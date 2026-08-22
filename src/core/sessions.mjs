@@ -2015,7 +2015,9 @@ export class SessionManager extends EventEmitter {
     const options = names.map((name) => ({
       optionId: name,
       name,
-      kind: /^(reject|deny|skip|no|cancel|undo)\b/i.test(name) ? 'reject_once' : 'allow_once',
+      kind: /^(reject|deny|skip|no|cancel|undo|stay in|remain in)\b/i.test(name)
+        ? 'reject_once'
+        : 'allow_once',
     }));
 
     // Never decide this one automatically. Cursor's own settings already had

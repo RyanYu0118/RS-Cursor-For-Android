@@ -17,7 +17,7 @@ sources:
   - id: clipboard
     resource: /src/core/clipboard.mjs
     title: Image paste via clipboard
-generated: { by: agent, at: 2026-08-21T21:40:00Z }
+generated: { by: agent, at: 2026-08-22T20:54:00Z }
 ---
 
 # The Cursor window
@@ -103,6 +103,13 @@ query would land in the chat.
 Nothing is believed from the click: Cursor's stored record keeps the model
 a chat was last *sent* with, so the word on the picker is the proof, and
 asking for what it is already on presses nothing.
+
+An agent-requested Agent ↔ Plan transition is different from choosing the
+picker from the phone: Cursor first displays an approval. Auto recognizes
+the observed **Switch** and **Skip** controls, removes Switch's inline `^↵`
+key hint, sends those choices through [approvals](approvals.md), and presses
+the selected wording in the same chat. It does not infer or force the mode
+itself.
 
 ## Pictures
 

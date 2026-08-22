@@ -150,6 +150,14 @@ const APPROVAL_WORDS =
   /^(run|run command|run anyway|accept|allow|allow once|always allow|approve|reject|deny|skip|cancel|continue|resume|move on|yes|no)\b/i;
 
 /**
+ * Cursor's `switch_mode` card uses transition-specific labels rather than the
+ * ordinary approval verbs above. Keep these exact: a broad `switch` match
+ * would mistake navigation and picker controls for an approval.
+ */
+const MODE_SWITCH_WORDS =
+  /^(switch|(?:switch to|stay in|remain in)\s+(?:agent|plan)(?:\s+mode)?)$/i;
+
+/**
  * Words that belong to the bar offering to review file changes.
  *
  * These were in the vocabulary above and should never have been. That bar is
@@ -184,7 +192,7 @@ const APPROVAL_MAX = 24;
 export function isApproval(label) {
   const name = String(label || '').trim();
   if (name.length > APPROVAL_MAX || REVIEW_WORDS.test(name)) return false;
-  return APPROVAL_WORDS.test(name);
+  return APPROVAL_WORDS.test(name) || MODE_SWITCH_WORDS.test(name);
 }
 
 /** Does this control act on file changes rather than answer a question? */
@@ -391,7 +399,12 @@ const PRESSABLE = `
       }
       const label = clean(el.getAttribute('aria-label') || el.getAttribute('title'));
       // The keybinding hint Cursor prints inside a button is not part of its name.
-      const text = clean(el.textContent).replace(/(Ctrl|Alt|Shift|⌘|⌥)[^\\s]*$/i, '').trim();
+      const text = clean(el.textContent)
+        .replace(/(Ctrl|Alt|Shift|⌘|⌥)[^\\s]*$/i, '')
+        // switch_mode prints its submit shortcut as "^⏎" inside the button.
+        // It is a key hint, not part of the action's name.
+        .replace(/\\s*\\^⏎$/i, '')
+        .trim();
       if (!label && !text) continue;
       // One of several nested layers all saying the same thing: press the outer.
       const name = label || text;

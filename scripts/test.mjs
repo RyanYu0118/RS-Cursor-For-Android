@@ -1275,6 +1275,18 @@ if (existsSync(SRC)) {
     if (!isApproval('Run command') || !isApproval('Skip') || !isApproval('Allow once')) {
       fail('approval vocabulary should recognise Cursor asking');
     }
+    for (const word of [
+      'Switch',
+      'Switch to Plan',
+      'Switch to Agent mode',
+      'Stay in Agent',
+      'Remain in Plan mode',
+    ]) {
+      if (!isApproval(word)) fail(`${word} should be recognised as a mode-switch approval`);
+    }
+    for (const word of ['Switch mode', 'Switch chat', 'Stay in this conversation']) {
+      if (isApproval(word)) fail(`${word} is navigation, not a mode-switch approval`);
+    }
     if (isApproval('Copy message') || isApproval('Ran command') || isApproval('Review')) {
       fail('approval vocabulary should not catch ordinary controls');
     }

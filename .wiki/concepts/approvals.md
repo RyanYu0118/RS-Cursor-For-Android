@@ -14,7 +14,13 @@ sources:
   - id: tools
     resource: /src/web/desktop-tool-ui.js
     title: How desktop tools are drawn
-generated: { by: agent, at: 2026-08-21T21:20:00Z }
+  - id: dom
+    resource: /src/core/cursor-dom.mjs
+    title: Cursor control vocabulary
+  - id: sessions
+    resource: /src/core/sessions.mjs
+    title: Desktop approval watcher
+generated: { by: agent, at: 2026-08-22T20:54:00Z }
 ---
 
 # Approvals, questions, and plans
@@ -43,6 +49,21 @@ whichever option comes back — withdrawing the question if it is answered in
 the IDE first. The vocabulary lives in `cursor-dom.mjs` (never class names).
 With Cursor set to run everything automatically it rarely asks — treat the
 first real sighting as a chance to learn the words Cursor actually uses.
+
+### Automatic mode transitions
+
+An agent may request an Agent ↔ Plan transition with `switch_mode`. Cursor
+renders that request through its approval controls rather than changing mode
+silently. The observed card offers **Always ask**, **Skip**, and **Switch**;
+Auto relays the resolving actions, Skip and Switch, through the same permission
+broker as Run / Allow. Web and Telegram therefore show the real choices, and
+the selected wording is pressed back in Cursor. The `^↵` key hint rendered
+inside Switch is stripped before the action is matched.
+
+The matching is intentionally exact. “Switch mode” and “Switch chat” controls
+are navigation, not approvals, and must never be offered as one. Skip is a
+rejection choice; Switch is an allow choice. Cursor remains the owner of the
+actual transition.
 
 Skip and Continue **inside a chat message bubble** are not approvals: they
 belong to Cursor's `ask_question` card. Offering Skip from that card as

@@ -1,6 +1,8 @@
 # Directory Update Log
 
 ## 2026-08-22
+* **Update**: Agent-requested Agent ↔ Plan transitions reach web and Telegram as Cursor approval choices; Auto recognizes the observed Switch / Skip labels, strips Switch's inline shortcut hint, and presses the selected action in the owning chat.
+* **Documentation**: iOS Previous / Next / Done keyboard bar is native Safari form-assistant chrome; a browser/PWA cannot hide it, and doing so requires a native wrapper.
 * **Update**: PWA detects a newer web build (`webBuild` fingerprint) on reconnect and foreground poll, and shows a reload banner when the host has moved on.
 * **Fix**: Scrubber scrolls the chat so the active landmark's message sits at the top of the viewport (was ~28% down and only snapped in a narrow rail band).
 * **Fix**: Markdown table columns cap at 28em with word wrap — scroll only when wrapped columns still overflow, not `max-content` no-wrap.

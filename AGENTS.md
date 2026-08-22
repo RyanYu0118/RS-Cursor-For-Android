@@ -146,6 +146,11 @@ goes into the transcript and the agent. The queue is memory only, and stopping
   everything automatically it never asks, so the vocabulary in `cursor-dom.mjs`
   has not met a real prompt. Treat the first sighting as a chance to learn the
   words Cursor actually uses.
+- **Automatic Agent ↔ Plan requests are approvals too.** Cursor labels those
+  resolving controls "Switch" and "Skip", so Auto sends those real choices to
+  web and Telegram and presses the selected wording in the owning chat.
+  Cursor's inline `^↵` shortcut hint is not part of the name. Broad "Switch…"
+  matching is forbidden: navigation and mode-picker controls are not approvals.
 - **A question the agent asks can be answered from the phone.** The card
   carries the real options, not Skip and Continue. A tap — or a letter back
   on Telegram — presses that option in Cursor and Continue. Skip is still

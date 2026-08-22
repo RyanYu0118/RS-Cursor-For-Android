@@ -29,7 +29,15 @@ sources:
   - id: icon
     resource: /src/web/icon.svg
     title: App icon
-generated: { by: agent, at: 2026-08-22T16:00:00Z }
+  - id: apple-ios-forms
+    resource: https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/DesigningForms/DesigningForms.html
+    title: Designing Forms for iOS
+    author: Apple
+  - id: ionic-keyboard
+    resource: https://ionicframework.com/docs/developing/keyboard
+    title: Keyboard Guide
+    author: Ionic
+generated: { by: agent, at: 2026-08-22T20:30:00Z }
 ---
 
 # Web app
@@ -89,6 +97,20 @@ every first-party file under `src/web`; it is stamped into
 WebSocket `hello`. The client compares that to what it loaded: on mismatch
 (a host restart after a deploy) it shows a reload banner, and polls again
 when the tab comes back to the foreground.
+
+### iOS keyboard chrome
+
+The grey bar above the iOS keyboard with Previous, Next, and Done is
+Safari's native **form assistant**, not an element rendered by Auto.[^apple-ios-forms]
+A browser tab or installed PWA cannot hide it with HTML, CSS, JavaScript,
+`contenteditable`, `readonly`, `inert`, `tabindex`, or by removing other form
+controls. Those techniques may change which navigation arrows are enabled,
+but they do not control the native accessory view. Do not distort the
+composer or replace its pickers trying to remove the bar.
+
+Removing it requires a native container such as Capacitor, Cordova, or a
+custom `WKWebView`, where native code or a keyboard plugin can configure the
+accessory view. A PWA has no corresponding web API.[^ionic-keyboard]
 
 The composer floats over the transcript: no hairline above the box.
 Messages scroll through a short fade and under the field. A measured
@@ -253,3 +275,6 @@ and account quotas ([usage](usage.md)).
 - [Telegram](telegram.md)
 - [Tool lanes](tool-lanes.md)
 - [Access](access.md)
+
+[^apple-ios-forms]: Apple documents the form assistant as Safari UI displayed above the keyboard.
+[^ionic-keyboard]: Ionic explicitly distinguishes browser/PWA apps, where the accessory bar cannot be hidden, from native Capacitor/Cordova containers.

@@ -590,7 +590,7 @@ html[data-standalone] #app {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: max(10px, env(safe-area-inset-top, 0px)) 16px 10px;
+  padding: max(16px, env(safe-area-inset-top, 0px)) 16px 4px;
   border-top: none;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
@@ -636,7 +636,7 @@ html[data-standalone] #app {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
+  gap: 1px;
 }
 
 .titles-path {
@@ -994,8 +994,13 @@ details.think {
 }
 
 details.think summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 20px;
   cursor: pointer;
   font-size: 12.5px;
+  line-height: 1.2;
   color: var(--faint);
   list-style: none;
   user-select: none;
@@ -1004,8 +1009,12 @@ details.think summary {
 details.think summary .n { color: var(--text); }
 
 details.think summary::-webkit-details-marker { display: none; }
-details.think summary::before { content: "▸ "; }
-details.think[open] summary::before { content: "▾ "; }
+details.think summary::before {
+  content: "▸";
+  flex: 0 0 auto;
+  line-height: 1;
+}
+details.think[open] summary::before { content: "▾"; }
 details.think .body {
   font-size: 13.5px;
   font-style: italic;
@@ -3050,7 +3059,7 @@ pre:hover .copy,
     font-size: 12.5px;
   }
 
-  #topbar { padding: max(8px, env(safe-area-inset-top, 0px)) 10px 8px; gap: 6px; }
+  #topbar { padding: max(14px, env(safe-area-inset-top, 0px)) 10px 2px; gap: 6px; }
   .usage-panel {
     /* Phone: edge-to-edge sheet from the bottom. */
     width: 100%;

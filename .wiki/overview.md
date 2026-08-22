@@ -14,7 +14,7 @@ sources:
   - id: host
     resource: /src/server/index.mjs
     title: Host process
-generated: { by: agent, at: 2026-08-21T21:40:00Z }
+generated: { by: agent, at: 2026-08-22T20:54:00Z }
 ---
 
 # Auto
@@ -67,6 +67,12 @@ default (that would close every window) and falls back to ACP unless
   Use [supervise](concepts/supervise.md).
 - Skills, docs, and this wiki need no host restart. Anything under `src/`
   does: `POST /api/restart`, Telegram `/restart`, or the web ♻.
+- On iOS, Safari owns the keyboard's Previous / Next / Done accessory bar.
+  The [web PWA](concepts/web.md#ios-keyboard-chrome) cannot hide it; that
+  requires a native wrapper.
+- Agent-requested Agent ↔ Plan transitions remain Cursor approvals. Auto
+  relays their Switch / Stay choices to web and Telegram and presses the
+  selected action in the owning chat.
 
 ## Related
 
