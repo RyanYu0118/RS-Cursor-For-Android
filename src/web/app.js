@@ -63,6 +63,7 @@ const els = {
   mode: $('mode'),
   composer: $('composer'),
   composerBox: document.querySelector('.composer-box'),
+  topbar: $('topbar'),
   viewChat: $('view-chat'),
   model: $('model'),
   modelOpen: $('model-open'),
@@ -2794,6 +2795,10 @@ function setModelSheet(open) {
     return;
   }
   clearTimeout(state.modelSheetTimer);
+  // The veil is for what the sheet covers; the topbar is chrome, not chat.
+  if (els.topbar) {
+    els.modelSheet.style.setProperty('--topbar-h', `${Math.round(els.topbar.offsetHeight)}px`);
+  }
   els.modelSheet.hidden = false;
   setModelPage('settings');
   sizeModelRail({ animate: false });

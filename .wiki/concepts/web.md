@@ -256,7 +256,8 @@ meta also asks for `interactive-widget=resizes-content` where supported.
 ## Composer
 
 Enter sends. Images attach from a + on the lower-right of the box,
-or paste, or drop, and go with the next prompt. Stop interrupts. The busy
+or paste, or drop, and go with the next prompt. Their thumbnails are 112px —
+a 56px chip is a checkbox, not a preview. Stop interrupts. The busy
 session still accepts another message — it queues. `ask_question` is a
 Question card with real options, not an OTHER tool bar.
 
@@ -317,11 +318,12 @@ the sheet's own surface, not on a control and not on a list that can still
 scroll up — and while it is under a finger the chat behind sharpens in step:
 the veil is its own pseudo-element (`#model-sheet::before`) so it can be set
 from the drag, because an element's own `backdrop-filter` cannot be eased
-from a finger. Letting go past a third of the panel, or with a flick,
-dismisses it; anything less springs back. Open and close are the same motion
-played both ways — the panel rises on open and falls on close, and close
-waits for the fall before taking the sheet out of the page, or the leave
-would be a cut.
+from a finger. The veil starts below the topbar — the topbar is chrome, not
+chat, and blurring it read as the app losing focus. Letting go past a third
+of the panel, or with a flick, dismisses it; anything less springs back.
+Open and close are the same motion played both ways — the panel rises on
+open and falls on close, and close waits for the fall before taking the
+sheet out of the page, or the leave would be a cut.
 
 Two ways this sheet failed silently are worth remembering, and `npm test`
 now guards both. A `var()` on a property nobody declares is invalid at

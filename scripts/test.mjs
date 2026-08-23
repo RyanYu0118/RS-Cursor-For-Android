@@ -2805,6 +2805,18 @@ if (existsSync(SRC)) {
     fail('attachment strip styles must target thumbnails inside the composer box');
     failed = true;
   }
+  // A thumbnail you cannot make out is a checkbox, not a preview.
+  const attCssAt = css.indexOf('.att {');
+  const attCss = attCssAt < 0 ? '' : css.slice(attCssAt, css.indexOf('}', attCssAt) + 1);
+  if (!/width:\s*112px/.test(attCss) || !/height:\s*112px/.test(attCss)) {
+    fail('composer attachments must be large enough to read — 112px, not a 56px chip');
+    failed = true;
+  }
+  // The veil is for what the sheet covers; the topbar is chrome, not chat.
+  if (!/top:\s*var\(--topbar-h/.test(css) || !js.includes("setProperty('--topbar-h'")) {
+    fail('the model sheet’s veil must start below the topbar');
+    failed = true;
+  }
   if (!css.includes('.usage-dial') || !css.includes('conic-gradient')) {
     fail('usage dial must be a fillable ring');
     failed = true;

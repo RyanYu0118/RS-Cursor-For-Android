@@ -5,6 +5,8 @@
 * **Fix**: Leaving Auto picks Cursor's own first-listed model — `auto-mode-select` is a choice in the list, not a toggle, so pressing it while Auto was on did nothing and the phone's switch snapped back.
 * **Update**: `namedModels` reads the model list without choosing; menu rows are marked `row` so a badge ("Max", "High Fast") is never mistaken for a model.
 * **Update**: The web Auto switch moved out of the model sheet and onto the composer beside the mode chip, styled to match it; the model chip hides while Auto is on and the sheet no longer offers Auto.
+* **Fix**: The model sheet's blur veil started at the very top of the screen, so the topbar read as blurred chrome; it now starts below the topbar, which is chrome and not chat.
+* **Update**: Composer image attachments doubled to 112px — a 56px chip is a checkbox, not a preview.
 * **Update**: The model sheet can be dragged away with a finger — direction-locked, the chat behind deblurs in step with the drag via a `--veil` pseudo-layer, past a third or a flick dismisses, and open/close are the same rise/fall played both ways (close now waits for the fall before hiding).
 * **Update**: `![alt](…)` in an answer is a real image on the web — http(s) and `data:` load directly, a host file goes through the new `/api/image` (raster only, no SVG, inside the chat's folder / Cursor's screenshot temp / `state/`, checked by real path), tapping opens the viewer, and a refused file collapses to its alt text. Telegram reads it as "🖼 alt".
 * **Fix**: Changing a model's Context (or the model itself) refreshes the composer's context dial — the size is the dial's denominator, and it used to stay wrong until the next 20s poll.

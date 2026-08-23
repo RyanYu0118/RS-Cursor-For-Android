@@ -2669,6 +2669,8 @@ button.icon.active {
   background: color-mix(in srgb, var(--bg) 30%, transparent);
   backdrop-filter: blur(8px) saturate(1.1);
   -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  /* The topbar is chrome, not chat — the veil is for what the sheet covers. */
+  top: var(--topbar-h, 0px);
   opacity: var(--veil, 0);
   transition: opacity 0.28s ease;
 }
@@ -3569,9 +3571,9 @@ pre:hover .copy,
 
 .att {
   position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
+  width: 112px;
+  height: 112px;
+  border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--line-2);
   background: var(--sunken);
@@ -3589,14 +3591,14 @@ pre:hover .copy,
   position: absolute;
   top: 0;
   right: 0;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-bottom-left-radius: 8px;
+  border-bottom-left-radius: 10px;
   background: var(--scrim);
   color: #fff;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1;
   padding: 0;
   z-index: 1;
