@@ -68,6 +68,7 @@ const els = {
   modelOpen: $('model-open'),
   modelSummary: $('model-summary'),
   modelSheet: $('model-sheet'),
+  modelPanel: document.querySelector('.model-panel'),
   modelClose: $('model-close'),
   modelAuto: $('model-auto'),
   modelChoice: $('model-choice'),
@@ -76,6 +77,7 @@ const els = {
   modelFilter: $('model-filter'),
   modelList: $('model-list'),
   modelParameters: $('model-parameters'),
+  modelParametersGroup: $('model-parameters-group'),
   modelStatus: $('model-status'),
   policy: $('policy'),
   conn: $('conn'),
@@ -2713,6 +2715,7 @@ function renderModelControls(controls) {
   const automatic = Boolean(state.modelControls?.auto);
   els.modelAuto.checked = automatic;
   els.modelParameters.innerHTML = '';
+  els.modelParametersGroup.hidden = true;
   setModelList(false);
   updateModelPresentation();
   if (!state.modelControls || automatic) {
@@ -2742,7 +2745,7 @@ function renderModelControls(controls) {
       input.checked = Boolean(parameter.value);
       input.setAttribute('aria-label', parameter.label);
       const track = document.createElement('span');
-      track.className = 'model-auto-track';
+      track.className = 'model-switch-track';
       track.setAttribute('aria-hidden', 'true');
       input.onchange = () => {
         setModelUpdating(true);
@@ -2779,9 +2782,17 @@ function renderModelControls(controls) {
         value: select.value,
       });
     };
-    row.append(copy, select);
+    // The app draws its own chevron: a native one is the OS speaking, not us.
+    const field = document.createElement('span');
+    field.className = 'model-select';
+    const chevron = document.createElement('span');
+    chevron.className = 'model-select-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    field.append(select, chevron);
+    row.append(copy, field);
     els.modelParameters.append(row);
   }
+  els.modelParametersGroup.hidden = !els.modelParameters.children.length;
   setModelUpdating(false);
   updateModelPresentation();
 }
@@ -2823,7 +2834,10 @@ function mergeModes(modes) {
  */
 function paintMode(mode = els.mode.value) {
   if (!els.composerBox) return;
-  els.composerBox.dataset.mode = canonicalModeId(mode);
+  const id = canonicalModeId(mode);
+  els.composerBox.dataset.mode = id;
+  // The model sheet is the chat box opened out, so it carries the same edge.
+  if (els.modelPanel) els.modelPanel.dataset.mode = id;
 }
 
 /**

@@ -2755,6 +2755,36 @@ if (existsSync(SRC)) {
     fail('the mode chip background must follow the mode colour');
     failed = true;
   }
+
+  /*
+   * Two ways a stylesheet fails silently, both of which shipped:
+   *
+   *  - a custom property nobody defines. `color-mix(… var(--blue) …)` is
+   *    invalid at computed-value time, so the whole declaration is dropped
+   *    and a switch that should be blue shows a bare dot on nothing.
+   *  - a card in a column flex box. Flex items shrink by default, and with
+   *    `overflow: hidden` the open model list was clipped out of existence
+   *    while still reporting a perfectly good bounding box.
+   */
+  // Written anywhere counts: a rule, a one-liner, `setProperty`, or an inline
+  // style built in a template string.
+  const sets = (text) => [
+    ...[...text.matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((m) => m[1]),
+    ...[...text.matchAll(/[gs]etProperty\(\s*['"`](--[a-z0-9-]+)/gi)].map((m) => m[1]),
+  ];
+  const declared = new Set([...sets(css), ...sets(readFileSync(join(ROOT, 'src/web/app.js'), 'utf8'))]);
+  const undeclared = [...new Set([...css.matchAll(/var\((--[a-z0-9-]+)/gi)].map((m) => m[1]))]
+    .filter((name) => !declared.has(name));
+  if (undeclared.length) {
+    fail(`every custom property must be defined somewhere: ${undeclared.join(', ')}`);
+    failed = true;
+  }
+  const cardAt = css.indexOf('.model-card {');
+  const card = cardAt < 0 ? '' : css.slice(cardAt, css.indexOf('}', cardAt) + 1);
+  if (!/flex:\s*0 0 auto/.test(card) || !/overflow:\s*hidden/.test(card)) {
+    fail('a clipping model card must refuse to shrink, or the open model list disappears');
+    failed = true;
+  }
   if (!failed) ok('v2 web: composer mode colours');
 }
 

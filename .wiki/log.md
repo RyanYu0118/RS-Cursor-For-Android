@@ -5,6 +5,9 @@
 * **Fix**: Leaving Auto picks Cursor's own first-listed model — `auto-mode-select` is a choice in the list, not a toggle, so pressing it while Auto was on did nothing and the phone's switch snapped back.
 * **Update**: `namedModels` reads the model list without choosing; menu rows are marked `row` so a badge ("Max", "High Fast") is never mistaken for a model.
 * **Update**: The web Auto switch moved out of the model sheet and onto the composer beside the mode chip, styled to match it; the model chip hides while Auto is on and the sheet no longer offers Auto.
+* **Update**: Model sheet redrawn from the chat box's own parts — composer radius and mode-coloured edge, grouped cards instead of full-bleed hairline rows, chip selects with a drawn chevron, and the scrubber's coloured-edge-plus-ring for the model you are on.
+* **Fix**: Sheet switches had no visible track — every rule using `var(--blue)` was invalid at computed-value time because that property is never declared anywhere; they now use `--focus`. `npm test` fails on any undeclared custom property.
+* **Fix**: The open model list was clipped out of existence — a `.model-card` in a column flex box shrank below its content while `overflow: hidden` hid the result; cards no longer shrink, and a test holds that.
 * **Update**: Removed the web/Telegram Review changes card — Cursor only offers a global Keep/Undo bar, not per-edit rollback, so a bottom-of-chat card was misleading; review in the IDE.
 * **Update**: Web composer now has one model summary button; it opens a desktop dialog / phone bottom sheet with Auto, a searchable model list, and clearly labelled live parameters.
 * **Update**: Model controls now mirror Cursor: Auto is a separate switch, and web/Telegram discover and select the current model's Fast, Context, Reasoning, or Effort options from the IDE's nested menus.

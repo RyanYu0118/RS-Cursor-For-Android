@@ -355,26 +355,34 @@
 <!-- Model selection and every parameter Cursor exposes for that model. -->
 <div id="model-sheet" hidden>
   <div class="sheet-panel model-panel" role="dialog" aria-modal="true" aria-labelledby="model-sheet-title">
-    <div class="sheet-head">
+    <!-- The grip the sheet is dragged by on a phone; decoration on a desktop. -->
+    <div class="model-grabber" aria-hidden="true"></div>
+    <div class="sheet-head model-head">
       <span id="model-sheet-title">Model</span>
       <button id="model-close" class="icon" title="Close" aria-label="Close model settings">×</button>
     </div>
     <div class="model-sheet-body">
-      <button id="model-choice" class="model-config-row model-choice" type="button" aria-expanded="false">
-        <span class="model-config-copy">
-          <strong>Model</strong>
-          <small id="model-choice-label">Choose a model</small>
-        </span>
-        <span class="model-choice-chevron" aria-hidden="true">›</span>
-      </button>
-      <select id="model" title="Model" aria-label="Model" hidden></select>
+      <div class="model-card">
+        <button id="model-choice" class="model-config-row model-choice" type="button" aria-expanded="false">
+          <span class="model-config-copy">
+            <strong>Model</strong>
+            <small id="model-choice-label">Choose a model</small>
+          </span>
+          <span class="model-choice-chevron" aria-hidden="true">›</span>
+        </button>
+        <select id="model" title="Model" aria-label="Model" hidden></select>
 
-      <div id="model-list-pane" class="model-list-pane" hidden>
-        <input id="model-filter" type="search" placeholder="Search models…" aria-label="Search models" autocomplete="off" />
-        <div id="model-list" role="listbox" aria-label="Models"></div>
+        <div id="model-list-pane" class="model-list-pane" hidden>
+          <input id="model-filter" type="search" placeholder="Search models…" aria-label="Search models" autocomplete="off" />
+          <div id="model-list" role="listbox" aria-label="Models"></div>
+        </div>
       </div>
 
-      <div id="model-parameters" class="model-parameter-list"></div>
+      <div id="model-parameters-group" class="model-group" hidden>
+        <h2 class="model-group-title">Parameters</h2>
+        <div id="model-parameters" class="model-card model-parameter-list"></div>
+      </div>
+
       <div id="model-status" class="sheet-note model-status" aria-live="polite"></div>
     </div>
   </div>
