@@ -2726,6 +2726,29 @@ if (existsSync(SRC)) {
     fail('Escape must leave the model list before it leaves the sheet');
     failed = true;
   }
+
+  /*
+   * The sheet can be dragged away, and the chat behind it sharpens as it goes.
+   * The veil is its own pseudo-layer so a finger can set it — an element's own
+   * backdrop-filter cannot be eased from a drag. Close is not instant: the
+   * panel falls and the veil fades before the sheet is taken out of the page.
+   */
+  if (!css.includes('#model-sheet::before') || !/opacity:\s*var\(--veil/.test(css)) {
+    fail('the model sheet needs a veil layer a drag can set');
+    failed = true;
+  }
+  if (!/data-panel='out'\] \.model-panel\s*\{[^}]*translateY\(100%\)/.test(css)) {
+    fail('the model sheet must be able to fall away below the screen');
+    failed = true;
+  }
+  if (!js.includes('setPointerCapture') || !js.includes("sheet.dataset.veil = 'drag'")) {
+    fail('the model sheet must follow a finger down and deblur the chat as it goes');
+    failed = true;
+  }
+  if (!js.includes('state.modelSheetTimer')) {
+    fail('closing the model sheet must let the fall play before hiding it');
+    failed = true;
+  }
   const attachAt = html.indexOf('id="attach"');
   const controlsAt = html.indexOf('class="composer-controls"');
   const mainAt = html.indexOf('class="composer-main"');

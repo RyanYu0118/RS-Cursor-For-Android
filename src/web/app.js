@@ -2768,15 +2768,40 @@ function setModelUpdating(updating, text = 'Updating Cursor…') {
   updateModelPresentation();
 }
 
+/**
+ * Open and close are the same motion played both ways.
+ *
+ * The panel and the veil behind it are their own layers so a finger can ask
+ * either to move: the chat softens as the sheet arrives and sharpens as it
+ * leaves, and while the sheet is being dragged down the veil is set from the
+ * finger — the chat is already sharp by the time the sheet would have gone.
+ * `out` is the resting pose, applied while the sheet is hidden so opening
+ * starts from the bottom rather than from wherever it was last seen.
+ */
 function setModelSheet(open) {
   if (open && els.modelAuto.checked) return;
-  els.modelSheet.hidden = !open;
   if (!open) {
+    if (els.modelSheet.hidden) return;
+    // Leave by the same edge it arrived from: the panel falls, the veil
+    // sharpens, and only then is the sheet taken out of the page.
+    els.modelSheet.dataset.panel = 'out';
+    els.modelSheet.dataset.veil = 'out';
     setModelPage('settings');
+    clearTimeout(state.modelSheetTimer);
+    state.modelSheetTimer = setTimeout(() => {
+      els.modelSheet.hidden = true;
+    }, 320);
     return;
   }
+  clearTimeout(state.modelSheetTimer);
+  els.modelSheet.hidden = false;
   setModelPage('settings');
   sizeModelRail({ animate: false });
+  els.modelSheet.dataset.panel = 'out';
+  els.modelSheet.dataset.veil = 'out';
+  void els.modelSheet.offsetHeight;
+  els.modelSheet.dataset.panel = 'in';
+  els.modelSheet.dataset.veil = 'in';
   const meta = state.sessions.find((session) => session.id === state.sessionId);
   if (meta?.kind === 'desktop') {
     setModelUpdating(true, 'Reading Cursor…');
@@ -4296,6 +4321,118 @@ els.modelChoice.onclick = () =>
   setModelPage(els.modelPanel.dataset.page === 'list' ? 'settings' : 'list');
 els.modelBack.onclick = () => setModelPage('settings');
 els.modelFilter.addEventListener('input', renderModelList);
+
+/*
+ * The sheet can be dragged away.
+ *
+ * A sheet that rises from the bottom edge should be able to leave by the same
+ * edge, and the grabber is only there because it says so. The drag is
+ * direction-locked: a mostly-vertical pull on the sheet's own surface (not on
+ * a control, and not on a list that can scroll up) is taken as the drag, and
+ * the veil behind is set from the finger so the chat sharpens as the sheet
+ * goes. Letting go past a third of the panel — or with a flick — dismisses it;
+ * anything less springs it back.
+ */
+(() => {
+  const sheet = els.modelSheet;
+  const panel = els.modelPanel;
+  if (!sheet || !panel) return;
+  let drag = null;
+
+  const veil = (progress) => {
+    sheet.style.setProperty('--veil', String(Math.max(0, Math.min(1, progress))));
+  };
+
+  sheet.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (e.target.closest('button, a, input, select, textarea, label')) return;
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dy: 0, decided: false, on: false };
+  });
+
+  sheet.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.decided) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      drag.decided = true;
+      // A page that can scroll up owns an upward pull; the sheet only takes
+      // downward ones, and only when nothing above the finger can still rise.
+      const page = e.target.closest('.model-page');
+      const canRise = page && page.scrollTop > 0;
+      drag.on = dy > Math.abs(dx) && !canRise;
+      if (!drag.on) {
+        drag = null;
+        return;
+      }
+      try {
+        sheet.setPointerCapture(e.pointerId);
+      } catch {}
+      sheet.dataset.panel = 'drag';
+      sheet.dataset.veil = 'drag';
+    }
+    drag.dy = Math.max(0, dy);
+    panel.style.transform = `translateY(${drag.dy}px)`;
+    veil(1 - drag.dy / panel.offsetHeight);
+  });
+
+  let lastY = 0;
+  let lastT = 0;
+  let velocity = 0;
+
+  sheet.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.decided) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      drag.decided = true;
+      // A page that can scroll up owns an upward pull; the sheet only takes
+      // downward ones, and only when nothing above the finger can still rise.
+      const page = e.target.closest('.model-page');
+      const canRise = page && page.scrollTop > 0;
+      drag.on = dy > Math.abs(dx) && !canRise;
+      if (!drag.on) {
+        drag = null;
+        return;
+      }
+      try {
+        sheet.setPointerCapture(e.pointerId);
+      } catch {}
+      sheet.dataset.panel = 'drag';
+      sheet.dataset.veil = 'drag';
+      lastY = e.clientY;
+      lastT = e.timeStamp;
+      velocity = 0;
+    }
+    const now = e.timeStamp;
+    if (now > lastT) velocity = (e.clientY - lastY) / (now - lastT);
+    lastY = e.clientY;
+    lastT = now;
+    drag.dy = Math.max(0, dy);
+    panel.style.transform = `translateY(${drag.dy}px)`;
+    veil(1 - drag.dy / panel.offsetHeight);
+  });
+
+  const settle = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { dy, on } = drag;
+    drag = null;
+    panel.style.transform = '';
+    sheet.style.removeProperty('--veil');
+    if (!on) return;
+    // Distance is the honest signal; a flick is for the sheet you meant to
+    // throw away but only nudged.
+    if (dy > panel.offsetHeight / 3 || velocity > 0.5) {
+      setModelSheet(false);
+    } else {
+      sheet.dataset.panel = 'in';
+      sheet.dataset.veil = 'in';
+    }
+  };
+  sheet.addEventListener('pointerup', settle);
+  sheet.addEventListener('pointercancel', settle);
+})();
 els.policy.onchange = () =>
   sendOp({ op: 'session.policy', sessionId: state.sessionId, policy: els.policy.value });
 

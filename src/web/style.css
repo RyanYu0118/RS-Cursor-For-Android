@@ -2653,6 +2653,51 @@ button.icon.active {
   -webkit-backdrop-filter: blur(6px);
 }
 
+/*
+ * The veil is its own layer so it can be asked to move.
+ *
+ * The chat behind the sheet softens as the sheet arrives and sharpens as it
+ * leaves, and while a finger is dragging the sheet down the veil is set from
+ * the finger — the chat is already sharp again by the time the sheet would
+ * have gone. The backdrop keeps a constant 6px on top of it so the sheet's
+ * own edges never sit on raw text.
+ */
+#model-sheet::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 30%, transparent);
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  opacity: var(--veil, 0);
+  transition: opacity 0.28s ease;
+}
+
+#model-sheet[data-veil='in']::before {
+  opacity: 1;
+}
+
+#model-sheet[data-veil='drag']::before {
+  transition: none;
+}
+
+/* The panel rides the same spring, so a finger and a tap agree on the way. */
+.model-panel {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+#model-sheet[data-panel='out'] .model-panel {
+  transform: translateY(100%);
+}
+
+#model-sheet[data-panel='in'] .model-panel {
+  transform: none;
+}
+
+#model-sheet[data-panel='drag'] .model-panel {
+  transition: none;
+}
+
 #model-sheet[hidden] {
   display: none;
 }
@@ -2793,7 +2838,9 @@ button.model-back[hidden] {
 
 @media (prefers-reduced-motion: reduce) {
   .model-pages,
-  .model-page {
+  .model-page,
+  .model-panel,
+  #model-sheet::before {
     transition: none;
   }
 }
@@ -3063,7 +3110,6 @@ button.model-choice:disabled {
     margin: 0;
     border-radius: 20px 20px 0 0;
     border-bottom: 0;
-    animation: sheet-up 0.18s ease;
   }
 }
 

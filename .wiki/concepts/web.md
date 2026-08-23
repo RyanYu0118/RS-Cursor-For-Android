@@ -310,6 +310,19 @@ hidden cannot slide. The search box takes focus only where there is a
 mouse; a phone raising its keyboard over the list it has just opened is
 worse than arriving without a caret.
 
+**The sheet can be dragged away.** A sheet that rises from the bottom edge
+should be able to leave by the same edge, and the grabber is only there
+because it says so. The drag is direction-locked — a mostly-vertical pull on
+the sheet's own surface, not on a control and not on a list that can still
+scroll up — and while it is under a finger the chat behind sharpens in step:
+the veil is its own pseudo-element (`#model-sheet::before`) so it can be set
+from the drag, because an element's own `backdrop-filter` cannot be eased
+from a finger. Letting go past a third of the panel, or with a flick,
+dismisses it; anything less springs back. Open and close are the same motion
+played both ways — the panel rises on open and falls on close, and close
+waits for the fall before taking the sheet out of the page, or the leave
+would be a cut.
+
 Two ways this sheet failed silently are worth remembering, and `npm test`
 now guards both. A `var()` on a property nobody declares is invalid at
 computed-value time, so the whole declaration is dropped — that is why the
