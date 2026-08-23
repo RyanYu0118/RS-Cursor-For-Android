@@ -79,14 +79,17 @@ value as setup documentation is fine.
   item is named by its own text, never its subtree, or "Opus 5" holding a "High"
   badge reads as "Opus 5 HighEdit". A variant is the row then the badge on it.
   The model trigger is compact: it often says only the effort word ("High"),
-  and that first menu is parameters (Fast / Effort / High / Model), not the
-  model list. Auto presses Model to reach the list (`selected-model-list-submenu`),
-  then search for a name that is not on the first card. Never type into search until the caret is actually there, or the
-  query becomes a message. Auto in that list is `auto-mode-select`. A badge
-  can also bundle more than one word in one press — Grok's row offers
-  "High Fast" together, not separately — so either word finds that same press.
-  The compact trigger staying on "High" after a switch is not proof it missed.
-  Asking for what the trigger already says presses nothing.
+  and that first menu is parameters, not the model list. Those parameters vary
+  by model — GPT currently shows Fast / Context / Reasoning / Model, while Grok
+  shows Fast / Effort / Model — so the presence of Model, not one hard-coded
+  parameter, identifies the sheet. Auto reads each nested option menu and
+  mirrors those controls on web and Telegram; Auto-select is a separate switch.
+  Model opens the list (`selected-model-list-submenu`), whose Auto row is
+  `auto-mode-select`; search is used for names outside the first card. Never
+  type until the search caret is actually there, or the query becomes a message.
+  A badge can bundle more than one word in one press — Grok's row offers "High
+  Fast" together — and the compact trigger staying on "High" after a switch is
+  not proof it missed.
 - **A mirrored answer arrives in pieces.** Cursor writes a reply into its bubble
   as it is spoken, so what is in the database mid-turn is a prefix. Reading a
   bubble once and marking it seen published whatever was written at that instant

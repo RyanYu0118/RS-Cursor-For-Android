@@ -221,7 +221,13 @@
               <option value="multitask">Multitask</option>
               <option value="ask">Ask</option>
             </select>
+            <label class="model-auto" title="Let Cursor choose the model">
+              <input id="model-auto" type="checkbox" role="switch" />
+              <span class="model-auto-track" aria-hidden="true"></span>
+              <span>Auto</span>
+            </label>
             <select id="model" title="Model" aria-label="Model"></select>
+            <span id="model-parameters"></span>
           </div>
           <div class="composer-actions">
             <button id="usage" class="in-box usage" type="button" title="Usage" aria-label="Usage" hidden>

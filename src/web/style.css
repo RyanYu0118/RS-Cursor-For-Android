@@ -1659,6 +1659,78 @@ html[data-standalone] #composer {
   transform-origin: left center;
 }
 
+#model-parameters {
+  display: contents;
+}
+
+.model-auto,
+.model-parameter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--bg-3);
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.model-auto input,
+.model-parameter-toggle input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.model-auto-track {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--line-2);
+  transition: background 120ms ease;
+}
+
+.model-auto-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.model-auto input:checked + .model-auto-track {
+  background: color-mix(in srgb, var(--blue) 65%, var(--bg-3));
+}
+
+.model-auto input:checked + .model-auto-track::after {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+.model-auto:focus-within,
+.model-parameter-toggle:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--blue) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.model-parameter-toggle:has(input:checked) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--blue) 40%, transparent);
+  background: color-mix(in srgb, var(--blue) 14%, var(--bg-3));
+}
+
 .composer-controls select {
   background: var(--bg-3);
   border: 1px solid var(--line-2);
@@ -1687,6 +1759,14 @@ html[data-standalone] .composer-controls select {
   padding: 3px 8px;
   border-radius: 6px;
   max-width: 12rem;
+}
+
+html[data-standalone] .model-auto,
+html[data-standalone] .model-parameter-toggle {
+  min-height: 22px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 .composer-controls select:hover {

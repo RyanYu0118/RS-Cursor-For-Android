@@ -445,6 +445,7 @@ if (existsSync(SRC)) {
           modelChangeEndsTurn = true,
           hasMenuSearch = false,
           modelList = null,
+          parameterMenus = null,
         } = {},
       ) {
         this.takesPaste = takesPaste;
@@ -458,6 +459,8 @@ if (existsSync(SRC)) {
         this.modelChangeEndsTurn = modelChangeEndsTurn;
         this.hasMenuSearch = hasMenuSearch;
         this.modelList = modelList;
+        this.parameterMenus = parameterMenus || {};
+        this.openParameter = null;
         this.menuQuery = '';
         this.typedSearch = '';
         this.searchFocused = false;
@@ -500,7 +503,8 @@ if (existsSync(SRC)) {
             .toLowerCase();
           return hay.includes(q);
         });
-        return { open: this.openMenu ? 1 : 0, items };
+        const nested = this.openParameter ? this.parameterMenus[this.openParameter] || [] : [];
+        return { open: this.openMenu ? 1 + Number(Boolean(this.openParameter)) : 0, items: [...items, ...nested] };
       }
       async menuSearch() {
         if (this.openMenu !== 'model' || !this.hasMenuSearch) return null;
@@ -511,6 +515,10 @@ if (existsSync(SRC)) {
       }
       async pressEscape() {
         this.pressed.push('«escape»');
+        if (this.openParameter) {
+          this.openParameter = null;
+          return;
+        }
         this.openMenu = null;
         this.searchFocused = false;
         this.menuQuery = '';
@@ -534,11 +542,24 @@ if (existsSync(SRC)) {
           this.searchFocused = true;
           return;
         }
+        const nestedItem = (this.parameterMenus[this.openParameter] || []).find(
+          (i) => Math.abs(i.x - x) < 1 && Math.abs(i.y - y) < 1,
+        );
+        if (nestedItem) {
+          this.pressed.push(nestedItem.label);
+          this.openParameter = null;
+          if (nestedItem.becomes) this.pickers.model = nestedItem.becomes;
+          return;
+        }
         const item = (this.menus[this.openMenu] || []).find(
           (i) => Math.abs(i.x - x) < 1 && Math.abs(i.y - y) < 1,
         );
         if (item) {
           this.pressed.push(item.label);
+          if (item.opensParameter) {
+            this.openParameter = item.opensParameter;
+            return;
+          }
           if (item.opens === 'list' && this.modelList) {
             this.menus.model = this.modelList;
             return;
@@ -1401,7 +1422,8 @@ if (existsSync(SRC)) {
 
     // Setting a chat's model and mode: the menu is opened, one item is pressed,
     // and nothing is believed until the picker itself says something new.
-    const { pickItem, menuSearchStem, isParametersMenu } = await import('../src/core/cursor-cdp.mjs');
+    const { pickItem, menuSearchStem, isParametersMenu, parseParameterMenu } =
+      await import('../src/core/cursor-cdp.mjs');
     let picking = false;
     const withPickers = () =>
       new FakeWindow(
@@ -1632,6 +1654,102 @@ if (existsSync(SRC)) {
       ])
     ) {
       picking = fail('Fast/Effort/High/Model is the parameters sheet') ?? true;
+    }
+    const gptParameters = [
+      { label: 'Fast', x: 10, y: 10, current: false },
+      { label: 'Context', x: 10, y: 20 },
+      { label: '272K', x: 40, y: 20 },
+      { label: 'Reasoning', x: 10, y: 30 },
+      { label: 'Medium', x: 40, y: 30 },
+      { label: 'Model', x: 10, y: 40 },
+      { label: 'GPT-5.6 Sol', x: 40, y: 40 },
+    ];
+    if (!isParametersMenu(gptParameters)) {
+      picking = fail('Context/Reasoning/Model is also a parameters sheet') ?? true;
+    }
+    const parsedGpt = parseParameterMenu(gptParameters);
+    if (
+      parsedGpt.model !== 'GPT-5.6 Sol' ||
+      parsedGpt.parameters.map((p) => `${p.label}:${p.value}`).join('|') !==
+        'Fast:false|Context:272K|Reasoning:Medium'
+    ) {
+      picking = fail(`GPT parameter rows should preserve IDE controls: ${JSON.stringify(parsedGpt)}`) ?? true;
+    }
+    const parameterWindow = () =>
+      new FakeWindow(
+        { threadId: THREAD, hasComposer: true },
+        {
+          pickers: { model: 'Medium' },
+          menus: {
+            model: [
+              {
+                label: 'Fast',
+                x: 10,
+                y: 10,
+                current: false,
+                source: 'selected-model-parameters-submenu-menu',
+              },
+              {
+                label: 'Reasoning',
+                x: 10,
+                y: 20,
+                source: 'selected-model-parameters-submenu-menu',
+                opensParameter: 'reasoning',
+              },
+              {
+                label: 'Medium',
+                x: 40,
+                y: 20,
+                source: 'selected-model-parameters-submenu-menu',
+              },
+              {
+                label: 'Model',
+                x: 10,
+                y: 30,
+                source: 'selected-model-parameters-submenu-menu',
+              },
+              {
+                label: 'GPT-5.6 Sol',
+                x: 40,
+                y: 30,
+                source: 'selected-model-parameters-submenu-menu',
+              },
+            ],
+          },
+          parameterMenus: {
+            reasoning: [
+              { label: 'None', x: 80, y: 10, source: 'parameter-submenu-reasoning' },
+              { label: 'Medium', x: 80, y: 20, source: 'parameter-submenu-reasoning' },
+              {
+                label: 'High',
+                x: 80,
+                y: 30,
+                source: 'parameter-submenu-reasoning',
+                becomes: 'High',
+              },
+            ],
+          },
+        },
+      );
+    const parameterRead = await machine({ parameterRead: parameterWindow() }).modelControls({
+      threadId: THREAD,
+    });
+    if (
+      parameterRead.status !== 'ok' ||
+      parameterRead.model !== 'GPT-5.6 Sol' ||
+      parameterRead.parameters.find((p) => p.id === 'reasoning')?.options?.join('|') !==
+        'None|Medium|High'
+    ) {
+      picking = fail(`model controls should come from Cursor's nested menu: ${JSON.stringify(parameterRead)}`) ?? true;
+    }
+    const parameterSetWindow = parameterWindow();
+    const parameterSet = await machine({ parameterSetWindow }).setModelParameter({
+      threadId: THREAD,
+      parameter: 'reasoning',
+      value: 'High',
+    });
+    if (parameterSet.status !== 'set' || !parameterSetWindow.pressed.includes('High')) {
+      picking = fail(`Reasoning should be selectable through Cursor: ${JSON.stringify(parameterSet)}`) ?? true;
     }
     if (isParametersMenu([{ label: 'Auto' }, { label: 'GPT-5.5' }, { label: 'Medium' }])) {
       picking = fail('the model list is not the parameters sheet') ?? true;
@@ -2359,6 +2477,22 @@ if (existsSync(SRC)) {
   }
   if (!js.includes('function modelOptionLabel') || !js.includes("split('-')")) {
     fail('the model picker must show kimi-k3 as Kimi K3, not the catalog slug');
+    failed = true;
+  }
+  if (
+    !html.includes('id="model-auto"') ||
+    !html.includes('role="switch"') ||
+    !js.includes('function renderModelControls')
+  ) {
+    fail('Auto-select must be a switch beside dynamic Cursor model controls');
+    failed = true;
+  }
+  if (
+    !js.includes("op: 'session.modelControls'") ||
+    !js.includes("op: 'session.modelParameter'") ||
+    !tg.includes("kind: 'cursorParam'")
+  ) {
+    fail('web and Telegram must expose Cursor model parameters');
     failed = true;
   }
   if (!tg.includes('debug|multitask|ask') && !tg.includes("'debug', 'multitask', 'ask'")) {

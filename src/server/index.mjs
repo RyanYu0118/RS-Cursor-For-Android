@@ -383,8 +383,25 @@ const OPS = {
     await sessions.setMode(msg.sessionId || state.sessionId, msg.modeId);
   },
 
-  async 'session.model'(_ws, state, msg) {
-    await sessions.setModel(msg.sessionId || state.sessionId, msg.modelId);
+  async 'session.model'(ws, state, msg) {
+    const id = msg.sessionId || state.sessionId;
+    const set = await sessions.setModel(id, msg.modelId);
+    send(ws, { type: 'model.set', sessionId: id, set });
+    if (sessions.get(id)?.kind === 'desktop') {
+      send(ws, { type: 'model.controls', sessionId: id, ...(await sessions.modelControls(id)) });
+    }
+  },
+
+  async 'session.modelControls'(ws, state, msg) {
+    const id = msg.sessionId || state.sessionId;
+    send(ws, { type: 'model.controls', sessionId: id, ...(await sessions.modelControls(id)) });
+  },
+
+  async 'session.modelParameter'(ws, state, msg) {
+    const id = msg.sessionId || state.sessionId;
+    const set = await sessions.setModelParameter(id, msg.parameter, msg.value);
+    send(ws, { type: 'model.parameter', sessionId: id, set });
+    send(ws, { type: 'model.controls', sessionId: id, ...(await sessions.modelControls(id)) });
   },
 
   'session.policy'(_ws, state, msg) {

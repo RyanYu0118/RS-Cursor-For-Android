@@ -67,6 +67,8 @@ const els = {
   composerBox: document.querySelector('.composer-box'),
   viewChat: $('view-chat'),
   model: $('model'),
+  modelAuto: $('model-auto'),
+  modelParameters: $('model-parameters'),
   policy: $('policy'),
   conn: $('conn'),
   sheet: $('sheet'),
@@ -156,6 +158,8 @@ const state = {
   pendingEchoes: [],
   /** latest usage snapshot for the dial / dialog */
   usage: null,
+  /** Cursor's live Auto / Fast / Context / Reasoning / Effort controls */
+  modelControls: null,
   usageTimer: null,
   /** after session.create, put the caret in the box once the chat is attached */
   focusComposer: false,
@@ -2551,15 +2555,19 @@ function modelOptionLabel(m) {
  * carry their options. Keep the id as the value and show the friendly name.
  */
 function renderModels(models) {
-  if (!models?.length || els.model.dataset.filled === String(models.length)) return;
+  const named = (models || []).filter((model) => model.modelId !== 'default[]');
+  const signature = named.map((model) => model.modelId).join(',');
+  if (!named.length || els.model.dataset.filled === signature) return;
+  const was = els.model.value;
   els.model.innerHTML = '';
-  for (const m of models) {
+  for (const m of named) {
     const opt = document.createElement('option');
     opt.value = m.modelId;
     opt.textContent = modelOptionLabel(m);
     els.model.append(opt);
   }
-  els.model.dataset.filled = String(models.length);
+  if (named.some((model) => model.modelId === was)) els.model.value = was;
+  els.model.dataset.filled = signature;
 }
 
 /**
@@ -2572,6 +2580,13 @@ function renderModels(models) {
  */
 function selectModel(modelId, modelName) {
   if (!els.model.options.length) return;
+  const automatic = modelId === 'default[]';
+  els.modelAuto.checked = automatic;
+  els.model.disabled = automatic;
+  if (automatic) {
+    renderModelControls({ status: 'ok', auto: true, model: null, parameters: [] });
+    return;
+  }
   const options = [...els.model.options];
   if (modelId && options.some((o) => o.value === modelId)) {
     els.model.value = modelId;
@@ -2588,6 +2603,59 @@ function selectModel(modelId, modelName) {
     .filter((o) => o.textContent && name.toLowerCase().startsWith(o.textContent.toLowerCase()))
     .sort((a, b) => b.textContent.length - a.textContent.length)[0];
   if (byPrefix) els.model.value = byPrefix.value;
+}
+
+/** Paint the same controls Cursor puts in its compact model menu. */
+function renderModelControls(controls) {
+  state.modelControls = controls?.status === 'ok' ? controls : null;
+  const automatic = Boolean(state.modelControls?.auto);
+  els.modelAuto.checked = automatic;
+  els.model.disabled = automatic;
+  els.modelParameters.innerHTML = '';
+  if (!state.modelControls || automatic) return;
+
+  for (const parameter of state.modelControls.parameters || []) {
+    if (parameter.type === 'toggle') {
+      const label = document.createElement('label');
+      label.className = 'model-parameter-toggle';
+      label.title = parameter.label;
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.role = 'switch';
+      input.checked = Boolean(parameter.value);
+      input.setAttribute('aria-label', parameter.label);
+      input.onchange = () =>
+        sendOp({
+          op: 'session.modelParameter',
+          sessionId: state.sessionId,
+          parameter: parameter.id,
+          value: input.checked,
+        });
+      label.append(input, document.createTextNode(parameter.label));
+      els.modelParameters.append(label);
+      continue;
+    }
+
+    const select = document.createElement('select');
+    select.title = parameter.label;
+    select.setAttribute('aria-label', parameter.label);
+    select.dataset.parameter = parameter.id;
+    for (const value of parameter.options || [parameter.value]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.append(option);
+    }
+    select.value = parameter.value;
+    select.onchange = () =>
+      sendOp({
+        op: 'session.modelParameter',
+        sessionId: state.sessionId,
+        parameter: parameter.id,
+        value: select.value,
+      });
+    els.modelParameters.append(select);
+  }
 }
 
 /**
@@ -2959,6 +3027,16 @@ function connect() {
       if (msg.chats) state.chats = msg.chats;
       state.replaying = true;
       applyMeta(msg.meta);
+      if (msg.meta?.kind === 'desktop') {
+        sendOp({ op: 'session.modelControls', sessionId: msg.sessionId });
+      } else {
+        renderModelControls({
+          status: 'ok',
+          auto: msg.meta?.model === 'default[]',
+          model: msg.meta?.modelName || msg.meta?.model || null,
+          parameters: [],
+        });
+      }
       renderRail();
       // Panes first (quiet), so replayed terminal chunks have somewhere to land
       // and the remembered active tab can win after restoreViews.
@@ -3057,6 +3135,17 @@ function connect() {
       renderModes(msg.catalog?.modes);
       const mine = state.sessions.find((s) => s.id === state.sessionId);
       if (mine?.model) selectModel(mine.model, mine.modelName);
+      return;
+    }
+
+    if (msg.type === 'model.controls') {
+      if (msg.sessionId !== state.sessionId) return;
+      renderModelControls(msg);
+      return;
+    }
+
+    if (msg.type === 'model.set' || msg.type === 'model.parameter') {
+      if (msg.sessionId !== state.sessionId) return;
       return;
     }
 
@@ -4036,8 +4125,21 @@ els.mode.onchange = () => {
   paintMode();
   sendOp({ op: 'session.mode', sessionId: state.sessionId, modeId: els.mode.value });
 };
-els.model.onchange = () =>
+els.model.onchange = () => {
+  els.modelAuto.checked = false;
+  els.model.disabled = false;
   sendOp({ op: 'session.model', sessionId: state.sessionId, modelId: els.model.value });
+};
+els.modelAuto.onchange = () => {
+  const automatic = els.modelAuto.checked;
+  els.model.disabled = automatic;
+  els.modelParameters.innerHTML = '';
+  sendOp({
+    op: 'session.model',
+    sessionId: state.sessionId,
+    modelId: automatic ? 'default[]' : els.model.value,
+  });
+};
 els.policy.onchange = () =>
   sendOp({ op: 'session.policy', sessionId: state.sessionId, policy: els.policy.value });
 

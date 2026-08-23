@@ -1244,6 +1244,46 @@ export class SessionManager extends EventEmitter {
     return this.cursor.choices({ threadId: meta.desktopThreadId, picker });
   }
 
+  /** Auto plus the model-specific controls Cursor currently shows. */
+  async modelControls(id) {
+    const meta = this.meta.get(id);
+    if (meta?.kind !== 'desktop') {
+      return {
+        status: 'ok',
+        auto: meta?.model === 'default[]',
+        model: this.modelName(meta?.model),
+        parameters: [],
+      };
+    }
+    return this.cursor.modelControls({ threadId: meta.desktopThreadId });
+  }
+
+  /** Change Fast / Context / Reasoning / Effort through Cursor's own menu. */
+  async setModelParameter(id, parameter, value) {
+    const meta = this.meta.get(id);
+    if (meta?.kind !== 'desktop') {
+      return { status: 'error', reason: 'model parameters belong to Cursor desktop chats' };
+    }
+    const result = await this.cursor.setModelParameter({
+      threadId: meta.desktopThreadId,
+      parameter,
+      value,
+    });
+    if (result.status === 'set' || result.status === 'already') {
+      this.#record(id, KIND.notice, {
+        text:
+          result.status === 'already'
+            ? `${result.parameter} was already ${String(result.value)}.`
+            : `Cursor's ${result.parameter} for this chat is now ${String(result.value)}.`,
+      });
+      return true;
+    }
+    this.#record(id, KIND.notice, {
+      text: `Could not set Cursor's ${parameter}: ${result.reason || result.status}.`,
+    });
+    return false;
+  }
+
   /** What a desktop chat is set to, from the desktop's own records. */
   desktopSettings(id) {
     const meta = this.meta.get(id);

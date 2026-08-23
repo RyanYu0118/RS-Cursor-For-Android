@@ -17,7 +17,7 @@ sources:
   - id: clipboard
     resource: /src/core/clipboard.mjs
     title: Image paste via clipboard
-generated: { by: agent, at: 2026-08-23T11:55:00Z }
+generated: { by: agent, at: 2026-08-23T16:20:00Z }
 ---
 
 # The Cursor window
@@ -77,14 +77,23 @@ new selectors.
 
 The pickers beside the chat box ignore a dispatched click; they open only
 on input the window believes came from a mouse, so they are pressed *where
-they are*. The model trigger is often compact — it shows only the effort
-word ("High"), not the model name — and that first menu is a parameters
-sheet (`selected-model-parameters-submenu-menu`: Fast / Effort / High /
-Model). Auto presses **Model** to open the real list
-(`selected-model-list-submenu`). Auto-select in that list is
-`auto-mode-select`. Search lives in the list (`placeholder="Search models"`);
-names not on the first card (GPT 5.5 is one) are typed there, only once the
-caret is in that box.
+they are*. The model trigger is compact — it often shows a parameter value
+("Medium" or "High"), not the model name — and first opens
+`selected-model-parameters-submenu-menu`.
+
+That sheet is model-specific. A GPT model can expose **Fast**, **Context**,
+**Reasoning**, and **Model**; another model can expose **Effort** instead.
+The stable contract is the **Model** row, not any one parameter name. Auto
+groups the label/value pairs by their row, opens each
+`parameter-submenu-<name>` to discover its options, and mirrors the result
+on web and Telegram. Fast is a switch; Context, Reasoning, and Effort are
+selects. No option list is hard-coded.
+
+The web presents Auto-select as a separate switch. Turning it on presses
+Cursor's `auto-mode-select`; choosing a named model turns it off. **Model**
+opens the real list (`selected-model-list-submenu`). Search lives there
+(`placeholder="Search models"`); names outside the first card are typed
+only once the caret is in that box.
 
 Modes are the @-mention popover. A model row is named from
 `model-item-*` minus Edit and the badges, because "Composer" and "2.5"
@@ -96,12 +105,12 @@ press for both, not two. Reading it as one word only left "Fast" glued to
 the next row's "New" tag into "FastNew" and Grok unreachable; either word
 in "High Fast" now finds that same press.
 
-The phone picker sends agent ids (`kimi-k3[reasoning=max]`), not menu
-words. The catalog often names that row `kimi-k3` too. Hyphens are spaces
-(`kimi-k3` is "Kimi K3"), a slug can omit a prefix the menu adds
-(`grok-4.6` is "Cursor Grok 4.6"), and `reasoning=max` / `fast=true` are
-the Max and Fast badges. `effort=high` is not — High sits on several rows.
-`reasoning=medium` is the Medium badge (GPT 5.5).
+The phone's named-model picker sends agent ids
+(`kimi-k3[reasoning=max]`), not menu words. The catalog often names that
+row `kimi-k3` too. Hyphens are spaces (`kimi-k3` is "Kimi K3"), and a slug
+can omit a prefix the menu adds (`grok-4.6` is "Cursor Grok 4.6").
+Parameter changes after model selection use Cursor's separate controls,
+not a guessed model-id suffix.
 
 The compact trigger staying on "High" after a switch is not proof it
 missed. Asking for what the trigger already says presses nothing.

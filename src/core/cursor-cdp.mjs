@@ -412,16 +412,71 @@ const plain = (s) =>
     .toLowerCase();
 
 /** The compact model trigger often shows only this, not the model name. */
-const EFFORT_WORD = /^(fast|high|medium|max)$/i;
+const EFFORT_WORD = /^(none|low|medium|high|extra high|max|fast)$/i;
 
 /**
- * Did we land on the parameters sheet (Fast / Effort / High / Model) rather
- * than the model list? That sheet is what the compact "High" trigger opens;
- * Model is the door into the real list.
+ * Did we land on the parameters sheet rather than the model list? Every model
+ * has a Model row, while its other controls vary: GPT has Context/Reasoning,
+ * Grok has Effort, and future models can add more. Requiring one particular
+ * control is what made the same build work on Grok and fail on GPT.
  */
 export function isParametersMenu(items) {
   const labels = new Set((items || []).map((item) => plain(item.label)));
-  return labels.has('model') && labels.has('effort') && !labels.has('auto');
+  return labels.has('model') && !labels.has('auto');
+}
+
+/**
+ * Turn Cursor's two-column parameter rows into controls a phone can render.
+ *
+ * MENU_ITEMS keeps each visible word separately because they are separately
+ * pressable. Their shared y-coordinate is the row relationship: Context sits
+ * beside 272K, Reasoning beside Medium. Fast is a checkbox row by itself.
+ */
+export function parseParameterMenu(items) {
+  const preferred = (items || []).filter(
+    (item) => item.source === 'selected-model-parameters-submenu-menu',
+  );
+  const source = preferred.length ? preferred : items || [];
+  const rows = [];
+  for (const item of [...source].sort((a, b) => a.y - b.y || a.x - b.x)) {
+    let row = rows.find((kept) => Math.abs(kept.y - item.y) <= 4);
+    if (!row) {
+      row = { y: item.y, items: [] };
+      rows.push(row);
+    }
+    if (!row.items.some((kept) => plain(kept.label) === plain(item.label))) row.items.push(item);
+  }
+
+  let model = null;
+  const parameters = [];
+  for (const row of rows) {
+    const parts = row.items.sort((a, b) => a.x - b.x);
+    const label = parts[0]?.label;
+    if (!label) continue;
+    const key = plain(label).replace(/\s+/g, '-');
+    if (key === 'model') {
+      model = parts[1]?.label || null;
+      continue;
+    }
+    if (parts.length === 1) {
+      parameters.push({
+        id: key,
+        label,
+        type: 'toggle',
+        value: Boolean(parts[0].current),
+        at: { x: parts[0].x, y: parts[0].y },
+      });
+      continue;
+    }
+    parameters.push({
+      id: key,
+      label,
+      type: 'select',
+      value: parts[1].label,
+      at: { x: parts[0].x, y: parts[0].y },
+    });
+  }
+  return { model, parameters };
 }
 
 /**
@@ -1275,6 +1330,109 @@ export class CursorCdp {
   }
 
   /**
+   * Cursor's model controls for this chat, in the shape the IDE currently
+   * exposes: Auto plus model-specific Fast / Context / Reasoning / Effort.
+   *
+   * Options are discovered from each nested submenu rather than hard-coded;
+   * different models and Cursor builds legitimately offer different values.
+   */
+  async modelControls({ threadId }) {
+    return this.#withThread(threadId, async (window) => {
+      const opened = await this.#openModelParameters(window);
+      if (opened.status !== 'ok') return opened;
+      if (!opened.parameters) {
+        await this.#closeMenu(window);
+        return {
+          status: 'ok',
+          auto: plain(opened.at.label) === 'auto',
+          model: plain(opened.at.label) === 'auto' ? null : opened.at.label,
+          parameters: [],
+        };
+      }
+
+      const parsed = parseParameterMenu(opened.menu.items);
+      for (const control of parsed.parameters.filter((item) => item.type === 'select')) {
+        await window.mouseAt(control.at);
+        const nested = await this.#parameterSubmenu(window, control.id);
+        control.options = nested.items.map((item) => item.label);
+        await window.pressEscape();
+        await wait(this.settleMs);
+      }
+      await this.#closeMenu(window);
+      return {
+        status: 'ok',
+        auto: false,
+        model: parsed.model,
+        parameters: parsed.parameters.map(({ at: _at, ...control }) => control),
+      };
+    });
+  }
+
+  /** Change one model-specific control through Cursor's own parameter menu. */
+  async setModelParameter({ threadId, parameter, value }) {
+    return this.#withThread(threadId, async (window) => {
+      const held = await this.#holdQueue(window);
+      const opened = await this.#openModelParameters(window);
+      if (opened.status !== 'ok' || !opened.parameters) {
+        await this.#closeMenu(window);
+        await this.#putBackQueue(window, held);
+        return opened.status === 'ok'
+          ? { status: 'no-such-option', reason: 'Auto has no model parameters' }
+          : opened;
+      }
+
+      const parsed = parseParameterMenu(opened.menu.items);
+      const wanted = plain(parameter);
+      const control = parsed.parameters.find(
+        (item) => plain(item.id) === wanted || plain(item.label) === wanted,
+      );
+      if (!control) {
+        await this.#closeMenu(window);
+        await this.#putBackQueue(window, held);
+        return {
+          status: 'no-such-option',
+          reason: `no parameter called "${parameter}"`,
+          options: parsed.parameters.map((item) => item.label),
+        };
+      }
+
+      if (control.type === 'toggle') {
+        const next = Boolean(value);
+        if (next === control.value) {
+          await this.#closeMenu(window);
+          await this.#putBackQueue(window, held);
+          return { status: 'already', parameter: control.label, value: next };
+        }
+        await window.mouseAt(control.at);
+      } else {
+        await window.mouseAt(control.at);
+        const nested = await this.#parameterSubmenu(window, control.id);
+        const picked = pickItem(nested.items, String(value));
+        if (!picked.item) {
+          await this.#closeMenu(window);
+          await this.#putBackQueue(window, held);
+          return {
+            status: 'no-such-option',
+            reason: picked.reason,
+            parameter: control.label,
+            options: nested.items.map((item) => item.label),
+          };
+        }
+        for (const step of picked.press) await window.mouseAt(step);
+      }
+
+      await this.#closeMenu(window);
+      const leftover = await this.#putBackQueue(window, held);
+      return {
+        status: 'set',
+        parameter: control.label,
+        value: control.type === 'toggle' ? Boolean(value) : String(value),
+        ...(leftover.length ? { held: leftover } : {}),
+      };
+    });
+  }
+
+  /**
    * Switch a chat's model or mode, by the name the menu gives it.
    *
    * A variant may be named after the model — "Opus 5 High" — and is pressed on
@@ -1291,6 +1449,31 @@ export class CursorCdp {
       return { status: 'error', reason: 'nothing was named to switch to' };
     }
     return this.#withThread(threadId, (window) => this.#inMenu(window, picker, String(wanted)));
+  }
+
+  /** Open the compact trigger and identify parameters vs the model list. */
+  async #openModelParameters(window) {
+    const at = await window.pickerAt('model');
+    if (!at) return { status: 'no-picker', reason: 'this window has no model picker' };
+    await window.mouseAt(at);
+    const menu = await this.#menuOpened(window);
+    if (!menu.items.length) {
+      return { status: 'no-menu', reason: 'the model picker did not open' };
+    }
+    return { status: 'ok', at, menu, parameters: isParametersMenu(menu.items) };
+  }
+
+  /** Wait for one parameter's nested option menu, excluding the main sheet. */
+  async #parameterSubmenu(window, parameter) {
+    const exact = `parameter-submenu-${plain(parameter).replace(/\s+/g, '-')}`;
+    let seen = { open: 0, items: [] };
+    for (let look = 0; look < MENU_LOOKS; look += 1) {
+      await wait(this.settleMs);
+      seen = (await window.menuItems()) || seen;
+      const items = seen.items.filter((item) => item.source === exact);
+      if (items.length) return { ...seen, items };
+    }
+    return { ...seen, items: [] };
   }
 
   /**

@@ -9,7 +9,7 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [Host](concepts/host.md) - One process on 4331: HTTP, WebSocket, restart, machine name
 * [Supervise](concepts/supervise.md) - Watchdog; runs setup checks; prints the Tailscale URL
 * [Access](concepts/access.md) - Tailscale-only reachability, setup checklist, no Auto login
-* [Cursor window](concepts/cursor-window.md) - Typing, pressing, pickers, paste, over the debug port
+* [Cursor window](concepts/cursor-window.md) - Typing, pressing, dynamic model controls, and paste over the debug port
 * [Desktop chats](concepts/desktop-chats.md) - Carry on a Cursor IDE chat from the phone
 * [Desktop bridge](concepts/desktop-bridge.md) - Named-pipe send, gate, outbox
 * [Desktop threads](concepts/desktop-threads.md) - Reading replies from `state.vscdb`

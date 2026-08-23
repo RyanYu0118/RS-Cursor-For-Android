@@ -670,6 +670,37 @@ export class TelegramBridge extends EventEmitter {
         })),
       );
     }
+    if (picker === 'model') {
+      const controls = await this.sessions.modelControls(active.id);
+      for (const parameter of controls.parameters || []) {
+        if (parameter.type === 'toggle') {
+          rows.push([
+            {
+              text: `${parameter.value ? '●' : '○'} ${parameter.label}`,
+              callback_data: this.tokenFor({
+                kind: 'cursorParam',
+                parameter: parameter.id,
+                type: 'toggle',
+                value: String(!parameter.value),
+                label: parameter.label,
+              }),
+            },
+          ]);
+          continue;
+        }
+        const buttons = (parameter.options || []).map((value) => ({
+          text: `${value === parameter.value ? '● ' : ''}${parameter.label}: ${value}`.slice(0, 40),
+          callback_data: this.tokenFor({
+            kind: 'cursorParam',
+            parameter: parameter.id,
+            type: 'select',
+            value,
+            label: parameter.label,
+          }),
+        }));
+        for (let i = 0; i < buttons.length; i += 2) rows.push(buttons.slice(i, i + 2));
+      }
+    }
     return this.send(
       `Cursor's ${picker} for this chat is <b>${esc(offer.was || 'unknown')}</b>`,
       { reply_markup: { inline_keyboard: rows } },
@@ -739,6 +770,15 @@ export class TelegramBridge extends EventEmitter {
           : await this.sessions.setModel(id, payload.label);
       await answer(set ? `${payload.picker}: ${payload.label}` : 'Cursor would not take that.');
       if (set) await this.send(`${payload.picker === 'mode' ? 'Mode' : 'Model'} → <b>${esc(payload.label)}</b>`);
+      return;
+    }
+
+    if (payload.kind === 'cursorParam') {
+      const id = this.sessions.activeId;
+      const value = payload.type === 'toggle' ? payload.value === 'true' : payload.value;
+      const set = await this.sessions.setModelParameter(id, payload.parameter, value);
+      await answer(set ? `${payload.label}: ${payload.value}` : 'Cursor would not take that.');
+      if (set) await this.send(`${esc(payload.label)} → <b>${esc(payload.value)}</b>`);
       return;
     }
 

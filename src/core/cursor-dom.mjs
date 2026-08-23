@@ -669,7 +669,10 @@ export const MENU_ITEMS = `(() => {
       .map((s) => modelMenu.querySelector(s))
       .find(Boolean);
     if (toggle) {
-      push(items, 'Auto', toggle, { current: toggle.getAttribute('aria-checked') === 'true' });
+      push(items, 'Auto', toggle, {
+        current: toggle.getAttribute('aria-checked') === 'true',
+        source: 'model-list',
+      });
     }
     for (const selector of ${list(SELECTORS.modelItem)}) {
       for (const el of modelMenu.querySelectorAll(selector)) {
@@ -690,9 +693,9 @@ export const MENU_ITEMS = `(() => {
         // them there are (Grok pops "Fast" then "High").
         const words = clean(nameEl.textContent).split(' ').filter(Boolean);
         while (words.length > 1 && badgeWord.test(words[words.length - 1])) words.pop();
-        push(items, words.join(' '), nameEl, { current: state === 'true' });
+        push(items, words.join(' '), nameEl, { current: state === 'true', source: 'model-list' });
 
-        for (const kid of leaf) push(items, clean(ownText(kid)), kid);
+        for (const kid of leaf) push(items, clean(ownText(kid)), kid, { source: 'model-list' });
       }
     }
     return { open: 1, items };
@@ -707,6 +710,11 @@ export const MENU_ITEMS = `(() => {
 
   const items = [];
   for (const menu of menus) {
+    const source =
+      menu.getAttribute('data-testid') ||
+      menu.getAttribute('aria-label') ||
+      menu.closest('[data-testid]')?.getAttribute('data-testid') ||
+      'menu';
     for (const el of menu.querySelectorAll('*')) {
       const label = clean(ownText(el));
       if (!label || label.length > 60 || shortcut.test(label)) continue;
@@ -722,7 +730,7 @@ export const MENU_ITEMS = `(() => {
         el.getAttribute('aria-selected') ??
         el.closest('[aria-checked],[aria-selected]')?.getAttribute('aria-checked') ??
         null;
-      items.push({ label, x, y, current: state === 'true' });
+      items.push({ label, x, y, current: state === 'true', source });
     }
   }
   return { open: menus.length, items };
