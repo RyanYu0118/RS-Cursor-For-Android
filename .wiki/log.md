@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-08-23
+* **Fix**: Desktop model switch drills through the compact picker's parameters sheet (Fast / Effort / High / Model) into the real list, then search — GPT 5.5 and Auto-select were missing because Auto was reading that first menu as the whole offer.
 * **Fix**: New Agent from the phone hits the real `(Ctrl+N)` workbench button with a CDP mouse click — editor-group chrome that also says "New Agent" no longer fakes success and forces ACP fallback.
 
 ## 2026-08-22

@@ -411,6 +411,19 @@ const plain = (s) =>
     .trim()
     .toLowerCase();
 
+/** The compact model trigger often shows only this, not the model name. */
+const EFFORT_WORD = /^(fast|high|medium|max)$/i;
+
+/**
+ * Did we land on the parameters sheet (Fast / Effort / High / Model) rather
+ * than the model list? That sheet is what the compact "High" trigger opens;
+ * Model is the door into the real list.
+ */
+export function isParametersMenu(items) {
+  const labels = new Set((items || []).map((item) => plain(item.label)));
+  return labels.has('model') && labels.has('effort') && !labels.has('auto');
+}
+
 /**
  * Which menu item does this name mean, and what has to be pressed to get it?
  *
@@ -1314,6 +1327,17 @@ export class CursorCdp {
       return { status: 'no-menu', reason: `the ${which} picker did not open` };
     }
 
+    // Compact trigger opens parameters (Fast / Effort / High / Model). The
+    // real list is behind Model — without this step every name looks missing
+    // and the offer list is those five words.
+    if (which === 'model' && isParametersMenu(menu.items)) {
+      const gate = menu.items.find((item) => plain(item.label) === 'model');
+      if (gate) {
+        await window.mouseAt(gate);
+        menu = await this.#menuOpened(window);
+      }
+    }
+
     const options = [...new Set(menu.items.map((item) => item.label))];
     if (!wanted) {
       await this.#closeMenu(window);
@@ -1344,10 +1368,16 @@ export class CursorCdp {
 
     const now = await this.#settled(window, which, at.label);
     const leftover = await this.#putBackQueue(window, held);
-    const base =
-      now === at.label
-        ? { status: 'unchanged', reason: `it still says ${now}`, picker: which, was: at.label }
-        : { status: 'set', picker: which, was: at.label, now };
+    // The compact trigger keeps showing an effort word ("High") after a
+    // switch, so an unchanged label is not proof the press missed — unless
+    // it was never an effort word to begin with.
+    const compact =
+      which === 'model' && (EFFORT_WORD.test(plain(at.label)) || EFFORT_WORD.test(plain(now)));
+    const shown = compact && EFFORT_WORD.test(plain(now)) ? wanted : now;
+    const missed = now === at.label && !compact;
+    const base = missed
+      ? { status: 'unchanged', reason: `it still says ${now}`, picker: which, was: at.label }
+      : { status: 'set', picker: which, was: at.label, now: shown };
     return leftover.length ? { ...base, held: leftover } : base;
   }
 

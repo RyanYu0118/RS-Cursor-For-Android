@@ -78,14 +78,15 @@ value as setup documentation is fine.
   each other (models are a `role=menu`, modes are the @-mention popover) and an
   item is named by its own text, never its subtree, or "Opus 5" holding a "High"
   badge reads as "Opus 5 HighEdit". A variant is the row then the badge on it.
-  When the chat is on Auto, that menu hides every named model behind a search
-  box — Auto types the stem (`composer-2.5 Fast` → `composer 2.5`) into it,
-  and only once the caret is actually there, or the query becomes a message.
-  A badge can also bundle more than one word in one press — Grok's row offers
+  The model trigger is compact: it often says only the effort word ("High"),
+  and that first menu is parameters (Fast / Effort / High / Model), not the
+  model list. Auto presses Model to reach the list (`selected-model-list-submenu`),
+  then search for a name that is not on the first card. Never type into search until the caret is actually there, or the
+  query becomes a message. Auto in that list is `auto-mode-select`. A badge
+  can also bundle more than one word in one press — Grok's row offers
   "High Fast" together, not separately — so either word finds that same press.
-  Nothing is believed from the click: Cursor's stored record keeps the model a
-  chat was last *sent* with, so the word on the picker is the proof, and asking
-  for what it is already on presses nothing.
+  The compact trigger staying on "High" after a switch is not proof it missed.
+  Asking for what the trigger already says presses nothing.
 - **A mirrored answer arrives in pieces.** Cursor writes a reply into its bubble
   as it is spoken, so what is in the database mid-turn is a prefix. Reading a
   bubble once and marking it seen published whatever was written at that instant

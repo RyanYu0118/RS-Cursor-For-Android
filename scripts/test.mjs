@@ -444,6 +444,7 @@ if (existsSync(SRC)) {
           nextThreadId = null,
           modelChangeEndsTurn = true,
           hasMenuSearch = false,
+          modelList = null,
         } = {},
       ) {
         this.takesPaste = takesPaste;
@@ -456,6 +457,7 @@ if (existsSync(SRC)) {
         this.nextThreadId = nextThreadId;
         this.modelChangeEndsTurn = modelChangeEndsTurn;
         this.hasMenuSearch = hasMenuSearch;
+        this.modelList = modelList;
         this.menuQuery = '';
         this.typedSearch = '';
         this.searchFocused = false;
@@ -537,6 +539,10 @@ if (existsSync(SRC)) {
         );
         if (item) {
           this.pressed.push(item.label);
+          if (item.opens === 'list' && this.modelList) {
+            this.menus.model = this.modelList;
+            return;
+          }
           // A model row with badges beside it does not commit on its own: the
           // variant sitting on that row is what gets chosen, so the menu stays.
           const beside = (this.menus[this.openMenu] || []).filter(
@@ -1395,7 +1401,7 @@ if (existsSync(SRC)) {
 
     // Setting a chat's model and mode: the menu is opened, one item is pressed,
     // and nothing is believed until the picker itself says something new.
-    const { pickItem, menuSearchStem } = await import('../src/core/cursor-cdp.mjs');
+    const { pickItem, menuSearchStem, isParametersMenu } = await import('../src/core/cursor-cdp.mjs');
     let picking = false;
     const withPickers = () =>
       new FakeWindow(
@@ -1607,6 +1613,62 @@ if (existsSync(SRC)) {
     }
     if (pickItem(grok, 'grok-4.6 Max').item) {
       picking = fail('a word not on the badge is not a match') ?? true;
+    }
+
+    const gpt = [
+      { label: 'GPT-5.5', x: 1, y: 20 },
+      { label: 'Medium', x: 8, y: 20 },
+    ];
+    if (pickItem(gpt, 'gpt-5.5 Medium').press.length !== 2) {
+      picking = fail('gpt-5.5 Medium should press the row then Medium') ?? true;
+    }
+    if (
+      !isParametersMenu([
+        { label: 'Fast' },
+        { label: 'Effort' },
+        { label: 'High' },
+        { label: 'Model' },
+        { label: 'Cursor Grok 4.6' },
+      ])
+    ) {
+      picking = fail('Fast/Effort/High/Model is the parameters sheet') ?? true;
+    }
+    if (isParametersMenu([{ label: 'Auto' }, { label: 'GPT-5.5' }, { label: 'Medium' }])) {
+      picking = fail('the model list is not the parameters sheet') ?? true;
+    }
+
+    // Compact picker opens parameters first; Model is the door to the list.
+    const compact = new FakeWindow(
+      { threadId: THREAD, hasComposer: true },
+      {
+        pickers: { model: 'High' },
+        hasMenuSearch: true,
+        menus: {
+          model: [
+            { label: 'Fast', x: 10, y: 10 },
+            { label: 'Effort', x: 10, y: 20 },
+            { label: 'High', x: 40, y: 20 },
+            { label: 'Model', x: 10, y: 30, opens: 'list' },
+            { label: 'Cursor Grok 4.6', x: 40, y: 30 },
+          ],
+        },
+        modelList: [
+          { label: 'Auto', x: 10, y: 40 },
+          { label: 'GPT-5.5', x: 10, y: 50, needSearch: 'gpt 5.5' },
+          { label: 'Medium', x: 40, y: 50, needSearch: 'gpt 5.5', becomes: 'Medium' },
+        ],
+      },
+    );
+    const toGpt = await machine({ compact }).choose({
+      threadId: THREAD,
+      picker: 'model',
+      wanted: 'gpt-5.5 Medium',
+    });
+    if (toGpt.status !== 'set' || toGpt.now !== 'gpt-5.5 Medium') {
+      picking = fail(`parameters then search should find GPT 5.5: ${JSON.stringify(toGpt)}`) ?? true;
+    }
+    if (!compact.pressed.includes('Model') || !compact.pressed.includes('«search»')) {
+      picking = fail(`should press Model then search, pressed ${compact.pressed.join(',')}`) ?? true;
     }
 
     // Cursor's Auto-on menu hides named models until search is typed.

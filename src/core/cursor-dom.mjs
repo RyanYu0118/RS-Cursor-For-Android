@@ -80,33 +80,46 @@ export const SELECTORS = {
   questionLabel: ['.composer-questionnaire-toolbar-option-label'],
   questionContinue: ['.composer-run-button'],
   questionSkip: ['.composer-skip-button'],
-  /** The model button, and the text inside it naming the current model. */
-  modelName: ['.ui-model-picker__trigger-text'],
-  modelButton: ['button[aria-haspopup="menu"]'],
   /**
-   * Cursor's model picker menu, as of the Auto-toggle redesign.
+   * The model button, and the text inside it.
    *
-   * When Auto is on, the named models are not listed — they appear once the
-   * search box is typed in. Rows are `data-testid="model-item-<id>"`.
+   * The compact trigger often shows only the effort word ("High"), not the
+   * model name. Class prefix moved from `ui-` to `vscode-`.
    */
-  modelMenu: ['[data-testid="model-picker-menu"]'],
+  modelName: ['.vscode-model-picker__trigger-text', '.ui-model-picker__trigger-text'],
+  modelButton: ['.vscode-model-picker__trigger', 'button[aria-haspopup="menu"]'],
+  /**
+   * Cursor's model picker menus.
+   *
+   * The compact trigger first opens a parameters sheet (`Fast` / `Effort` /
+   * `High` / `Model`). The real list is a submenu — `selected-model-list-submenu`
+   * — reached by pressing Model. Search and `model-item-*` rows live there.
+   * Auto is `auto-mode-select`, not a checkbox toggle.
+   */
+  modelMenu: ['[data-testid="selected-model-list-submenu"]', '[data-testid="model-picker-menu"]'],
+  parametersMenu: ['[data-testid="selected-model-parameters-submenu-menu"]'],
   modelSearch: [
     '[data-component="menu-search-row"] input',
     'input[placeholder="Search models"]',
     'input[aria-label="Search menu items"]',
   ],
-  autoToggle: ['[data-testid="auto-mode-toggle"]'],
+  autoToggle: ['[data-testid="auto-mode-select"]', '[data-testid="auto-mode-toggle"]'],
   modelItem: ['[data-testid^="model-item-"]'],
   /**
    * A menu, once one is open.
    *
    * The two pickers do not agree on what a menu is: models open a proper
-   * `role=menu` (the picker itself is `data-testid="model-picker-menu"`),
-   * modes open the same popover Cursor uses for @-mentions. Both are listed,
-   * and neither is in the chat pane — they render near the root of the page,
-   * so a menu is looked for in the whole document.
+   * `role=menu` (the list is `selected-model-list-submenu`), modes open the
+   * same popover Cursor uses for @-mentions. Both are listed, and neither is
+   * in the chat pane — they render near the root of the page, so a menu is
+   * looked for in the whole document.
    */
-  menu: ['[data-testid="model-picker-menu"]', '[role="menu"]', '.typeahead-popover'],
+  menu: [
+    '[data-testid="selected-model-list-submenu"]',
+    '[data-testid="model-picker-menu"]',
+    '[role="menu"]',
+    '.typeahead-popover',
+  ],
   /**
    * Things that look pressable and are not controls.
    *
@@ -600,13 +613,15 @@ ${HELPERS}
 /**
  * What the open menu offers, and where each of those things is.
  *
- * The model picker is its own widget (`data-testid="model-picker-menu"`). A
- * row's name is split across children — "Composer" in a highlight, "2.5" next
- * to it, badges after that, "Edit" as a nested menuitem — so walking every
- * text node produced names no person would use, and Auto's description
- * ("Balanced quality and speed…") read as a second model. Rows are taken from
- * `model-item-*` test ids, named by the words minus Edit and the badges, with
- * the badges still their own pressable thing.
+ * The model list is `selected-model-list-submenu` (older builds used
+ * `model-picker-menu`). A row's name is split across children — "Composer" in
+ * a highlight, "2.5" next to it, badges after that, "Edit" as a nested
+ * menuitem — so walking every text node produced names no person would use,
+ * and Auto's description ("Balanced quality and speed…") read as a second
+ * model. Rows are taken from `model-item-*` test ids, named by the words minus
+ * Edit and the badges, with the badges still their own pressable thing. The
+ * compact trigger's first menu is parameters, not this list — Auto presses
+ * Model to reach it.
  *
  * A badge element can hold more than one word — Grok's row says "High Fast"
  * in a single span, not two. That is one press, not a press per word: reading
