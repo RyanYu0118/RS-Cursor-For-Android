@@ -17,7 +17,7 @@ sources:
   - id: clipboard
     resource: /src/core/clipboard.mjs
     title: Image paste via clipboard
-generated: { by: agent, at: 2026-08-23T16:20:00Z }
+generated: { by: agent, at: 2026-08-23T16:26:00Z }
 ---
 
 # The Cursor window
@@ -89,11 +89,14 @@ groups the label/value pairs by their row, opens each
 on web and Telegram. Fast is a switch; Context, Reasoning, and Effort are
 selects. No option list is hard-coded.
 
-The web presents Auto-select as a separate switch. Turning it on presses
-Cursor's `auto-mode-select`; choosing a named model turns it off. **Model**
-opens the real list (`selected-model-list-submenu`). Search lives there
-(`placeholder="Search models"`); names outside the first card are typed
-only once the caret is in that box.
+The web composer presents one model summary. Tapping it opens a settings
+dialog (bottom sheet on phones) where Auto-select is a separate switch,
+Model opens a searchable list, and the model-specific parameters are
+labelled rows. Turning Auto on presses Cursor's `auto-mode-select`; choosing
+a named model turns it off. Cursor's own **Model** row opens the real list
+(`selected-model-list-submenu`). Search lives there
+(`placeholder="Search models"`); names outside the first card are typed only
+once the caret is in that box.
 
 Modes are the @-mention popover. A model row is named from
 `model-item-*` minus Edit and the badges, because "Composer" and "2.5"

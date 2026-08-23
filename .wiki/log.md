@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-08-23
+* **Update**: Web composer now has one model summary button; it opens a desktop dialog / phone bottom sheet with Auto, a searchable model list, and clearly labelled live parameters.
 * **Update**: Model controls now mirror Cursor: Auto is a separate switch, and web/Telegram discover and select the current model's Fast, Context, Reasoning, or Effort options from the IDE's nested menus.
 * **Fix**: Parameter-sheet detection keys on the stable Model row instead of requiring Effort, so GPT's Context/Reasoning sheet reaches the model list too.
 * **Fix**: Desktop model switch drills through the compact picker's parameters sheet (Fast / Effort / High / Model) into the real list, then search — GPT 5.5 and Auto-select were missing because Auto was reading that first menu as the whole offer.

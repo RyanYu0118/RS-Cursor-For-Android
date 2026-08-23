@@ -2480,11 +2480,16 @@ if (existsSync(SRC)) {
     failed = true;
   }
   if (
+    !html.includes('id="model-open"') ||
+    !html.includes('id="model-sheet"') ||
     !html.includes('id="model-auto"') ||
+    !html.includes('id="model-filter"') ||
     !html.includes('role="switch"') ||
-    !js.includes('function renderModelControls')
+    !js.includes('function renderModelControls') ||
+    !js.includes('function setModelSheet') ||
+    !js.includes('function updateModelPresentation')
   ) {
-    fail('Auto-select must be a switch beside dynamic Cursor model controls');
+    fail('one composer button must open searchable Auto and model controls in a sheet');
     failed = true;
   }
   if (

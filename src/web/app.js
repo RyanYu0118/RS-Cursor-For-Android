@@ -67,8 +67,18 @@ const els = {
   composerBox: document.querySelector('.composer-box'),
   viewChat: $('view-chat'),
   model: $('model'),
+  modelOpen: $('model-open'),
+  modelSummary: $('model-summary'),
+  modelSheet: $('model-sheet'),
+  modelClose: $('model-close'),
   modelAuto: $('model-auto'),
+  modelChoice: $('model-choice'),
+  modelChoiceLabel: $('model-choice-label'),
+  modelListPane: $('model-list-pane'),
+  modelFilter: $('model-filter'),
+  modelList: $('model-list'),
   modelParameters: $('model-parameters'),
+  modelStatus: $('model-status'),
   policy: $('policy'),
   conn: $('conn'),
   sheet: $('sheet'),
@@ -160,6 +170,8 @@ const state = {
   usage: null,
   /** Cursor's live Auto / Fast / Context / Reasoning / Effort controls */
   modelControls: null,
+  /** a model/menu press is in flight; lock duplicate changes until Cursor replies */
+  modelUpdating: false,
   usageTimer: null,
   /** after session.create, put the caret in the box once the chat is attached */
   focusComposer: false,
@@ -2568,6 +2580,8 @@ function renderModels(models) {
   }
   if (named.some((model) => model.modelId === was)) els.model.value = was;
   els.model.dataset.filled = signature;
+  renderModelList();
+  updateModelPresentation();
 }
 
 /**
@@ -2582,7 +2596,6 @@ function selectModel(modelId, modelName) {
   if (!els.model.options.length) return;
   const automatic = modelId === 'default[]';
   els.modelAuto.checked = automatic;
-  els.model.disabled = automatic;
   if (automatic) {
     renderModelControls({ status: 'ok', auto: true, model: null, parameters: [] });
     return;
@@ -2590,6 +2603,8 @@ function selectModel(modelId, modelName) {
   const options = [...els.model.options];
   if (modelId && options.some((o) => o.value === modelId)) {
     els.model.value = modelId;
+    renderModelList();
+    updateModelPresentation();
     return;
   }
   const name = String(modelName || modelId || '').trim();
@@ -2597,42 +2612,156 @@ function selectModel(modelId, modelName) {
   const byName = options.find((o) => o.textContent === name);
   if (byName) {
     els.model.value = byName.value;
+    renderModelList();
+    updateModelPresentation();
     return;
   }
   const byPrefix = options
     .filter((o) => o.textContent && name.toLowerCase().startsWith(o.textContent.toLowerCase()))
     .sort((a, b) => b.textContent.length - a.textContent.length)[0];
   if (byPrefix) els.model.value = byPrefix.value;
+  renderModelList();
+  updateModelPresentation();
 }
 
-/** Paint the same controls Cursor puts in its compact model menu. */
+function selectedModelLabel() {
+  return els.model.selectedOptions[0]?.textContent || state.modelControls?.model || 'Choose a model';
+}
+
+/** One compact composer button; details belong in the sheet. */
+function updateModelPresentation() {
+  const automatic = Boolean(state.modelControls?.auto || els.modelAuto.checked);
+  const model = state.modelControls?.model || selectedModelLabel();
+  els.modelChoiceLabel.textContent = automatic ? 'Cursor picks' : model;
+  els.modelChoice.disabled = automatic || Boolean(state.modelUpdating);
+
+  if (automatic) {
+    els.modelSummary.textContent = 'Auto';
+    return;
+  }
+  const parameters = state.modelControls?.parameters || [];
+  const thinking = parameters.find((parameter) => /^(reasoning|effort)$/i.test(parameter.id));
+  const fast = parameters.find((parameter) => parameter.id === 'fast' && parameter.value);
+  const parts = [model, thinking?.value, fast ? 'Fast' : null].filter(Boolean);
+  els.modelSummary.textContent = parts.join(' · ') || 'Model';
+}
+
+function setModelList(open) {
+  const show = Boolean(open) && !els.modelChoice.disabled;
+  els.modelListPane.hidden = !show;
+  els.modelChoice.setAttribute('aria-expanded', String(show));
+  if (show) {
+    els.modelFilter.value = '';
+    renderModelList();
+    setTimeout(() => els.modelFilter.focus(), 0);
+  }
+}
+
+function renderModelList() {
+  if (!els.modelList) return;
+  const query = String(els.modelFilter?.value || '').trim().toLowerCase();
+  els.modelList.innerHTML = '';
+  for (const option of els.model.options) {
+    if (query && !option.textContent.toLowerCase().includes(query)) continue;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'model-list-option';
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', String(option.value === els.model.value));
+    button.innerHTML = `<span>${esc(option.textContent)}</span><span aria-hidden="true">${
+      option.value === els.model.value ? '✓' : ''
+    }</span>`;
+    button.onclick = () => {
+      els.model.value = option.value;
+      setModelList(false);
+      els.model.onchange();
+    };
+    els.modelList.append(button);
+  }
+  if (!els.modelList.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'sheet-note model-list-empty';
+    empty.textContent = 'No matching models';
+    els.modelList.append(empty);
+  }
+}
+
+function setModelUpdating(updating, text = 'Updating Cursor…') {
+  state.modelUpdating = Boolean(updating);
+  els.modelStatus.textContent = updating ? text : '';
+  els.modelAuto.disabled = Boolean(updating);
+  els.modelChoice.disabled = Boolean(updating) || els.modelAuto.checked;
+  for (const control of els.modelParameters.querySelectorAll('input, select')) {
+    control.disabled = Boolean(updating);
+  }
+  els.modelOpen.classList.toggle('loading', Boolean(updating));
+  updateModelPresentation();
+}
+
+function setModelSheet(open) {
+  els.modelSheet.hidden = !open;
+  if (!open) {
+    setModelList(false);
+    return;
+  }
+  const meta = state.sessions.find((session) => session.id === state.sessionId);
+  if (meta?.kind === 'desktop') {
+    setModelUpdating(true, 'Reading Cursor…');
+    sendOp({ op: 'session.modelControls', sessionId: state.sessionId });
+  } else {
+    setModelUpdating(false);
+  }
+}
+
+/** Paint the same controls Cursor puts in its model settings sheet. */
 function renderModelControls(controls) {
   state.modelControls = controls?.status === 'ok' ? controls : null;
   const automatic = Boolean(state.modelControls?.auto);
   els.modelAuto.checked = automatic;
-  els.model.disabled = automatic;
   els.modelParameters.innerHTML = '';
-  if (!state.modelControls || automatic) return;
+  setModelList(false);
+  if (!state.modelControls || automatic) {
+    setModelUpdating(false);
+    updateModelPresentation();
+    return;
+  }
 
   for (const parameter of state.modelControls.parameters || []) {
+    const row = document.createElement('div');
+    row.className = 'model-config-row';
+    const copy = document.createElement('span');
+    copy.className = 'model-config-copy';
+    const name = document.createElement('strong');
+    name.textContent = parameter.label;
+    copy.append(name);
+
     if (parameter.type === 'toggle') {
+      const value = document.createElement('small');
+      value.textContent = parameter.value ? 'On' : 'Off';
+      copy.append(value);
       const label = document.createElement('label');
-      label.className = 'model-parameter-toggle';
+      label.className = 'model-switch';
       label.title = parameter.label;
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.role = 'switch';
       input.checked = Boolean(parameter.value);
       input.setAttribute('aria-label', parameter.label);
-      input.onchange = () =>
+      const track = document.createElement('span');
+      track.className = 'model-auto-track';
+      track.setAttribute('aria-hidden', 'true');
+      input.onchange = () => {
+        setModelUpdating(true);
         sendOp({
           op: 'session.modelParameter',
           sessionId: state.sessionId,
           parameter: parameter.id,
           value: input.checked,
         });
-      label.append(input, document.createTextNode(parameter.label));
-      els.modelParameters.append(label);
+      };
+      label.append(input, track);
+      row.append(copy, label);
+      els.modelParameters.append(row);
       continue;
     }
 
@@ -2647,15 +2776,20 @@ function renderModelControls(controls) {
       select.append(option);
     }
     select.value = parameter.value;
-    select.onchange = () =>
+    select.onchange = () => {
+      setModelUpdating(true);
       sendOp({
         op: 'session.modelParameter',
         sessionId: state.sessionId,
         parameter: parameter.id,
         value: select.value,
       });
-    els.modelParameters.append(select);
+    };
+    row.append(copy, select);
+    els.modelParameters.append(row);
   }
+  setModelUpdating(false);
+  updateModelPresentation();
 }
 
 /**
@@ -3023,6 +3157,9 @@ function connect() {
       }
       renderModels(msg.catalog?.models);
       renderModes(msg.catalog?.modes);
+      state.modelControls = null;
+      els.modelParameters.innerHTML = '';
+      setModelUpdating(false);
       if (msg.projects) state.projects = msg.projects;
       if (msg.chats) state.chats = msg.chats;
       state.replaying = true;
@@ -3262,6 +3399,10 @@ function connect() {
 
     if (msg.type === 'error') {
       setHistoryLoading(false);
+      if (!els.modelSheet.hidden && state.modelUpdating) {
+        setModelUpdating(false);
+        els.modelStatus.textContent = msg.message;
+      }
       render({ kind: 'error', text: msg.message });
     }
   };
@@ -4114,6 +4255,7 @@ document.addEventListener('keydown', (e) => {
   // tool view, which sits over the rail.
   if (!$('lightbox').hidden) closeLightbox();
   else if (!els.planSheet.hidden) setPlanSheet(false);
+  else if (!els.modelSheet.hidden) setModelSheet(false);
   else if (!els.usageSheet.hidden) setUsageSheet(false);
   else if (!$('newbie').hidden) setNewbie(false);
   else if (!els.sheet.hidden) setSheet(false);
@@ -4127,19 +4269,27 @@ els.mode.onchange = () => {
 };
 els.model.onchange = () => {
   els.modelAuto.checked = false;
-  els.model.disabled = false;
+  setModelUpdating(true);
+  updateModelPresentation();
   sendOp({ op: 'session.model', sessionId: state.sessionId, modelId: els.model.value });
 };
 els.modelAuto.onchange = () => {
   const automatic = els.modelAuto.checked;
-  els.model.disabled = automatic;
-  els.modelParameters.innerHTML = '';
+  setModelList(false);
+  setModelUpdating(true);
   sendOp({
     op: 'session.model',
     sessionId: state.sessionId,
     modelId: automatic ? 'default[]' : els.model.value,
   });
 };
+els.modelOpen.onclick = () => setModelSheet(true);
+els.modelClose.onclick = () => setModelSheet(false);
+els.modelSheet.onclick = (e) => {
+  if (e.target === els.modelSheet) setModelSheet(false);
+};
+els.modelChoice.onclick = () => setModelList(els.modelListPane.hidden);
+els.modelFilter.addEventListener('input', renderModelList);
 els.policy.onchange = () =>
   sendOp({ op: 'session.policy', sessionId: state.sessionId, policy: els.policy.value });
 

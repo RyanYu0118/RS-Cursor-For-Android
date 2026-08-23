@@ -18,7 +18,7 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [Approvals](concepts/approvals.md) - Permissions, automatic mode transitions, questions, plans, and deliberate Keep / Undo / Redo
 * [Queue](concepts/queue.md) - Messages waiting behind a turn, in Auto or in Cursor
 * [Telegram](concepts/telegram.md) - Bot as a projection of the same host
-* [Web](concepts/web.md) - PWA lifecycle, transcript cache, Home Screen install, and native iOS keyboard limits
+* [Web](concepts/web.md) - PWA lifecycle, transcript cache, responsive model sheet, and Home Screen behaviour
 * [Usage](concepts/usage.md) - Context dial for this chat, plus Cursor Models / Other Models account quotas
 * [Browser](concepts/browser.md) - Headed Chrome, screencast, not recorded
 * [Terminals](concepts/terminals.md) - node-pty shells for the user and the agent

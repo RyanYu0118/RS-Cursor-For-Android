@@ -37,7 +37,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-08-22T20:30:00Z }
+generated: { by: agent, at: 2026-08-23T16:26:00Z }
 ---
 
 # Web app
@@ -117,7 +117,8 @@ Messages scroll through a short fade and under the field. A measured
 `--composer-height` pads the transcript (and lifts the jump button /
 scrub rail) so the newest line stays readable at the live edge.
 
-Mode and model live beside the composer, as in Cursor; approval policy
+Mode and one compact model summary live beside the composer; tapping the
+model opens its settings dialog (a bottom sheet on phones). Approval policy
 lives in the top bar (and in Settings on a narrow screen). The topbar
 also has **New chat** — one tap starts an empty conversation in the open
 session's folder (`session.create`), without the project picker, and puts
@@ -246,8 +247,8 @@ Each session keeps its own unsent draft: switching chats parks what you
 were typing and restores it when you come back. An idle send appears in
 the stream at once — it used to wait until Cursor's window had taken it.
 
-Mode and model are chips under the text: a slight background and rounded
-edges so a thumb can see where each picker starts. Their base font is
+Mode and the model summary are chips under the text: a slight background and
+rounded edges so a thumb can see where each starts. Their base font is
 **16px** — iOS Safari zooms the page into anything smaller and never zooms
 back out, and an older `zoom: 0.75` trick still triggered it (WebKit uses
 the scaled size). They sit in a `.composer-pickers` group scaled with
@@ -257,14 +258,23 @@ The installed PWA is different: there the viewport sets `maximum-scale=1`,
 which a Home Screen app honours, so focus-zoom is impossible and the chips
 draw at a true 12px with no transform, the size Cursor gives them.
 
+The composer has only one model button. Its summary is Auto, or the current
+model plus the most useful active parameter (for example
+`GPT-5.6 Sol · Medium · Fast`). It opens a centred dialog on desktop and a
+bottom sheet on a phone. Auto is a switch; Model opens a searchable list;
+Fast, Context, Reasoning, and Effort appear as clearly labelled rows only
+when Cursor reports them for the selected model. Changes apply immediately.
+While Cursor is opening or pressing its own picker, the sheet disables
+duplicate presses and shows progress.
+
 Mode is Agent, Plan, Debug, Multitask, or Ask — the same five Cursor
 lists. The ring around the box, the send button, and the mode chip itself —
 word and a tint of background — all take that mode's colour (blue, amber,
 red, purple, green), so a glance says which one is in force. An ACP catalog that only names three does
-not drop Debug or Multitask from the picker. The model chip is keyed by
+not drop Debug or Multitask from the picker. The model choice is keyed by
 model id; after a desktop switch Auto keeps that id (and Cursor's label
-as the name) so the control does not go blank. Catalog names that are
-slugs (`kimi-k3`) are shown with spaces (`Kimi K3`) so the chip matches
+as the name) so the summary and list do not go blank. Catalog names that are
+slugs (`kimi-k3`) are shown with spaces (`Kimi K3`) so the list matches
 the IDE. A fillable dial sits left
 of the attach `+` — context fill for this chat; tap it for session detail
 and account quotas ([usage](usage.md)).

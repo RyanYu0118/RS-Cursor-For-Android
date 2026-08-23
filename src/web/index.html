@@ -221,13 +221,10 @@
               <option value="multitask">Multitask</option>
               <option value="ask">Ask</option>
             </select>
-            <label class="model-auto" title="Let Cursor choose the model">
-              <input id="model-auto" type="checkbox" role="switch" />
-              <span class="model-auto-track" aria-hidden="true"></span>
-              <span>Auto</span>
-            </label>
-            <select id="model" title="Model" aria-label="Model"></select>
-            <span id="model-parameters"></span>
+            <button id="model-open" class="model-summary" type="button" title="Model settings" aria-haspopup="dialog">
+              <span id="model-summary">Model</span>
+              <span class="model-summary-chevron" aria-hidden="true">⌄</span>
+            </button>
           </div>
           <div class="composer-actions">
             <button id="usage" class="in-box usage" type="button" title="Usage" aria-label="Usage" hidden>
@@ -346,6 +343,45 @@
     </div>
     <div id="usage-body" class="usage-body">
       <div class="sheet-note">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Model selection and every parameter Cursor exposes for that model. -->
+<div id="model-sheet" hidden>
+  <div class="sheet-panel model-panel" role="dialog" aria-modal="true" aria-labelledby="model-sheet-title">
+    <div class="sheet-head">
+      <span id="model-sheet-title">Model</span>
+      <button id="model-close" class="icon" title="Close" aria-label="Close model settings">×</button>
+    </div>
+    <div class="model-sheet-body">
+      <div class="model-config-row">
+        <span class="model-config-copy">
+          <strong>Auto</strong>
+          <small>Let Cursor choose the model</small>
+        </span>
+        <label class="model-switch" title="Let Cursor choose the model">
+          <input id="model-auto" type="checkbox" role="switch" aria-label="Auto-select" />
+          <span class="model-auto-track" aria-hidden="true"></span>
+        </label>
+      </div>
+
+      <button id="model-choice" class="model-config-row model-choice" type="button" aria-expanded="false">
+        <span class="model-config-copy">
+          <strong>Model</strong>
+          <small id="model-choice-label">Choose a model</small>
+        </span>
+        <span class="model-choice-chevron" aria-hidden="true">›</span>
+      </button>
+      <select id="model" title="Model" aria-label="Model" hidden></select>
+
+      <div id="model-list-pane" class="model-list-pane" hidden>
+        <input id="model-filter" type="search" placeholder="Search models…" aria-label="Search models" autocomplete="off" />
+        <div id="model-list" role="listbox" aria-label="Models"></div>
+      </div>
+
+      <div id="model-parameters" class="model-parameter-list"></div>
+      <div id="model-status" class="sheet-note model-status" aria-live="polite"></div>
     </div>
   </div>
 </div>
