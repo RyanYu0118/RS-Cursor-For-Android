@@ -282,15 +282,6 @@ export function editStatsForTurn(records = []) {
   return saw ? { added, removed } : null;
 }
 
-/** Headline for the Keep / Undo card: "+12 −3" or a plain fallback. */
-export function reviewHeadline(stats) {
-  if (!stats || (stats.added == null && stats.removed == null)) return 'Edits';
-  const a = Number(stats.added) || 0;
-  const r = Number(stats.removed) || 0;
-  if (!a && !r) return 'Edits';
-  return `+${a} −${r}`;
-}
-
 /**
  * How long a spell of work lasted, the way Cursor writes it: "8s", "7m 3s".
  * Counts stay separate from the units so a renderer can draw them louder.

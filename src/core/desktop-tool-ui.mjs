@@ -15,7 +15,6 @@ export {
   isCreatedPlan,
   isSimpleLs,
   planFields,
-  reviewHeadline,
   toolBase,
   toolPath,
   turnCopy,

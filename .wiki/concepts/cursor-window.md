@@ -78,25 +78,49 @@ new selectors.
 The pickers beside the chat box ignore a dispatched click; they open only
 on input the window believes came from a mouse, so they are pressed *where
 they are*. The model trigger is compact — it often shows a parameter value
-("Medium" or "High"), not the model name — and first opens
-`selected-model-parameters-submenu-menu`.
+("Medium" or "High") or just "Auto", not the model name.
 
-That sheet is model-specific. A GPT model can expose **Fast**, **Context**,
-**Reasoning**, and **Model**; another model can expose **Effort** instead.
-The stable contract is the **Model** row, not any one parameter name. Auto
-groups the label/value pairs by their row, opens each
+**The trigger never opens the model list.** It opens one of two sheets, and
+both are crossed the same way, by pressing **Model**:
+
+- a named model opens `selected-model-parameters-submenu-menu`;
+- Auto-select opens `selected-auto-menu`: a line of description, a **Model**
+  row, and the word "Auto" as that row's *value*.
+
+The parameters sheet is model-specific. A GPT model can expose **Fast**,
+**Context**, **Reasoning**, and **Model**; another can expose **Effort**
+instead. The stable contract is the **Model** row, not any one parameter
+name. Auto groups the label/value pairs by their row, opens each
 `parameter-submenu-<name>` to discover its options, and mirrors the result
 on web and Telegram. Fast is a switch; Context, Reasoning, and Effort are
 selects. No option list is hard-coded.
 
-The web composer presents one model summary. Tapping it opens a settings
-dialog (bottom sheet on phones) where Auto-select is a separate switch,
-Model opens a searchable list, and the model-specific parameters are
-labelled rows. Turning Auto on presses Cursor's `auto-mode-select`; choosing
-a named model turns it off. Cursor's own **Model** row opens the real list
-(`selected-model-list-submenu`). Search lives there
-(`placeholder="Search models"`); names outside the first card are typed only
-once the caret is in that box.
+A sheet is told from the list by *source*, never by the words in it. The
+list is whatever carries `model-list` items; a sheet is anything else with a
+**Model** row. Ruling out the sheet by "it does not say Auto" is what broke:
+the Auto sheet says Auto too, so while Auto-select was on every model name
+looked missing and the phone was told the models on offer were "Balanced
+quality and speed…, Model, Auto".
+
+Behind **Model** is the real list (`selected-model-list-submenu`), with the
+first card of models plainly visible — Auto-select hides nothing. Search
+(`placeholder="Search models"`) is for names outside that card, and is typed
+only once the caret is in that box.
+
+**Auto-select has no off switch.** Its row (`auto-mode-select`) is a choice
+in the list, not a toggle: it carries no `aria-checked`, and pressing it
+while Auto is on does nothing. The only thing that leaves Auto is choosing a
+model. So "Auto off" from a phone reads the list and takes Cursor's own
+first row — the one it puts at the top — and the picker then says which.
+`namedModels` is that read: rows only, since a badge beside a row ("Max",
+"High Fast") is a variant, not a model.
+
+The web composer carries the Auto switch itself, beside the mode chip, and
+hides the model chip while Auto is on — an Auto chat has no model to show.
+Tapping the model chip opens a settings dialog (bottom sheet on phones)
+where Model opens a searchable list and the model-specific parameters are
+labelled rows. Auto is not offered inside that sheet; it is the switch
+outside it.
 
 Modes are the @-mention popover. A model row is named from
 `model-item-*` minus Edit and the badges, because "Composer" and "2.5"

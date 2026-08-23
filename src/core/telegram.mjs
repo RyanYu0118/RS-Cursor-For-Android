@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
 import { listProjects, workspaceIdFor } from './projects.mjs';
 import { desktopChats } from './desktop-chats.mjs';
 import { optionLetter, parseQuestionReply } from './questions.mjs';
-import { classifyTool, displayLabel, foldTools, isCreatedPlan, planFields, reviewHeadline, turnCopy } from './desktop-tool-ui.mjs';
+import { classifyTool, displayLabel, foldTools, isCreatedPlan, planFields, turnCopy } from './desktop-tool-ui.mjs';
 import { linkify } from '../web/markdown.js';
 
 const LIMIT = 4096;
@@ -190,8 +190,6 @@ export class TelegramBridge extends EventEmitter {
     this.permMessages = new Map();
     /** askId -> Telegram message id, so the buttons can be taken off once answered */
     this.askMessages = new Map();
-    /** sessionId -> Telegram message id for the sticky Keep / Undo / Redo bar */
-    this.reviewMessages = new Map();
     /** askId -> { sessionId, questions, chosen } while a multi-pick is in progress */
     this.asks = new Map();
     /** toolCallId -> latest plan fields, so View Plan sends what we have now */
@@ -876,22 +874,6 @@ export class TelegramBridge extends EventEmitter {
       await answer(payload.label || 'Build');
       return;
     }
-
-    if (payload.kind === 'review') {
-      const id = payload.sessionId || this.sessions.activeId;
-      if (!id) {
-        await answer('No active session.');
-        return;
-      }
-      try {
-        const result = await this.sessions.reviewPress(id, { name: payload.name });
-        if (result.status === 'pressed') await answer(payload.name);
-        else await answer((result.reason || result.status || 'gone').slice(0, 190));
-      } catch (err) {
-        await answer(err.message.slice(0, 190));
-        await this.send(`⚠️ ${esc(err.message)}`);
-      }
-    }
   }
 
   // ------------------------------------------------------------------- output
@@ -902,13 +884,6 @@ export class TelegramBridge extends EventEmitter {
       if (sessionId !== this.sessions.activeId) return;
       this.onRecord(sessionId, record).catch((err) =>
         this.emit('log', `render failed: ${err.message}`),
-      );
-    });
-    // Sticky file-review bar — Keep All / Undo All / Redo, never an approval.
-    this.sessions.on('review', ({ sessionId, actions, added, removed }) => {
-      if (sessionId !== this.sessions.activeId) return;
-      this.#paintReview(sessionId, actions || [], { added, removed }).catch((err) =>
-        this.emit('log', `review failed: ${err.message}`),
       );
     });
   }
@@ -1181,51 +1156,6 @@ export class TelegramBridge extends EventEmitter {
     const chosen = Object.values(rec.selections || {}).flat().filter(Boolean);
     const said = chosen.join(', ') || rec.state || 'answered';
     await this.edit(messageId, `❓ <b>Question</b> — ${esc(said)}`, { reply_markup: undefined });
-  }
-
-  /**
-   * Cursor's Keep / Undo / Redo as a Telegram message with buttons.
-   *
-   * Headline is +/− from this turn's edits when known. When the bar clears,
-   * the keyboard comes off.
-   */
-  async #paintReview(sessionId, actions, stats = {}) {
-    const names = (actions || []).map((a) => a.name || a).filter(Boolean);
-    const messageId = this.reviewMessages.get(sessionId);
-    const headline = reviewHeadline(
-      stats.added != null || stats.removed != null
-        ? { added: stats.added || 0, removed: stats.removed || 0 }
-        : null,
-    );
-
-    if (!names.length) {
-      if (!messageId) return;
-      this.reviewMessages.delete(sessionId);
-      await this.edit(messageId, `📁 <b>${esc(headline)}</b> — done`, {
-        reply_markup: { inline_keyboard: [] },
-      });
-      return;
-    }
-
-    const rows = names.map((name) => [
-      {
-        text: name,
-        callback_data: this.tokenFor({
-          kind: 'review',
-          sessionId,
-          name,
-        }),
-      },
-    ]);
-    const text = `📁 <b>${esc(headline)}</b>\n<i>Keep, undo, or redo in Cursor.</i>`;
-    if (messageId) {
-      const edited = await this.edit(messageId, text, {
-        reply_markup: { inline_keyboard: rows },
-      });
-      if (edited) return;
-    }
-    const sent = await this.send(text, { reply_markup: { inline_keyboard: rows } });
-    if (sent?.message_id) this.reviewMessages.set(sessionId, sent.message_id);
   }
 
   async #sendPlan(sessionId, rec) {

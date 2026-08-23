@@ -32,7 +32,7 @@ import { DesktopOutbox } from './desktop-outbox.mjs';
 import { ThreadWatcher, readThread, readContextUsage, realTitle, UNTITLED_THREAD, SETTLE_LOOKS, isHarnessPrompt } from './desktop-threads.mjs';
 import { accountUsage } from './cursor-usage.mjs';
 import { labelsForAnswer, indexesForAnswer } from './questions.mjs';
-import { classifyTool, editStatsForTurn } from './desktop-tool-ui.mjs';
+import { classifyTool } from './desktop-tool-ui.mjs';
 
 /** Same words, even when Cursor stores a different apostrophe or spacing. */
 export function echoKey(text) {
@@ -72,6 +72,16 @@ const modelKey = (s) =>
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+
+/** Slug catalog names (`kimi-k3`) become menu words (`Kimi K3`). */
+function friendlyModelName(name) {
+  const raw = String(name || '').replace(/\[.*$/, '');
+  if (!raw || /\s/.test(raw) || !raw.includes('-')) return raw;
+  return raw
+    .split('-')
+    .map((part) => (part && /[a-z]/.test(part[0]) ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(' ');
+}
 
 /**
  * Badges Cursor's model menu would show for the options on an agent id.
@@ -120,7 +130,11 @@ export function cursorNameFor(wanted, models = []) {
     list.find((m) => m.name === asked) ||
     list.find((m) => String(m.modelId || '').replace(/\[.*$/, '') === stem);
 
-  const base = hit?.name || (asked.includes('[') ? stem : asked);
+  const base = hit?.name
+    ? friendlyModelName(hit.name)
+    : asked.includes('[')
+      ? friendlyModelName(stem)
+      : asked;
   const extra = modelBadges(hit?.modelId || asked).filter(
     (b) => !modelKey(base).split(' ').includes(modelKey(b)),
   );
@@ -1719,164 +1733,6 @@ export class SessionManager extends EventEmitter {
   }
 
   /**
-   * What Cursor's file-review bar is offering right now for this chat.
-   *
-   * Empty when there are no unreviewed edits (or after Keep / Undo / Redo).
-   * Desktop only — ACP has no review bar.
-   */
-  reviewing(id) {
-    const meta = this.meta.get(id);
-    if (!meta || meta.kind !== 'desktop') return { actions: [] };
-    const held = this.live.get(id)?.review || {};
-    const actions = held.actions || [];
-    const out = { actions: actions.map((name) => ({ name })) };
-    if (held.added != null || held.removed != null) {
-      out.added = held.added || 0;
-      out.removed = held.removed || 0;
-    }
-    return out;
-  }
-
-  /**
-   * Press Keep All / Undo All / Redo (etc.) on Cursor's file-review bar.
-   *
-   * Deliberate: never routed through the permission broker. The label must
-   * still be on the bar when the press lands, or the bar moved and we refuse.
-   */
-  async reviewPress(id, { name } = {}) {
-    const meta = this.meta.get(id);
-    if (!meta) throw new Error(`Unknown session ${id}`);
-    if (meta.kind !== 'desktop' || !meta.desktopThreadId) {
-      throw new Error('Only a desktop chat has a file-review bar');
-    }
-    const wanted = String(name || '').trim();
-    if (!wanted) throw new Error('no review action was named');
-
-    const held = this.live.get(id)?.review?.actions || [];
-    if (!held.some((n) => n.toLowerCase() === wanted.toLowerCase())) {
-      // Re-read once: the phone may be a beat behind the window.
-      await this.#pollDesktopReview(id);
-      const now = this.live.get(id)?.review?.actions || [];
-      if (!now.some((n) => n.toLowerCase() === wanted.toLowerCase())) {
-        return { status: 'gone', reason: 'that review action is no longer offered' };
-      }
-    }
-
-    const pressed = await this.cursor
-      .press({ threadId: meta.desktopThreadId, name: wanted })
-      .catch((err) => ({ status: 'error', reason: err.message }));
-
-    const ok = pressed.status === 'pressed';
-    this.#record(id, KIND.notice, {
-      text: ok
-        ? reviewNotice(wanted)
-        : `Could not press ${wanted} in Cursor: ${pressed.reason || pressed.status}.`,
-    });
-
-    // The bar usually changes (or clears) right after a press — refresh soon.
-    const refresh = setTimeout(() => {
-      this.#pollDesktopReview(id).catch(() => {});
-    }, 400);
-    refresh.unref?.();
-
-    return ok
-      ? { status: 'pressed', name: wanted }
-      : { status: pressed.status || 'error', reason: pressed.reason, name: wanted };
-  }
-
-  /**
-   * Watch Cursor's sticky file-review bar for as long as this desktop session
-   * is open — including after the turn ends, when Keep All / Undo All usually
-   * appear.
-   */
-  #watchDesktopReview(id) {
-    const meta = this.meta.get(id);
-    if (!meta?.desktopThreadId) return null;
-    const runtime = this.live.get(id) || {};
-    if (runtime.reviewTimer) return runtime.reviewTimer;
-
-    const schedule = (ms) => {
-      const live = this.live.get(id);
-      if (!live) return;
-      if (live.reviewTimer) clearTimeout(live.reviewTimer);
-      const timer = setTimeout(() => {
-        this.#pollDesktopReview(id)
-          .then((actions) => schedule(actions.length ? 2000 : 5000))
-          .catch((err) => {
-            this.emit('log', `[${meta.title}] watching for review: ${err.message}`);
-            schedule(5000);
-          });
-      }, ms);
-      timer.unref?.();
-      live.reviewTimer = timer;
-    };
-
-    this.live.set(id, {
-      ...runtime,
-      review: runtime.review || { actions: [], signature: '' },
-      reviewTimer: null,
-    });
-    schedule(0);
-    return true;
-  }
-
-  /** One look at the review bar; emit when the set of actions changes. */
-  async #pollDesktopReview(id) {
-    const meta = this.meta.get(id);
-    if (!meta?.desktopThreadId || meta.status === STATUS.archived) return [];
-
-    const state = await this.cursor
-      .waitingOn({ threadId: meta.desktopThreadId })
-      .catch((err) => ({ status: 'error', reason: err.message }));
-
-    const runtime = this.live.get(id);
-    if (!runtime) return [];
-
-    // No window / port: clear the bar on the phone rather than leave stale
-    // Keep All buttons that cannot be pressed.
-    let actions = [];
-    if (state.status === 'ok') {
-      actions = [...new Set(
-        (state.reviewing || [])
-          .map((c) => String(c.label || c.text || '').trim())
-          .filter(Boolean),
-      )];
-    }
-
-    const stats = await this.#editStatsForSession(id);
-    const signature = [
-      actions.map((n) => n.toLowerCase()).join('\0'),
-      stats ? `${stats.added}:${stats.removed}` : '',
-    ].join('|');
-    const prev = runtime.review?.signature ?? null;
-    runtime.review = {
-      actions,
-      signature,
-      added: stats?.added,
-      removed: stats?.removed,
-    };
-    if (signature !== prev) {
-      this.emit('review', {
-        sessionId: id,
-        actions: actions.map((name) => ({ name })),
-        ...(stats || {}),
-      });
-    }
-    return actions;
-  }
-
-  /** +/− for edits in the open turn, from the transcript tail. */
-  async #editStatsForSession(id) {
-    try {
-      const store = await this.transcript(id);
-      const records = store.readFrom(0, { limit: 400 });
-      return editStatsForTurn(records);
-    } catch {
-      return null;
-    }
-  }
-
-  /**
    * The part of a mirrored message that has not been said yet.
    *
    * A desktop bubble is read repeatedly while it is being written, and each read
@@ -1949,9 +1805,6 @@ export class SessionManager extends EventEmitter {
     watcher.on('error', (err) => this.emit('log', `[${meta.title}] watching: ${err.message}`));
 
     watcher.start();
-    // The file-review bar outlives the turn, so it has its own watcher — not
-    // the ask timer that stops once generating goes quiet.
-    this.#watchDesktopReview(id);
     return watcher;
   }
 
@@ -2391,6 +2244,39 @@ export class SessionManager extends EventEmitter {
   }
 
   /**
+   * Leave Auto-select.
+   *
+   * Cursor has no switch for this: Auto is a row in the model list, and the
+   * only thing that turns it off is choosing a model instead. So "Auto off"
+   * from a phone means picking one — Cursor's own first suggestion, which is
+   * the row it puts at the top — and the picker then says which.
+   */
+  async disableAutoSelect(id) {
+    const meta = this.meta.get(id);
+    if (!meta) return false;
+    if (meta.kind !== 'desktop') {
+      const named = (this.catalog?.models || []).find((m) => m.modelId !== 'default[]');
+      if (!named) return false;
+      return this.setModel(id, named.modelId);
+    }
+
+    const listed = await this.cursor.namedModels({ threadId: meta.desktopThreadId });
+    if (listed.status !== 'ok') {
+      this.#record(id, KIND.notice, {
+        text: `Could not read Cursor's model list to leave Auto: ${listed.reason || listed.status}.`,
+      });
+      return false;
+    }
+    return this.#chooseInCursor(id, 'model', listed.models[0]);
+  }
+
+  /** Auto-select is a model choice in Cursor, so both directions are one. */
+  async setAutoSelect(id, enabled) {
+    if (enabled) return this.setModel(id, 'default[]');
+    return this.disableAutoSelect(id);
+  }
+
+  /**
    * Display name for a model id, falling back to the id itself. The agent
    * calls its automatic pick "Auto", which reads as this app's name — say what
    * it actually does instead.
@@ -2428,7 +2314,6 @@ export class SessionManager extends EventEmitter {
     this.permissions.cancelForSession(id, 'session stopped');
     this.terminals.releaseForSession(id);
     if (runtime?.askTimer) clearInterval(runtime.askTimer);
-    if (runtime?.reviewTimer) clearTimeout(runtime.reviewTimer);
     runtime?.watcher?.stop();
     if (runtime?.client) await runtime.client.stop();
     this.live.delete(id);
@@ -2446,15 +2331,6 @@ function short(text, most = 60) {
     .replace(/\s+/g, ' ')
     .trim();
   return said.length > most ? `${said.slice(0, most - 1)}…` : said;
-}
-
-/** What happened when someone pressed the file-review bar from a phone. */
-function reviewNotice(name) {
-  const n = String(name || '').trim().toLowerCase();
-  if (/^keep\b/.test(n)) return `Kept changes in Cursor (${name}).`;
-  if (/^undo\b/.test(n)) return `Undid changes in Cursor (${name}).`;
-  if (/^(redo|restore)\b/.test(n)) return `Redid changes in Cursor (${name}).`;
-  return `Pressed ${name} in Cursor.`;
 }
 
 /**

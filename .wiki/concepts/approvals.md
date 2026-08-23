@@ -73,23 +73,16 @@ from an approval.
 
 ## The file-review bar is not a question
 
-"Keep All" and "Undo All" sit there for as long as a chat has unreviewed
-edits. Offering them as approvals meant offering to throw work away by
-accident. They are excluded from the approval vocabulary.
+"Keep All" and "Undo All" sit on Cursor's sticky bar for as long as a chat
+has unreviewed edits. Offering them as approvals meant offering to throw work
+away by accident. They are excluded from the approval vocabulary.
 
-They are a **deliberate action** instead. Auto polls the sticky bar on
-desktop chats (including after the turn ends — that is when it usually
-appears), broadcasts the current labels over the WebSocket (`review`), and
-the web shows a **Review changes** card at the end of the turn (scrub
-landmark) with Keep / Undo / Redo. The headline is +/− from that turn's
-edits when Cursor reported line counts — not the words "Unreviewed edits".
-Telegram gets the same headline and buttons. A tap presses that exact label
-in the window. After Undo, Cursor often offers Redo or Restore; those are
-the same path. Only short exact button labels count — a chat titled "Undo
-and redo…" is not Undo. "Review next file" is IDE navigation and is not
-offered. ACP sessions have no review bar. Git commit does not clear
-Cursor's review bar by itself; Keep / Undo still apply to unreviewed agent
-diffs in the IDE.
+Auto does **not** mirror that bar on web or Telegram. Cursor only exposes
+global Keep / Undo / Redo — not per-edit "roll back to here" — so a card at
+the bottom of the chat was misleading. Review changes in the IDE. Only short
+exact button labels are recognised when filtering approvals — a chat titled
+"Undo and redo…" is not Undo. "Review next file" is IDE navigation. ACP
+sessions have no review bar.
 
 ## Question cards
 

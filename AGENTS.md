@@ -83,10 +83,15 @@ value as setup documentation is fine.
   by model — GPT currently shows Fast / Context / Reasoning / Model, while Grok
   shows Fast / Effort / Model — so the presence of Model, not one hard-coded
   parameter, identifies the sheet. Auto reads each nested option menu and
-  mirrors those controls on web and Telegram; Auto-select is a separate switch.
-  Model opens the list (`selected-model-list-submenu`), whose Auto row is
-  `auto-mode-select`; search is used for names outside the first card. Never
-  type until the search caret is actually there, or the query becomes a message.
+  mirrors those controls on web and Telegram. Auto-select opens a sheet too
+  (`selected-auto-menu`), and its Model row is pressed like any other — a sheet
+  is told from the list by what the items *are*, never by whether one says
+  "Auto", or every model looks missing the moment Auto is on. Behind Model is
+  the list (`selected-model-list-submenu`), first card visible; search is for
+  names outside it. Never type until the search caret is actually there, or the
+  query becomes a message. Auto-select has no off switch — `auto-mode-select` is
+  a row in that list, so leaving Auto means choosing a model, and the switch on
+  the phone takes Cursor's own first-listed one.
   A badge can bundle more than one word in one press — Grok's row offers "High
   Fast" together — and the compact trigger staying on "High" after a switch is
   not proof it missed.
@@ -134,14 +139,12 @@ goes into the transcript and the agent. The queue is memory only, and stopping
   quoting a build log there buries the reply it came with. A card folded up is
   still expected to show the last lines it printed and its exit code: output
   that needs a tap to find reads as a chat where nothing printed anything.
-- **The file-review bar is not a question.** "Keep All" and "Undo All" sit there
-  for as long as a chat has unreviewed edits, and offering them as approvals
-  meant offering to throw work away by accident. They stay out of the approval
-  vocabulary. Instead Auto watches the sticky bar (including after the turn
-  ends) and shows a Review changes card at the end of the turn on the web
-  (scrub landmark, +/− from that turn's edits) and the same actions on
-  Telegram — Keep / Undo All, and Redo or Restore after an undo. Pressing one
-  presses that control in Cursor by its words.
+- **The file-review bar is not a question.** "Keep All" and "Undo All" sit on
+  Cursor's sticky bar for as long as a chat has unreviewed edits. They stay out
+  of the approval vocabulary so a phone never offers to throw work away by
+  accident. Auto does not mirror that bar on web or Telegram: Cursor only
+  exposes global Keep / Undo / Redo, not per-edit "roll back to here", so a
+  card at the bottom of the chat was misleading. Review changes in the IDE.
 - **Cursor's own approvals go to the phone.** While a desktop turn runs, Auto
   watches the window for controls whose words mean it is waiting for a person,
   parks them in the same broker as an agent's own permission requests, and

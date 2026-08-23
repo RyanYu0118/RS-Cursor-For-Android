@@ -414,15 +414,34 @@ const plain = (s) =>
 /** The compact model trigger often shows only this, not the model name. */
 const EFFORT_WORD = /^(none|low|medium|high|extra high|max|fast)$/i;
 
+/** The real list of models, as opposed to a sheet that merely mentions one. */
+export function isModelListMenu(items) {
+  return (items || []).some((item) => item.source === 'model-list');
+}
+
 /**
- * Did we land on the parameters sheet rather than the model list? Every model
- * has a Model row, while its other controls vary: GPT has Context/Reasoning,
- * Grok has Effort, and future models can add more. Requiring one particular
- * control is what made the same build work on Grok and fail on GPT.
+ * Did we land on a sheet in front of the model list rather than the list?
+ *
+ * The trigger opens one of two sheets, and neither is the list. A named model
+ * opens its parameters (Model plus controls that vary by model — GPT has
+ * Context/Reasoning, Grok has Effort). Auto-select opens a smaller sheet: a
+ * description, a Model row, and the word "Auto" as that row's *value*.
+ *
+ * Both are crossed the same way, by pressing Model. What used to say otherwise
+ * was `!labels.has('auto')`, meant to tell the sheet from the list — but the
+ * Auto sheet says "Auto" too, so while Auto-select was on every model name
+ * looked missing and the offer list was those three words.
  */
 export function isParametersMenu(items) {
   const labels = new Set((items || []).map((item) => plain(item.label)));
-  return labels.has('model') && !labels.has('auto');
+  return labels.has('model') && !isModelListMenu(items);
+}
+
+/** The sheet Auto-select opens: a Model row whose value is "Auto". */
+export function isAutoSheet(items) {
+  if (isModelListMenu(items)) return false;
+  if ((items || []).some((item) => item.source === 'selected-auto-menu')) return true;
+  return plain(parseParameterMenu(items).model) === 'auto';
 }
 
 /**
@@ -1340,14 +1359,15 @@ export class CursorCdp {
     return this.#withThread(threadId, async (window) => {
       const opened = await this.#openModelParameters(window);
       if (opened.status !== 'ok') return opened;
+      // Auto-select's sheet has a Model row too, so it reads as parameters —
+      // but its only control is the word "Auto". It has none to offer.
+      if (plain(opened.at.label) === 'auto' || isAutoSheet(opened.menu.items)) {
+        await this.#closeMenu(window);
+        return { status: 'ok', auto: true, model: null, parameters: [] };
+      }
       if (!opened.parameters) {
         await this.#closeMenu(window);
-        return {
-          status: 'ok',
-          auto: plain(opened.at.label) === 'auto',
-          model: plain(opened.at.label) === 'auto' ? null : opened.at.label,
-          parameters: [],
-        };
+        return { status: 'ok', auto: false, model: opened.at.label, parameters: [] };
       }
 
       const parsed = parseParameterMenu(opened.menu.items);
@@ -1451,6 +1471,35 @@ export class CursorCdp {
     return this.#withThread(threadId, (window) => this.#inMenu(window, picker, String(wanted)));
   }
 
+  /**
+   * The models this chat could be switched to, as the list names them.
+   *
+   * Rows only: a badge sitting on a row ("Max", "High Fast") is a variant of a
+   * model, not a model, and Auto-select is not one either. Reading it opens the
+   * picker and closes it again, pressing nothing.
+   */
+  async namedModels({ threadId }) {
+    return this.#withThread(threadId, async (window) => {
+      const at = await window.pickerAt('model');
+      if (!at) return { status: 'no-picker', reason: 'this window has no model picker' };
+      await window.mouseAt(at);
+      let menu = await this.#menuOpened(window);
+      if (!menu.items.length) {
+        await this.#closeMenu(window);
+        return { status: 'no-menu', reason: 'the model picker did not open' };
+      }
+      menu = await this.#throughToModelList(window, menu, null);
+      await this.#closeMenu(window);
+      const models = menu.items
+        .filter((item) => item.row && plain(item.label) !== 'auto')
+        .map((item) => item.label);
+      if (!models.length) {
+        return { status: 'no-such-option', reason: 'the model list named nothing' };
+      }
+      return { status: 'ok', models };
+    });
+  }
+
   /** Open the compact trigger and identify parameters vs the model list. */
   async #openModelParameters(window) {
     const at = await window.pickerAt('model');
@@ -1510,16 +1559,9 @@ export class CursorCdp {
       return { status: 'no-menu', reason: `the ${which} picker did not open` };
     }
 
-    // Compact trigger opens parameters (Fast / Effort / High / Model). The
-    // real list is behind Model — without this step every name looks missing
-    // and the offer list is those five words.
-    if (which === 'model' && isParametersMenu(menu.items)) {
-      const gate = menu.items.find((item) => plain(item.label) === 'model');
-      if (gate) {
-        await window.mouseAt(gate);
-        menu = await this.#menuOpened(window);
-      }
-    }
+    // The trigger opens a sheet, never the list — parameters for a named
+    // model, a description and a Model row for Auto-select. Press Model.
+    if (which === 'model') menu = await this.#throughToModelList(window, menu, wanted);
 
     const options = [...new Set(menu.items.map((item) => item.label))];
     if (!wanted) {
@@ -1528,17 +1570,10 @@ export class CursorCdp {
     }
 
     let found = pickItem(menu.items, wanted);
-    // Named models are hidden while Auto is on; typing the stem into search
-    // brings the matching row in. Never type Auto — that is the toggle.
-    if (!found.item && which === 'model' && !/^auto$/i.test(plain(wanted))) {
-      const stem = menuSearchStem(wanted);
-      if (stem && (await this.#typeMenuSearch(window, stem))) {
-        menu = await this.#menuOpened(window, wanted);
-        found = pickItem(menu.items, wanted);
-        for (const label of menu.items.map((item) => item.label)) {
-          if (!options.includes(label)) options.push(label);
-        }
-      }
+    if (which === 'model' && !found.item && !/^auto$/i.test(plain(wanted))) {
+      const searched = await this.#searchModelMenu(window, menu, wanted, options);
+      menu = searched.menu;
+      found = searched.found;
     }
     if (!found.item) {
       await this.#closeMenu(window);
@@ -1602,23 +1637,67 @@ export class CursorCdp {
    * there. insertText otherwise lands in the chat box, which is a message.
    */
   async #typeMenuSearch(window, stem) {
-    const at = await window.menuSearch();
-    if (!at) return false;
-    await window.mouseAt(at);
-    await wait(this.settleMs);
-    if (!(await window.menuSearchFocused())) return false;
-    await window.insertText(stem);
-    return true;
+    for (let tries = 0; tries < 3; tries += 1) {
+      const at = await window.menuSearch();
+      if (!at) return false;
+      await window.mouseAt(at);
+      await wait(this.settleMs);
+      if (await window.menuSearchFocused()) {
+        await window.insertText(stem);
+        return true;
+      }
+      await wait(this.settleMs);
+    }
+    return false;
+  }
+
+  /** Cross whichever sheet the model trigger opened, to reach the real list. */
+  async #throughToModelList(window, menu, wanted) {
+    if (isModelListMenu(menu.items) || !isParametersMenu(menu.items)) return menu;
+    const gate = menu.items.find((item) => plain(item.label) === 'model');
+    if (!gate) return menu;
+    await window.mouseAt(gate);
+    // The sheet stays in the DOM and still looks like a menu until the
+    // submenu opens, so wait for the list itself rather than for any menu.
+    return this.#menuOpened(window, wanted, { needModelList: true });
+  }
+
+  /**
+   * Named models are hidden while Auto is on; type the stem into search and
+   * fall back to the row when a badge (Max, Fast) is not on offer.
+   */
+  async #searchModelMenu(window, menu, wanted, options) {
+    const stem = menuSearchStem(wanted);
+    let found = pickItem(menu.items, wanted);
+    if (!stem) return { menu, found };
+
+    if (!(await this.#typeMenuSearch(window, stem))) return { menu, found };
+
+    menu = await this.#menuOpened(window, wanted, { needModelList: true });
+    for (const label of menu.items.map((item) => item.label)) {
+      if (!options.includes(label)) options.push(label);
+    }
+    found = pickItem(menu.items, wanted);
+    if (!found.item && stem !== plain(wanted)) {
+      const row = pickItem(menu.items, stem);
+      if (row.item) found = row;
+    }
+    return { menu, found };
   }
 
   /** Wait for a menu to appear, and say what is in it. */
-  async #menuOpened(window, matching) {
+  async #menuOpened(window, matching, { needModelList = false } = {}) {
     let seen = { open: 0, items: [] };
     for (let look = 0; look < MENU_LOOKS; look += 1) {
       await wait(this.settleMs);
       seen = (await window.menuItems()) || seen;
       if (!seen.items.length) continue;
-      if (!matching || pickItem(seen.items, matching).item) return seen;
+      if (needModelList && !isModelListMenu(seen.items)) continue;
+      if (!matching) return seen;
+      if (pickItem(seen.items, matching).item) return seen;
+      // A variant whose badge is missing is still that row arriving.
+      const stem = menuSearchStem(matching);
+      if (stem && pickItem(seen.items, stem).item) return seen;
     }
     return seen;
   }

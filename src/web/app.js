@@ -26,12 +26,10 @@ import {
   classifyTool,
   displayLabel,
   editCopy,
-  editStatsForTurn,
   fileStats,
   groupTally,
   isCreatedPlan,
   planFields,
-  reviewHeadline,
   turnCopy,
 } from './desktop-tool-ui.js';
 import {
@@ -155,9 +153,6 @@ const state = {
   attachments: [],
   /** what is waiting for the turn to end: {owner, waiting, items, hidden} */
   queue: { owner: 'auto', waiting: 0, items: [] },
-  /** Cursor's file-review Keep/Undo card for this chat (transcript landmark) */
-  review: { actions: [], added: null, removed: null },
-  reviewCard: null,
   /** the queued message being reworded, so the row stays an editor while typing */
   editing: null,
   /** Cursor chats dismissed with × this visit, so they do not reappear as "in Cursor" */
@@ -248,8 +243,6 @@ function resetChatUi() {
   state.bundle = null;
   state.permCards.clear();
   state.askCards.clear();
-  state.reviewCard = null;
-  state.review = { actions: [], added: null, removed: null };
   state.stream = null;
   state.streamKind = null;
   state.streamBody = null;
@@ -488,7 +481,7 @@ function syncToBottom() {
  * chat, not every tool card. Order matches the DOM.
  */
 function scrubLandmarks() {
-  return [...els.transcript.querySelectorAll('.msg.user, .ask, .created-plan, .perm, .file-review')];
+  return [...els.transcript.querySelectorAll('.msg.user, .ask, .created-plan, .perm')];
 }
 
 function scrubKindOf(el) {
@@ -496,7 +489,6 @@ function scrubKindOf(el) {
   if (el.classList.contains('ask')) return 'question';
   if (el.classList.contains('created-plan')) return 'plan';
   if (el.classList.contains('perm')) return 'approval';
-  if (el.classList.contains('file-review')) return 'review';
   return '';
 }
 
@@ -521,10 +513,6 @@ function scrubLabel(el) {
   if (el.classList.contains('perm')) {
     const t = el.querySelector('.what')?.textContent?.trim() || '';
     return { kind: 'Approval', text: t || 'Needs a decision' };
-  }
-  if (el.classList.contains('file-review')) {
-    const t = el.querySelector('.what')?.textContent?.trim() || '';
-    return { kind: 'Review', text: t || 'Edits' };
   }
   return { kind: '', text: '' };
 }
@@ -2630,15 +2618,20 @@ function selectedModelLabel() {
 
 /** One compact composer button; details belong in the sheet. */
 function updateModelPresentation() {
-  const automatic = Boolean(state.modelControls?.auto || els.modelAuto.checked);
-  const model = state.modelControls?.model || selectedModelLabel();
-  els.modelChoiceLabel.textContent = automatic ? 'Cursor picks' : model;
-  els.modelChoice.disabled = automatic || Boolean(state.modelUpdating);
+  if (!state.modelUpdating && state.modelControls) {
+    els.modelAuto.checked = Boolean(state.modelControls.auto);
+  }
+  const automatic = els.modelAuto.checked;
+  els.modelOpen.hidden = automatic;
 
   if (automatic) {
-    els.modelSummary.textContent = 'Auto';
     return;
   }
+
+  const model = state.modelControls?.model || selectedModelLabel();
+  els.modelChoiceLabel.textContent = model;
+  els.modelChoice.disabled = Boolean(state.modelUpdating);
+
   const parameters = state.modelControls?.parameters || [];
   const thinking = parameters.find((parameter) => /^(reasoning|effort)$/i.test(parameter.id));
   const fast = parameters.find((parameter) => parameter.id === 'fast' && parameter.value);
@@ -2690,7 +2683,7 @@ function setModelUpdating(updating, text = 'Updating Cursor…') {
   state.modelUpdating = Boolean(updating);
   els.modelStatus.textContent = updating ? text : '';
   els.modelAuto.disabled = Boolean(updating);
-  els.modelChoice.disabled = Boolean(updating) || els.modelAuto.checked;
+  els.modelChoice.disabled = Boolean(updating);
   for (const control of els.modelParameters.querySelectorAll('input, select')) {
     control.disabled = Boolean(updating);
   }
@@ -2699,6 +2692,7 @@ function setModelUpdating(updating, text = 'Updating Cursor…') {
 }
 
 function setModelSheet(open) {
+  if (open && els.modelAuto.checked) return;
   els.modelSheet.hidden = !open;
   if (!open) {
     setModelList(false);
@@ -2720,9 +2714,9 @@ function renderModelControls(controls) {
   els.modelAuto.checked = automatic;
   els.modelParameters.innerHTML = '';
   setModelList(false);
+  updateModelPresentation();
   if (!state.modelControls || automatic) {
     setModelUpdating(false);
-    updateModelPresentation();
     return;
   }
 
@@ -3234,8 +3228,6 @@ function connect() {
       setHistoryLoading(false);
       // Whatever was queued before you looked is still queued.
       sendOp({ op: 'queue.list', sessionId: msg.sessionId });
-      // File-review bar may already be up from a finished turn.
-      sendOp({ op: 'review.list', sessionId: msg.sessionId });
       if (state.focusComposer) {
         state.focusComposer = false;
         focusComposer();
@@ -3283,6 +3275,7 @@ function connect() {
 
     if (msg.type === 'model.set' || msg.type === 'model.parameter') {
       if (msg.sessionId !== state.sessionId) return;
+      if (msg.type === 'model.set' && !msg.set) setModelUpdating(false);
       return;
     }
 
@@ -3377,23 +3370,6 @@ function connect() {
         render({ kind: 'notice', text: msg.acted.reason || `That queued message is ${msg.acted.status}.` });
       }
       renderQueue();
-      return;
-    }
-
-    if (msg.type === 'review') {
-      if (msg.sessionId && msg.sessionId !== state.sessionId) return;
-      state.review = {
-        actions: msg.actions || [],
-        added: msg.added ?? null,
-        removed: msg.removed ?? null,
-      };
-      if (msg.acted && msg.acted.status !== 'pressed') {
-        render({
-          kind: 'notice',
-          text: msg.acted.reason || `Could not press ${msg.acted.name || 'that'} in Cursor.`,
-        });
-      }
-      renderFileReview();
       return;
     }
 
@@ -3529,81 +3505,6 @@ function button(face, title, onclick) {
   b.setAttribute('aria-label', title);
   b.onclick = onclick;
   return b;
-}
-
-/**
- * Cursor's Keep / Undo / Redo as the last block of a finished turn.
- *
- * Lives in the transcript (and the scrub timeline), not stuck above the
- * composer. Headline is +/− from this turn's edits when Cursor reported them.
- */
-function renderFileReview() {
-  const actions = state.review?.actions || [];
-  let stats =
-    state.review?.added != null || state.review?.removed != null
-      ? { added: state.review.added || 0, removed: state.review.removed || 0 }
-      : null;
-  if (!stats) {
-    const records = [...(state.liveHead || []), ...(state.liveRecords || [])];
-    stats = editStatsForTurn(records);
-  }
-  const headline = reviewHeadline(stats);
-
-  if (!actions.length) {
-    const card = state.reviewCard;
-    if (card?.isConnected) {
-      card.classList.add('resolved');
-      const what = card.querySelector('.what');
-      if (what) what.textContent = headline === 'Edits' ? 'Reviewed' : `${headline} · done`;
-      card.querySelector('.opts').innerHTML = '<span class="outcome">done</span>';
-      markScrubDirty();
-    }
-    return;
-  }
-
-  let card = state.reviewCard;
-  if (!card || !card.isConnected) {
-    card = div('file-review');
-    card.innerHTML = `
-      <div class="head">Review changes</div>
-      <div class="what"></div>
-      <div class="opts"></div>`;
-    state.reviewCard = card;
-    add(card);
-  } else {
-    // Keep it at the end of the stream when the turn just finished.
-    els.transcript.appendChild(card);
-  }
-
-  card.classList.remove('resolved');
-  card.querySelector('.what').textContent = headline;
-  const opts = card.querySelector('.opts');
-  opts.innerHTML = '';
-  for (const action of actions) {
-    const name = action.name || action;
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = name;
-    b.className = reviewKind(name);
-    b.addEventListener('click', () => {
-      if (card.dataset.busy) return;
-      card.dataset.busy = '1';
-      for (const btn of opts.querySelectorAll('button')) btn.disabled = true;
-      sendOp({ op: 'review.press', sessionId: state.sessionId, name });
-    });
-    opts.appendChild(b);
-  }
-  delete card.dataset.busy;
-  markScrubDirty();
-  scrollDown(nearBottom());
-}
-
-function reviewKind(name) {
-  const n = String(name || '').toLowerCase();
-  if (/^(undo|discard|reject|revert)\b/.test(n)) return 'deny';
-  if (/^(redo|restore)\b/.test(n)) return 'allow';
-  if (/^keep\b/.test(n)) return 'allow';
-  return 'allow';
 }
 
 /** Screenshots are half of what you want to say from a phone. */
@@ -4277,13 +4178,16 @@ els.modelAuto.onchange = () => {
   const automatic = els.modelAuto.checked;
   setModelList(false);
   setModelUpdating(true);
+  if (automatic) setModelSheet(false);
   sendOp({
-    op: 'session.model',
+    op: 'session.auto',
     sessionId: state.sessionId,
-    modelId: automatic ? 'default[]' : els.model.value,
+    enabled: automatic,
   });
 };
-els.modelOpen.onclick = () => setModelSheet(true);
+els.modelOpen.onclick = () => {
+  if (!els.modelAuto.checked) setModelSheet(true);
+};
 els.modelClose.onclick = () => setModelSheet(false);
 els.modelSheet.onclick = (e) => {
   if (e.target === els.modelSheet) setModelSheet(false);

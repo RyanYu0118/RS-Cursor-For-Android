@@ -221,6 +221,11 @@
               <option value="multitask">Multitask</option>
               <option value="ask">Ask</option>
             </select>
+            <label class="composer-auto" title="Let Cursor choose the model">
+              <span>Auto</span>
+              <input id="model-auto" type="checkbox" role="switch" aria-label="Auto-select" />
+              <span class="composer-auto-track" aria-hidden="true"></span>
+            </label>
             <button id="model-open" class="model-summary" type="button" title="Model settings" aria-haspopup="dialog">
               <span id="model-summary">Model</span>
               <span class="model-summary-chevron" aria-hidden="true">⌄</span>
@@ -355,17 +360,6 @@
       <button id="model-close" class="icon" title="Close" aria-label="Close model settings">×</button>
     </div>
     <div class="model-sheet-body">
-      <div class="model-config-row">
-        <span class="model-config-copy">
-          <strong>Auto</strong>
-          <small>Let Cursor choose the model</small>
-        </span>
-        <label class="model-switch" title="Let Cursor choose the model">
-          <input id="model-auto" type="checkbox" role="switch" aria-label="Auto-select" />
-          <span class="model-auto-track" aria-hidden="true"></span>
-        </label>
-      </div>
-
       <button id="model-choice" class="model-config-row model-choice" type="button" aria-expanded="false">
         <span class="model-config-copy">
           <strong>Model</strong>

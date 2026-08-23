@@ -418,6 +418,36 @@ if (existsSync(SRC)) {
     fail(`v2 outbox: ${e.message}`);
   }
 
+  // Clipboard retries: SetImage often fails once when another app holds the board.
+  try {
+    const { retryAsync } = await import('../src/core/clipboard.mjs');
+    let tries = 0;
+    const value = await retryAsync(
+      async () => {
+        tries += 1;
+        if (tries < 3) throw new Error('Requested Clipboard operation did not succeed.');
+        return 'ok';
+      },
+      { tries: 4, delayMs: 1 },
+    );
+    if (value !== 'ok' || tries !== 3) {
+      fail(`clipboard retry should recover after transient failures, got ${value} in ${tries}`);
+    }
+    let gaveUp = false;
+    try {
+      await retryAsync(async () => {
+        throw new Error('still busy');
+      }, { tries: 2, delayMs: 1 });
+    } catch (err) {
+      gaveUp = /still busy/.test(err.message);
+    }
+    if (!gaveUp) fail('clipboard retry should give up after the last attempt');
+
+    if (!failed) ok('v2 core: clipboard retries transient failures');
+  } catch (e) {
+    fail(`v2 clipboard: ${e.message}`);
+  }
+
   // Typing into Cursor's own window: the transport that no feature switch can
   // shut. It must land in the right chat, never overwrite someone's half-typed
   // message, and never leave text behind when it fails.
@@ -1422,7 +1452,7 @@ if (existsSync(SRC)) {
 
     // Setting a chat's model and mode: the menu is opened, one item is pressed,
     // and nothing is believed until the picker itself says something new.
-    const { pickItem, menuSearchStem, isParametersMenu, parseParameterMenu } =
+    const { pickItem, menuSearchStem, isParametersMenu, isAutoSheet, parseParameterMenu } =
       await import('../src/core/cursor-cdp.mjs');
     let picking = false;
     const withPickers = () =>
@@ -1754,6 +1784,20 @@ if (existsSync(SRC)) {
     if (isParametersMenu([{ label: 'Auto' }, { label: 'GPT-5.5' }, { label: 'Medium' }])) {
       picking = fail('the model list is not the parameters sheet') ?? true;
     }
+    // Auto-select's own sheet says "Auto" as the Model row's *value*. Reading
+    // that as the list is what made every model look missing while Auto was on.
+    const autoSheet = [
+      { label: 'Balanced quality and speed, recommended for most tasks', x: 40, y: 10, source: 'selected-auto-menu' },
+      { label: 'Model', x: 10, y: 20, source: 'selected-auto-menu' },
+      { label: 'Auto', x: 40, y: 20, source: 'selected-auto-menu' },
+    ];
+    if (!isParametersMenu(autoSheet)) {
+      picking = fail('the Auto-select sheet is crossed by pressing Model, like any other') ?? true;
+    }
+    if (!isAutoSheet(autoSheet)) picking = fail('the Auto-select sheet should be known by name') ?? true;
+    if (isAutoSheet([{ label: 'Auto', source: 'model-list' }, { label: 'Kimi K3', source: 'model-list' }])) {
+      picking = fail('the model list holding an Auto row is not the Auto sheet') ?? true;
+    }
 
     // Compact picker opens parameters first; Model is the door to the list.
     const compact = new FakeWindow(
@@ -1771,9 +1815,9 @@ if (existsSync(SRC)) {
           ],
         },
         modelList: [
-          { label: 'Auto', x: 10, y: 40 },
-          { label: 'GPT-5.5', x: 10, y: 50, needSearch: 'gpt 5.5' },
-          { label: 'Medium', x: 40, y: 50, needSearch: 'gpt 5.5', becomes: 'Medium' },
+          { label: 'Auto', x: 10, y: 40, source: 'model-list', row: true },
+          { label: 'GPT-5.5', x: 10, y: 50, source: 'model-list', row: true, needSearch: 'gpt 5.5' },
+          { label: 'Medium', x: 40, y: 50, source: 'model-list', needSearch: 'gpt 5.5', becomes: 'Medium' },
         ],
       },
     );
@@ -1789,33 +1833,95 @@ if (existsSync(SRC)) {
       picking = fail(`should press Model then search, pressed ${compact.pressed.join(',')}`) ?? true;
     }
 
-    // Cursor's Auto-on menu hides named models until search is typed.
-    const autoOn = new FakeWindow(
-      { threadId: THREAD, hasComposer: true },
-      {
-        pickers: { model: 'Auto' },
-        hasMenuSearch: true,
-        menus: {
-          model: [
-            { label: 'Auto', x: 300, y: 90, becomes: 'Auto' },
-            { label: 'Composer 2.5', x: 300, y: 130, needSearch: 'Composer 2.5' },
-            { label: 'Fast', x: 380, y: 130, needSearch: 'Composer 2.5', becomes: 'Composer 2.5 Fast' },
+    /**
+     * A chat on Auto-select, as Cursor actually builds it: the trigger opens
+     * the Auto sheet, and the models are behind its Model row — visible there
+     * without searching.
+     */
+    const onAuto = (rows) =>
+      new FakeWindow(
+        { threadId: THREAD, hasComposer: true },
+        {
+          pickers: { model: 'Auto' },
+          hasMenuSearch: true,
+          menus: {
+            model: [
+              {
+                label: 'Balanced quality and speed, recommended for most tasks',
+                x: 40,
+                y: 10,
+                source: 'selected-auto-menu',
+              },
+              { label: 'Model', x: 10, y: 20, source: 'selected-auto-menu', opens: 'list' },
+              { label: 'Auto', x: 40, y: 20, source: 'selected-auto-menu' },
+            ],
+          },
+          modelList: [
+            { label: 'Auto', x: 300, y: 90, source: 'model-list', row: true },
+            ...rows,
           ],
         },
-      },
-    );
+      );
+
+    const autoOn = onAuto([
+      { label: 'Cursor Grok 4.6', x: 300, y: 130, source: 'model-list', row: true },
+      { label: 'High Fast', x: 380, y: 130, source: 'model-list', becomes: 'Grok 4.6 Fast' },
+      { label: 'Composer 2.5', x: 300, y: 170, source: 'model-list', row: true },
+      { label: 'Fast', x: 380, y: 170, source: 'model-list', becomes: 'Composer 2.5 Fast' },
+    ]);
     const fromAuto = await machine({ autoOn }).choose({
       threadId: THREAD,
       picker: 'model',
       wanted: 'composer-2.5 Fast',
     });
     if (fromAuto.status !== 'set' || fromAuto.now !== 'Composer 2.5 Fast') {
-      picking = fail(`searching the Auto-on menu should find Composer: ${JSON.stringify(fromAuto)}`) ?? true;
+      picking = fail(`Auto on must not hide the model list: ${JSON.stringify(fromAuto)}`) ?? true;
     }
-    if (!autoOn.pressed.includes('«search»') || autoOn.typedSearch !== 'composer 2.5') {
-      picking = fail(`should type the stem into search, pressed ${autoOn.pressed.join(',')} query=${autoOn.typedSearch}`) ?? true;
+    if (!autoOn.pressed.includes('Model') || !autoOn.pressed.includes('Composer 2.5')) {
+      picking = fail(`should cross the Auto sheet by pressing Model, pressed ${autoOn.pressed.join(',')}`) ?? true;
     }
-    if (autoOn.box) picking = fail('search text must not land in the chat box') ?? true;
+    if (autoOn.box) picking = fail('nothing typed while switching may land in the chat box') ?? true;
+
+    // The badge Grok bundles ("High Fast") is one press, from either word.
+    const grokAuto = onAuto([
+      { label: 'Cursor Grok 4.6', x: 300, y: 130, source: 'model-list', row: true },
+      { label: 'High Fast', x: 380, y: 130, source: 'model-list', becomes: 'Grok 4.6 Fast' },
+    ]);
+    const grokPick = await machine({ grokAuto }).choose({
+      threadId: THREAD,
+      picker: 'model',
+      wanted: 'Grok 4.6 Fast',
+    });
+    if (grokPick.status !== 'set' || grokPick.now !== 'Grok 4.6 Fast') {
+      picking = fail(`Grok Fast should be reachable from Auto: ${JSON.stringify(grokPick)}`) ?? true;
+    }
+
+    // Max badge missing from the row: take the row alone rather than fail.
+    const kimiRow = onAuto([
+      { label: 'Kimi K3', x: 300, y: 130, source: 'model-list', row: true, becomes: 'Kimi K3' },
+    ]);
+    const kimiOnly = await machine({ kimiRow }).choose({
+      threadId: THREAD,
+      picker: 'model',
+      wanted: 'Kimi K3 Max',
+    });
+    if (kimiOnly.status !== 'set' || kimiOnly.now !== 'Kimi K3') {
+      picking = fail(`row without Max badge should still switch: ${JSON.stringify(kimiOnly)}`) ?? true;
+    }
+
+    // Leaving Auto is choosing a model, so the rows have to be readable — and
+    // a badge sitting beside one is a variant, not a model of its own.
+    const listing2 = onAuto([
+      { label: 'Cursor Grok 4.6', x: 300, y: 130, source: 'model-list', row: true },
+      { label: 'High Fast', x: 380, y: 130, source: 'model-list' },
+      { label: 'Kimi K3', x: 300, y: 170, source: 'model-list', row: true },
+    ]);
+    const named = await machine({ listing2 }).namedModels({ threadId: THREAD });
+    if (named.status !== 'ok' || named.models.join('|') !== 'Cursor Grok 4.6|Kimi K3') {
+      picking = fail(`namedModels should list rows, not Auto or badges: ${JSON.stringify(named)}`) ?? true;
+    }
+    if (listing2.openMenu) picking = fail('reading the model list must close it again') ?? true;
+    if (listing2.pickers.model !== 'Auto') picking = fail('reading the list must change nothing') ?? true;
 
     const stillAuto = new FakeWindow(
       { threadId: THREAD, hasComposer: true },
@@ -2218,6 +2324,27 @@ if (existsSync(SRC)) {
   if (!failed) ok('v2 web: streaming scroll stays put');
 }
 
+// The chat pane scrolls vertically only; wide tables and diagrams scroll inside
+// themselves. overflow-y: auto alone used to leave overflow-x at auto too.
+{
+  const css = readFileSync(join(ROOT, 'src/web/style.css'), 'utf8');
+  let failed = false;
+  const transcript = css.match(/#transcript\s*\{[^}]+\}/);
+  if (!transcript || !/overflow-x:\s*hidden/.test(transcript[0])) {
+    fail('#transcript must lock horizontal scroll');
+    failed = true;
+  }
+  if (!transcript || !/touch-action:\s*pan-y/.test(transcript[0])) {
+    fail('#transcript must restrict touch panning to vertical');
+    failed = true;
+  }
+  if (!css.includes('.table-wrap') || !/\.table-wrap[\s\S]*touch-action:\s*auto/.test(css)) {
+    fail('wide table wraps must keep their own horizontal scroll');
+    failed = true;
+  }
+  if (!failed) ok('v2 web: chat scrolls vertically; wide blocks scroll inside');
+}
+
 // 1d3. Chat history is not a blank pane while it loads. A long transcript
 // takes a few seconds to replay, and an empty #transcript used to look like
 // the app had frozen.
@@ -2483,18 +2610,21 @@ if (existsSync(SRC)) {
     !html.includes('id="model-open"') ||
     !html.includes('id="model-sheet"') ||
     !html.includes('id="model-auto"') ||
+    !html.includes('composer-auto') ||
     !html.includes('id="model-filter"') ||
     !html.includes('role="switch"') ||
     !js.includes('function renderModelControls') ||
     !js.includes('function setModelSheet') ||
-    !js.includes('function updateModelPresentation')
+    !js.includes('function updateModelPresentation') ||
+    !js.includes('modelOpen.hidden')
   ) {
-    fail('one composer button must open searchable Auto and model controls in a sheet');
+    fail('Auto switch lives in the composer; model sheet opens only when Auto is off');
     failed = true;
   }
   if (
     !js.includes("op: 'session.modelControls'") ||
     !js.includes("op: 'session.modelParameter'") ||
+    !js.includes("op: 'session.auto'") ||
     !tg.includes("kind: 'cursorParam'")
   ) {
     fail('web and Telegram must expose Cursor model parameters');
@@ -3130,19 +3260,19 @@ if (existsSync(SRC)) {
     { modelId: 'composer-2.5[fast=true]', name: 'composer-2.5' },
     { modelId: 'claude-opus-5[thinking=true,effort=high]', name: 'claude-opus-5' },
   ];
-  if (cursorNameFor('kimi-k3[reasoning=max]', slugs) !== 'kimi-k3 Max') {
+  if (cursorNameFor('kimi-k3[reasoning=max]', slugs) !== 'Kimi K3 Max') {
     fail('a Max variant must become the row name plus Max');
     failed = true;
   }
-  if (cursorNameFor('kimi-k3', slugs) !== 'kimi-k3 Max') {
+  if (cursorNameFor('kimi-k3', slugs) !== 'Kimi K3 Max') {
     fail('a slug without brackets must still pick up the catalog id\'s Max badge');
     failed = true;
   }
-  if (cursorNameFor('composer-2.5[fast=true]', slugs) !== 'composer-2.5 Fast') {
+  if (cursorNameFor('composer-2.5[fast=true]', slugs) !== 'Composer 2.5 Fast') {
     fail('fast=true must become the Fast badge');
     failed = true;
   }
-  if (cursorNameFor('claude-opus-5[thinking=true,effort=high]', slugs) !== 'claude-opus-5') {
+  if (cursorNameFor('claude-opus-5[thinking=true,effort=high]', slugs) !== 'Claude Opus 5') {
     fail('effort=high is not a badge — High sits on several rows');
     failed = true;
   }
@@ -4049,7 +4179,7 @@ if (existsSync(SRC)) {
     );
     check('no clock yet', turnCopy({ durationMs: 0, worked: true }).label, 'Done');
 
-    const { editStatsForTurn, reviewHeadline } = await import('../src/core/desktop-tool-ui.mjs');
+    const { editStatsForTurn } = await import('../src/core/desktop-tool-ui.mjs');
     const stats = editStatsForTurn([
       { kind: 'user_message', text: 'go' },
       {
@@ -4072,8 +4202,6 @@ if (existsSync(SRC)) {
       },
     ]);
     check('edit stats prefer latest update, sum files', stats, { added: 13, removed: 3 });
-    check('review headline', reviewHeadline(stats), '+13 −3');
-    check('review headline fallback', reviewHeadline(null), 'Edits');
     check(
       'edit stats stop at previous turn',
       editStatsForTurn([

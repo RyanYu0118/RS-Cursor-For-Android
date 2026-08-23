@@ -672,6 +672,7 @@ export const MENU_ITEMS = `(() => {
       push(items, 'Auto', toggle, {
         current: toggle.getAttribute('aria-checked') === 'true',
         source: 'model-list',
+        row: true,
       });
     }
     for (const selector of ${list(SELECTORS.modelItem)}) {
@@ -693,7 +694,12 @@ export const MENU_ITEMS = `(() => {
         // them there are (Grok pops "Fast" then "High").
         const words = clean(nameEl.textContent).split(' ').filter(Boolean);
         while (words.length > 1 && badgeWord.test(words[words.length - 1])) words.pop();
-        push(items, words.join(' '), nameEl, { current: state === 'true', source: 'model-list' });
+        // A row is a model you can be switched to; a badge beside it is not.
+        push(items, words.join(' '), nameEl, {
+          current: state === 'true',
+          source: 'model-list',
+          row: true,
+        });
 
         for (const kid of leaf) push(items, clean(ownText(kid)), kid, { source: 'model-list' });
       }

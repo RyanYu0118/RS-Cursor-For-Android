@@ -163,9 +163,6 @@ meta also asks for `interactive-widget=resizes-content` where supported.
   expires after the gesture so the next open can switch chats on the first
   tap.
 - The [queue](queue.md) above the chat box, with reword / send now / delete.
-- A **Review changes** card at the end of a turn when Cursor still has
-  unreviewed edits (Keep / Undo / Redo) — scrub landmark with a +/−
-  headline; see [approvals](approvals.md). Not mixed into permission cards.
 - Tool calls the way Cursor groups them — see [tool lanes](tool-lanes.md).
 - Diffs, thinking (folded when the block ends, timed from the record so a
   replay says "Thought for 8s" rather than staying "Thinking"), permission
@@ -192,7 +189,7 @@ meta also asks for `interactive-widget=resizes-content` where supported.
 - While scrolling a long chat, a flush right-edge grip appears (rounded on
   the left, drag ridges — Google Photos style). Grabbing it expands a labeled
   timeline **to the left of the thumb** — your messages, questions, plans,
-  approvals, and file-review cards — and the chat text dims hard so the pills lead. Labels
+  and approvals — and the chat text dims hard so the pills lead. Labels
   follow the finger continuously; only the chat content snaps to landmarks,
   so the wheel does not jitter under a magnetic latch. Label motion is linear
   along the rail (index × finger), independent of how much chat text sits

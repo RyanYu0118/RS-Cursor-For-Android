@@ -157,10 +157,6 @@ sessions.on('sessions', (list) => broadcast({ type: 'sessions', sessions: list }
 sessions.on('queue', ({ sessionId, ...queue }) =>
   broadcast({ type: 'queue', sessionId, ...queue }, sessionId),
 );
-// File-review Keep / Undo / Redo — sticky after the turn, never an approval.
-sessions.on('review', ({ sessionId, ...review }) =>
-  broadcast({ type: 'review', sessionId, ...review }, sessionId),
-);
 sessions.on('catalog', (catalog) => broadcast({ type: 'catalog', catalog }));
 
 // Terminal output reaches clients as transcript records; these only announce
@@ -315,22 +311,6 @@ const OPS = {
     send(ws, { type: 'plan.build', sessionId: id, toolCallId: msg.toolCallId, ...result });
   },
 
-  async 'review.list'(ws, state, msg) {
-    const id = msg.sessionId || state.sessionId;
-    send(ws, { type: 'review', sessionId: id, ...sessions.reviewing(id) });
-  },
-
-  async 'review.press'(ws, state, msg) {
-    const id = msg.sessionId || state.sessionId;
-    const result = await sessions.reviewPress(id, { name: msg.name });
-    send(ws, {
-      type: 'review',
-      sessionId: id,
-      acted: result,
-      ...sessions.reviewing(id),
-    });
-  },
-
   async 'session.create'(ws, state, msg) {
     // The web client offers a folder by hand as well as from the project list,
     // so a path that names nothing must be refused rather than spawn an agent
@@ -386,6 +366,15 @@ const OPS = {
   async 'session.model'(ws, state, msg) {
     const id = msg.sessionId || state.sessionId;
     const set = await sessions.setModel(id, msg.modelId);
+    send(ws, { type: 'model.set', sessionId: id, set });
+    if (sessions.get(id)?.kind === 'desktop') {
+      send(ws, { type: 'model.controls', sessionId: id, ...(await sessions.modelControls(id)) });
+    }
+  },
+
+  async 'session.auto'(ws, state, msg) {
+    const id = msg.sessionId || state.sessionId;
+    const set = await sessions.setAutoSelect(id, Boolean(msg.enabled));
     send(ws, { type: 'model.set', sessionId: id, set });
     if (sessions.get(id)?.kind === 'desktop') {
       send(ws, { type: 'model.controls', sessionId: id, ...(await sessions.modelControls(id)) });

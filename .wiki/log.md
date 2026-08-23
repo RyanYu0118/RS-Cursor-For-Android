@@ -1,6 +1,11 @@
 # Directory Update Log
 
 ## 2026-08-23
+* **Fix**: Auto-select's own sheet (`selected-auto-menu` — description, Model row, "Auto" as its value) is now crossed by pressing Model like any other sheet; ruling a sheet out because it says "Auto" was why every model looked missing while Auto was on ("Cursor has no model matching …").
+* **Fix**: Leaving Auto picks Cursor's own first-listed model — `auto-mode-select` is a choice in the list, not a toggle, so pressing it while Auto was on did nothing and the phone's switch snapped back.
+* **Update**: `namedModels` reads the model list without choosing; menu rows are marked `row` so a badge ("Max", "High Fast") is never mistaken for a model.
+* **Update**: The web Auto switch moved out of the model sheet and onto the composer beside the mode chip, styled to match it; the model chip hides while Auto is on and the sheet no longer offers Auto.
+* **Update**: Removed the web/Telegram Review changes card — Cursor only offers a global Keep/Undo bar, not per-edit rollback, so a bottom-of-chat card was misleading; review in the IDE.
 * **Update**: Web composer now has one model summary button; it opens a desktop dialog / phone bottom sheet with Auto, a searchable model list, and clearly labelled live parameters.
 * **Update**: Model controls now mirror Cursor: Auto is a separate switch, and web/Telegram discover and select the current model's Fast, Context, Reasoning, or Effort options from the IDE's nested menus.
 * **Fix**: Parameter-sheet detection keys on the stable Model row instead of requiring Effort, so GPT's Context/Reasoning sheet reaches the model list too.
