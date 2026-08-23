@@ -19,6 +19,7 @@ import {
 import { lineDiff, collapseContext, diffStats } from './diff.js';
 import { renderMarkdown, linkify } from './markdown.js';
 import { enrichMarkdown } from './enrich.js';
+import { modelPrice } from './model-pricing.js';
 import { initBrowser, onFrame, onStatus } from './browser.js';
 import { initWorkspace, isOpen as workspaceIsOpen, showChat, onViewsChange, restoreViews } from './workspace.js';
 import {
@@ -2738,9 +2739,18 @@ function renderModelList() {
     button.className = 'model-list-option';
     button.setAttribute('role', 'option');
     button.setAttribute('aria-selected', String(option.value === els.model.value));
-    button.innerHTML = `<span>${esc(option.textContent)}</span><span aria-hidden="true">${
-      option.value === els.model.value ? '✓' : ''
-    }</span>`;
+    const price = modelPrice(option.value);
+    if (price) button.setAttribute('aria-label', `${option.textContent}, ${price.ariaLabel}`);
+    const priceBadge = price
+      ? `<span class="model-price" aria-hidden="true" title="${esc(price.title)}">${price.symbols}</span>`
+      : '';
+    button.innerHTML = `
+      <span class="model-list-name">${esc(option.textContent)}</span>
+      <span class="model-list-meta">
+        ${priceBadge}
+        <span class="model-list-check" aria-hidden="true">${option.value === els.model.value ? '✓' : ''}</span>
+      </span>
+    `;
     button.onclick = () => {
       els.model.value = option.value;
       setModelPage('settings');

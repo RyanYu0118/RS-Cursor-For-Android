@@ -8,7 +8,7 @@ sources:
   - id: telegram
     resource: /src/core/telegram.mjs
     title: Telegram bridge
-generated: { by: agent, at: 2026-08-21T21:00:00Z }
+generated: { by: agent, at: 2026-08-23T21:27:00Z }
 ---
 
 # Telegram
@@ -27,6 +27,7 @@ rule live under [access](access.md).
 | Turn clock | Edited message ends with Worked/Thought for | Working… then the same label |
 | Approvals / questions / plans | Inline buttons | Cards |
 | File review (Keep / Undo / Redo) | Inline buttons (+/− headline) | Transcript card + scrub landmark |
+| Model choice | Known rows carry $ / $$ / $$$ | Same relative price bands |
 | URLs | Tappable `<a>` | Links in markdown and bare http(s) |
 
 Quoting a full build log in Telegram buries the reply it came with — that
@@ -48,8 +49,10 @@ already there, so they are not pasted back.
 
 `/mode` and `/model` on a desktop chat press Cursor's own pickers. On ACP
 they use the catalog from `session/new`. `/mode` accepts Agent, Plan,
-Debug, Multitask, and Ask. `/chats` continues a desktop thread. `/stop`
-puts the interrupted prompt back as a draft you can edit and send again.
+Debug, Multitask, and Ask. Both model keyboards append the shared relative
+price band to known choices and explain `$ lower / $$$ higher`; unknown
+models stay unlabelled. `/chats` continues a desktop thread. `/stop` puts
+the interrupted prompt back as a draft you can edit and send again.
 `/restart` is `POST /api/restart`.
 
 Plain text is a prompt to the active session. A lettered reply to a

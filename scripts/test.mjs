@@ -2655,6 +2655,36 @@ if (existsSync(SRC)) {
     failed = true;
   }
   if (
+    !js.includes("from './model-pricing.js'") ||
+    !js.includes('modelPrice(option.value)') ||
+    !js.includes('price.ariaLabel') ||
+    !html.includes('model-price-legend') ||
+    !css.includes('.model-price')
+  ) {
+    fail('the model list must show an explained relative price for each known model');
+    failed = true;
+  }
+  const { modelPrice } = await import('../src/web/model-pricing.js');
+  const cheapModel = modelPrice('gpt-5.4-nano[reasoning=medium]');
+  const midModel = modelPrice('grok-4.6[effort=high,fast=true]');
+  const premiumModel = modelPrice('claude-opus-5[thinking=true,fast=false]');
+  const cursorLabel = modelPrice('Cursor Grok 4.6 High Fast');
+  if (
+    cheapModel?.symbols !== '$' ||
+    midModel?.symbols !== '$$' ||
+    premiumModel?.symbols !== '$$$' ||
+    midModel?.inputPerMillion !== 4 ||
+    cursorLabel?.inputPerMillion !== 4 ||
+    !midModel?.title.includes('published base rates')
+  ) {
+    fail('relative price bands must distinguish cheap, moderate, and premium model rates');
+    failed = true;
+  }
+  if (modelPrice('future-model[]') !== null) {
+    fail('an unknown model must not receive a guessed price');
+    failed = true;
+  }
+  if (
     !html.includes('id="model-open"') ||
     !html.includes('id="model-sheet"') ||
     !html.includes('id="model-auto"') ||
@@ -5468,7 +5498,86 @@ if (existsSync(SRC)) {
       ok(`v2 telegram: ${text}`);
     }
 
-    if (!failed) ok('v2 telegram: approvals get through while a turn runs');
+    // The web's model price signal must survive both Telegram model chooser
+    // paths without changing the callback values used to make the selection.
+    const pricedModels = [
+      { modelId: 'gpt-5.4-nano[reasoning=medium]', name: 'GPT 5.4 Nano' },
+      { modelId: 'claude-opus-5[thinking=true]', name: 'claude-opus-5' },
+      { modelId: 'future-model[]', name: 'Future Model' },
+    ];
+    fakeSessions.catalog = { models: pricedModels };
+    fakeSessions.get = () => ({
+      id: 's1',
+      title: 't',
+      folder: ROOT,
+      kind: 'acp',
+      mode: 'agent',
+      policy: 'ask',
+      model: pricedModels[0].modelId,
+      modelName: pricedModels[0].name,
+    });
+
+    sent.length = 0;
+    await bridge.handleUpdate({ update_id: 6, message: { chat: { id: 1 }, text: '/model' } });
+    const acpPicker = sent[0];
+    const acpButtons = acpPicker?.opts?.reply_markup?.inline_keyboard?.flat() || [];
+    const cheapButton = acpButtons.find(
+      (button) => bridge.callbacks.get(button.callback_data)?.modelId === pricedModels[0].modelId,
+    );
+    const unknownAcpButton = acpButtons.find(
+      (button) => bridge.callbacks.get(button.callback_data)?.modelId === pricedModels[2].modelId,
+    );
+    const cheapPayload = bridge.callbacks.get(cheapButton?.callback_data);
+    if (
+      !acpPicker?.text.includes('$ lower / $$$ higher') ||
+      cheapButton?.text !== '● GPT 5.4 Nano $' ||
+      unknownAcpButton?.text !== 'Future Model' ||
+      cheapPayload?.modelId !== pricedModels[0].modelId ||
+      cheapPayload?.label !== pricedModels[0].name
+    ) {
+      fail(`the ACP model keyboard must show prices without changing callbacks: ${JSON.stringify(acpPicker)}`);
+      failed = true;
+    }
+
+    fakeSessions.get = () => ({
+      id: 's1',
+      title: 't',
+      folder: ROOT,
+      kind: 'desktop',
+      mode: 'agent',
+      policy: 'ask',
+    });
+    fakeSessions.desktopChoices = async () => ({
+      status: 'ok',
+      was: 'Opus 5',
+      options: ['Opus 5', 'Future Model'],
+    });
+    fakeSessions.modelControls = async () => ({ parameters: [] });
+
+    sent.length = 0;
+    await bridge.handleUpdate({ update_id: 7, message: { chat: { id: 1 }, text: '/model' } });
+    const desktopPicker = sent[0];
+    const desktopButtons = desktopPicker?.opts?.reply_markup?.inline_keyboard?.flat() || [];
+    const opusButton = desktopButtons.find(
+      (button) => bridge.callbacks.get(button.callback_data)?.label === 'Opus 5',
+    );
+    const unknownDesktopButton = desktopButtons.find(
+      (button) => bridge.callbacks.get(button.callback_data)?.label === 'Future Model',
+    );
+    const opusPayload = bridge.callbacks.get(opusButton?.callback_data);
+    if (
+      !desktopPicker?.text.includes('$ lower / $$$ higher') ||
+      opusButton?.text !== '● Opus 5 $$$' ||
+      unknownDesktopButton?.text !== 'Future Model' ||
+      opusPayload?.kind !== 'cursorPick' ||
+      opusPayload?.picker !== 'model' ||
+      opusPayload?.label !== 'Opus 5'
+    ) {
+      fail(`the desktop model keyboard must show prices without changing callbacks: ${JSON.stringify(desktopPicker)}`);
+      failed = true;
+    }
+
+    if (!failed) ok('v2 telegram: approvals and priced model choices stay responsive');
   } catch (e) {
     fail(`v2 telegram responsiveness: ${e.message}`);
   } finally {

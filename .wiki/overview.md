@@ -14,7 +14,7 @@ sources:
   - id: host
     resource: /src/server/index.mjs
     title: Host process
-generated: { by: agent, at: 2026-08-23T16:26:00Z }
+generated: { by: agent, at: 2026-08-23T21:27:00Z }
 ---
 
 # Auto
@@ -73,10 +73,13 @@ default (that would close every window) and falls back to ACP unless
 - Agent-requested Agent ↔ Plan transitions remain Cursor approvals. Auto
   relays their Switch / Stay choices to web and Telegram and presses the
   selected action in the owning chat.
-- Desktop model controls mirror Cursor inside one web dialog / phone bottom
-  sheet: Auto is a switch, Model is searchable, and Fast, Context, Reasoning,
-  or Effort appear only when that model exposes them. Their choices are read
-  from the IDE rather than assumed by Auto.
+- Desktop model controls mirror Cursor on both projections. The web uses one
+  dialog / phone bottom sheet with an Auto switch and searchable Model list;
+  Telegram uses keyboards. Fast, Context, Reasoning, or Effort appear only
+  when that model exposes them, with choices read from the IDE rather than
+  assumed by Auto. Known model choices on web and Telegram also show a broad
+  **$ / $$ / $$$** relative price band from published model API rates;
+  unknown models are never guessed.
 
 ## Related
 

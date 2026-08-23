@@ -14,6 +14,9 @@ sources:
   - id: css
     resource: /src/web/style.css
     title: Chrome
+  - id: model-pricing
+    resource: /src/web/model-pricing.js
+    title: Relative model price bands
   - id: md
     resource: /src/web/markdown.js
     title: Markdown parser
@@ -37,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-08-23T16:26:00Z }
+generated: { by: agent, at: 2026-08-23T21:27:00Z }
 ---
 
 # Web app
@@ -302,6 +305,15 @@ Back is pressed, or Escape is hit — Escape leaves the list before it
 leaves the sheet. The header follows, growing a back chevron and changing
 to **Choose model**.
 
+Known model rows carry an amber relative token-price mark: **$** lower,
+**$$** moderate, **$$$** higher. A small legend explains the scale; the
+badge's accessible label / desktop tooltip gives the published base input
+and output rates. The bands are deliberately broad because cache use,
+input/output mix, context length, plan, and regional uplifts change actual
+spend. An id whose encoded defaults include `fast=true` uses that published
+Fast rate. A future model with no known published rate gets no badge rather
+than a guessed price.
+
 Both pages are absolutely positioned so neither props the dialog open at
 the other's height, which leaves the rail no height of its own: it is
 measured from the page on screen and eased, so the dialog grows into the
@@ -326,9 +338,12 @@ the sheet's own surface, not on a control and not on a list that can still
 scroll up — and while it is under a finger the chat behind sharpens in step:
 the veil is its own pseudo-element (`#model-sheet::before`) so it can be set
 from the drag, because an element's own `backdrop-filter` cannot be eased
-from a finger. The veil starts below the topbar — the topbar is chrome, not
-chat, and blurring it read as the app losing focus. Letting go past a third
-of the panel, or with a flick, dismisses it; anything less springs back.
+from a finger. It is also the **only** layer with a backdrop filter: the
+full-screen sheet root stays unfiltered, and the panel is explicitly stacked
+above the veil, or WebKit can blur the topbar and fold the transformed panel
+into the same soft layer. The veil starts below the topbar — the topbar is
+chrome, not chat, and blurring it read as the app losing focus. Letting go
+past a third of the panel, or with a flick, dismisses it; anything less springs back.
 Open and close are the same motion played both ways — the panel rises on
 open and falls on close, and close waits for the fall before taking the
 sheet out of the page, or the leave would be a cut.

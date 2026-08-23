@@ -3072,6 +3072,20 @@ button.model-back[hidden] {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
 }
 
+.model-price-legend {
+  margin: -1px 2px 1px;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.model-price-legend strong {
+  color: var(--usage-accent);
+  font-family: var(--mono);
+  font-weight: 650;
+}
+
 /* The list is the page now, so it does not scroll inside itself as well. */
 #model-list {
   display: flex;
@@ -3102,6 +3116,37 @@ button.model-back[hidden] {
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 
+.model-list-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-list-meta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+/* Cost shares the usage dial's amber: meaningful, but not an alarm. */
+.model-price {
+  min-width: 3ch;
+  color: var(--usage-accent);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-align: right;
+}
+
+.model-list-check {
+  width: 12px;
+  color: transparent;
+  text-align: center;
+}
+
 .model-panel button.model-list-option:hover {
   border-color: var(--line-2);
   border-left-color: var(--line-2);
@@ -3116,7 +3161,7 @@ button.model-back[hidden] {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus) 22%, transparent);
 }
 
-.model-panel button.model-list-option[aria-selected='true'] span:last-child {
+.model-panel button.model-list-option[aria-selected='true'] .model-list-check {
   color: var(--focus);
 }
 

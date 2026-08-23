@@ -1,12 +1,14 @@
 # Directory Update Log
 
 ## 2026-08-23
+* **Fix**: Telegram's ACP and desktop `/model` keyboards append the shared **$ / $$ / $$$** signal to known models, explain `$ lower / $$$ higher`, and leave callback labels, model ids, and unknown-model rows unchanged.
+* **Update**: The searchable model list shows amber **$ / $$ / $$$** relative token-price bands from published base input/output rates, with a small legend and exact-rate tooltip / accessible label; Fast defaults use Fast rates, while unknown future models stay unlabelled rather than guessed.
 * **Fix**: Auto-select's own sheet (`selected-auto-menu` — description, Model row, "Auto" as its value) is now crossed by pressing Model like any other sheet; ruling a sheet out because it says "Auto" was why every model looked missing while Auto was on ("Cursor has no model matching …").
 * **Fix**: Leaving Auto picks Cursor's own first-listed model — `auto-mode-select` is a choice in the list, not a toggle, so pressing it while Auto was on did nothing and the phone's switch snapped back.
 * **Update**: `namedModels` reads the model list without choosing; menu rows are marked `row` so a badge ("Max", "High Fast") is never mistaken for a model.
 * **Update**: The web Auto switch moved out of the model sheet and onto the composer beside the mode chip, styled to match it; the model chip hides while Auto is on and the sheet no longer offers Auto.
 * **Fix**: Model-sheet parameter rows no longer squeeze their label into an ellipsis — the copy is capped so the control keeps its seat, a description wraps instead of truncating, and a switch stays beside its label where a select with a long description stacks.
-* **Fix**: The model sheet's blur veil started at the very top of the screen, so the topbar read as blurred chrome; it now starts below the topbar, which is chrome and not chat.
+* **Fix**: The model sheet's full-screen root no longer owns a backdrop filter — blur lives only on an inert veil below the topbar, with the panel explicitly above it, so WebKit keeps both the app header and model controls sharp.
 * **Update**: Composer image attachments doubled to 112px — a 56px chip is a checkbox, not a preview.
 * **Update**: The model sheet can be dragged away with a finger — direction-locked, the chat behind deblurs in step with the drag via a `--veil` pseudo-layer, past a third or a flick dismisses, and open/close are the same rise/fall played both ways (close now waits for the fall before hiding).
 * **Update**: `![alt](…)` in an answer is a real image on the web — http(s) and `data:` load directly, a host file goes through the new `/api/image` (raster only, no SVG, inside the chat's folder / Cursor's screenshot temp / `state/`, checked by real path), tapping opens the viewer, and a refused file collapses to its alt text. Telegram reads it as "🖼 alt".

@@ -2,7 +2,7 @@
 type: Concept
 title: Usage dial and account quotas
 description: Session context fill beside the composer, plus Cursor Models / Other Models / included / on-demand from the dashboard API.
-tags: [usage, billing, context, web]
+tags: [usage, billing, context, web, telegram]
 status: stable
 sources:
   - id: auth
@@ -17,7 +17,19 @@ sources:
   - id: web
     resource: /src/web/app.js
     title: Dial and usage sheet
-generated: { by: agent, at: 2026-08-21T19:05:00Z }
+  - id: model-pricing
+    resource: /src/web/model-pricing.js
+    title: Relative model price bands
+  - id: telegram
+    resource: /src/core/telegram.mjs
+    title: Telegram model keyboards
+  - id: cursor-model-pricing
+    resource: https://cursor.com/docs/models-and-pricing
+    title: Cursor Models & Pricing
+  - id: openai-gpt-5-1
+    resource: https://developers.openai.com/api/docs/models/gpt-5.1
+    title: GPT-5.1 API pricing
+generated: { by: agent, at: 2026-08-23T21:27:00Z }
 ---
 
 # Usage dial and account quotas
@@ -63,6 +75,25 @@ context size is the denominator under the dial, so a chat that just moved
 from 300K to 200K would otherwise read wrong until the next poll. Every
 `model.controls` reply (parameter change, model change, Auto on or off) is
 followed by a fresh `usage.get`.
+
+## Model selector price bands
+
+The web model list and Telegram's ACP / desktop model keyboards give known
+models a relative token-price badge derived from published base model API
+rates:
+
+- **$** — input ≤ $1.50/M and output ≤ $5/M
+- **$$** — input ≤ $5/M and output ≤ $20/M
+- **$$$** — anything above those bands
+
+This is a selection aid, not a bill estimate. The badge uses a model id's
+encoded Fast default when Cursor publishes a separate Fast rate; otherwise
+it uses the standard rate. The web tooltip / accessible label carries the
+two rates behind the band; Telegram explains the scale as
+`$ lower / $$$ higher`. Rates live in `src/web/model-pricing.js`, with the
+source and checked date beside them; unknown future models are left
+unlabelled rather than classified by name. Exact spend still comes from
+Cursor's usage records below.
 
 ## Account (Cursor Models / Other Models)
 

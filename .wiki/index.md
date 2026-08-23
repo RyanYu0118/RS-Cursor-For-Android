@@ -17,9 +17,9 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [ACP](concepts/acp.md) - Fallback `cursor-agent acp` sessions
 * [Approvals](concepts/approvals.md) - Permissions, automatic mode transitions, questions, plans, and deliberate Keep / Undo / Redo
 * [Queue](concepts/queue.md) - Messages waiting behind a turn, in Auto or in Cursor
-* [Telegram](concepts/telegram.md) - Bot as a projection of the same host
-* [Web](concepts/web.md) - PWA lifecycle, transcript cache, responsive model sheet, and Home Screen behaviour
-* [Usage](concepts/usage.md) - Context dial for this chat, plus Cursor Models / Other Models account quotas
+* [Telegram](concepts/telegram.md) - Bot projection with model price bands
+* [Web](concepts/web.md) - PWA lifecycle, transcript cache, responsive model sheet with price bands, and Home Screen behaviour
+* [Usage](concepts/usage.md) - Context dial, relative model price bands, and Cursor Models / Other Models account quotas
 * [Browser](concepts/browser.md) - Headed Chrome, screencast, not recorded
 * [Terminals](concepts/terminals.md) - node-pty shells for the user and the agent
 * [Projects](concepts/projects.md) - Folders as Cursor itself sees them

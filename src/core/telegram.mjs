@@ -18,12 +18,21 @@ import { desktopChats } from './desktop-chats.mjs';
 import { optionLetter, parseQuestionReply } from './questions.mjs';
 import { classifyTool, displayLabel, foldTools, isCreatedPlan, planFields, turnCopy } from './desktop-tool-ui.mjs';
 import { linkify } from '../web/markdown.js';
+import { modelPrice } from '../web/model-pricing.js';
 
 const LIMIT = 4096;
 /** Telegram tolerates roughly one edit a second; stay well clear. */
 const EDIT_MS = 1800;
 /** Cursor's current modes, in the order the IDE lists them. */
 const SESSION_MODES = ['agent', 'plan', 'debug', 'multitask', 'ask'];
+const MODEL_PRICE_LEGEND = '$ lower / $$$ higher';
+
+function modelChoiceText(label, modelId, maxLength = null) {
+  const price = modelPrice(modelId);
+  const suffix = price ? ` ${price.symbols}` : '';
+  const text = String(label);
+  return `${maxLength ? text.slice(0, Math.max(0, maxLength - suffix.length)) : text}${suffix}`;
+}
 
 /** Same shape the session uses for echo matching — trim and collapse space. */
 const echoKey = (text) => String(text || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -593,13 +602,16 @@ export class TelegramBridge extends EventEmitter {
         for (let i = 0; i < models.length; i += 2) {
           rows.push(
             models.slice(i, i + 2).map((m) => ({
-              text: `${m.modelId === active.model ? '● ' : ''}${m.name || m.modelId}`,
+              text: modelChoiceText(
+                `${m.modelId === active.model ? '● ' : ''}${m.name || m.modelId}`,
+                m.modelId,
+              ),
               callback_data: this.tokenFor({ kind: 'model', modelId: m.modelId, label: m.name }),
             })),
           );
         }
         return this.send(
-          `Model is <b>${esc(active.modelName || active.model || 'unset')}</b>`,
+          `Model is <b>${esc(active.modelName || active.model || 'unset')}</b>\n${MODEL_PRICE_LEGEND}`,
           { reply_markup: { inline_keyboard: rows } },
         );
       }
@@ -677,10 +689,16 @@ export class TelegramBridge extends EventEmitter {
     const options = offer.options.filter((o) => !/^(add models|new|edit)$/i.test(o));
     for (let i = 0; i < options.length; i += 2) {
       rows.push(
-        options.slice(i, i + 2).map((label) => ({
-          text: `${label === offer.was ? '● ' : ''}${label}`.slice(0, 40),
-          callback_data: this.tokenFor({ kind: 'cursorPick', picker, label }),
-        })),
+        options.slice(i, i + 2).map((label) => {
+          const text = `${label === offer.was ? '● ' : ''}${label}`;
+          return {
+            text:
+              picker === 'model'
+                ? modelChoiceText(text, label, 40)
+                : text.slice(0, 40),
+            callback_data: this.tokenFor({ kind: 'cursorPick', picker, label }),
+          };
+        }),
       );
     }
     if (picker === 'model') {
@@ -715,7 +733,8 @@ export class TelegramBridge extends EventEmitter {
       }
     }
     return this.send(
-      `Cursor's ${picker} for this chat is <b>${esc(offer.was || 'unknown')}</b>`,
+      `Cursor's ${picker} for this chat is <b>${esc(offer.was || 'unknown')}</b>` +
+        (picker === 'model' ? `\n${MODEL_PRICE_LEGEND}` : ''),
       { reply_markup: { inline_keyboard: rows } },
     );
   }
