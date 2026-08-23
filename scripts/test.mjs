@@ -2634,6 +2634,43 @@ if (existsSync(SRC)) {
     fail('Telegram /mode must accept debug and multitask');
     failed = true;
   }
+
+  /*
+   * Choosing a model is a page you go to, not a drawer under the row you
+   * tapped: two pages on a rail, the list arriving from the right over the
+   * whole dialog and leaving the same way. The page off screen has to keep
+   * its box to slide at all, so it is `inert` — `hidden` would teleport it.
+   */
+  if (
+    !html.includes('id="model-pages"') ||
+    (html.match(/class="model-page"/g) || []).length !== 2 ||
+    !/id="model-list-pane"[^>]*\binert\b/.test(html) ||
+    /id="model-list-pane"[^>]*\bhidden\b/.test(html) ||
+    !html.includes('id="model-back"')
+  ) {
+    fail('the model sheet must be two pages on a rail, the off-screen one inert rather than hidden');
+    failed = true;
+  }
+  const pageAt = css.indexOf('.model-page {');
+  const pageCss = pageAt < 0 ? '' : css.slice(pageAt, css.indexOf('}', pageAt) + 1);
+  if (!/position:\s*absolute/.test(pageCss) || !/transition:[\s\S]*transform/.test(pageCss)) {
+    fail('model pages must be stacked and transformed, or neither can slide over the other');
+    failed = true;
+  }
+  if (!/\.model-page\[data-page='list'\]\s*\{[^}]*translateX\(100%\)/.test(css)) {
+    fail('the model list must wait off the right edge');
+    failed = true;
+  }
+  if (!js.includes('function setModelPage') || !js.includes('function sizeModelRail')) {
+    fail('the rail needs a page switch and a measured height — absolute pages have none of their own');
+    failed = true;
+  }
+  const escapeAt = js.indexOf("if (e.key !== 'Escape') return;");
+  const escapeBlock = escapeAt < 0 ? '' : js.slice(escapeAt, escapeAt + 900);
+  if (escapeBlock.indexOf("setModelPage('settings')") > escapeBlock.indexOf('setModelSheet(false)')) {
+    fail('Escape must leave the model list before it leaves the sheet');
+    failed = true;
+  }
   const attachAt = html.indexOf('id="attach"');
   const controlsAt = html.indexOf('class="composer-controls"');
   const mainAt = html.indexOf('class="composer-main"');

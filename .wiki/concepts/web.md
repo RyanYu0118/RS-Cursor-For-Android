@@ -269,11 +269,27 @@ mode-coloured edge, chips on `--bg-3` for anything pressable, and the
 scrubber's way of marking the live row — a coloured left edge and a soft
 ring, not a tick alone. Rows are grouped into cards rather than running
 full-bleed under hairlines; a plain settings list is the one thing the rest
-of the app never looks like. Model opens a searchable list; Fast, Context,
-Reasoning, and Effort appear as labelled rows only when Cursor reports them
-for the selected model. Changes apply immediately. While Cursor is opening
-or pressing its own picker, the sheet disables duplicate presses and shows
-progress.
+of the app never looks like. Fast, Context, Reasoning, and Effort appear as
+labelled rows only when Cursor reports them for the selected model. Changes
+apply immediately. While Cursor is opening or pressing its own picker, the
+sheet disables duplicate presses and shows progress.
+
+Choosing a model is a **page you go to**, not a drawer that unfolds under
+the row you tapped. The sheet is two pages on one rail: the list arrives
+from the right over the whole dialog, the settings page steps back and
+dims behind it, and the list leaves the same way when a model is picked,
+Back is pressed, or Escape is hit — Escape leaves the list before it
+leaves the sheet. The header follows, growing a back chevron and changing
+to **Choose model**.
+
+Both pages are absolutely positioned so neither props the dialog open at
+the other's height, which leaves the rail no height of its own: it is
+measured from the page on screen and eased, so the dialog grows into the
+list rather than snapping, and the page is capped and scrolls once the
+rail hits `max-height`. The page off screen is `inert`, never `hidden` —
+hidden cannot slide. The search box takes focus only where there is a
+mouse; a phone raising its keyboard over the list it has just opened is
+worse than arriving without a caret.
 
 Two ways this sheet failed silently are worth remembering, and `npm test`
 now guards both. A `var()` on a property nobody declares is invalid at

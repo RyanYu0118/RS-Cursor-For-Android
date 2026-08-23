@@ -358,32 +358,44 @@
     <!-- The grip the sheet is dragged by on a phone; decoration on a desktop. -->
     <div class="model-grabber" aria-hidden="true"></div>
     <div class="sheet-head model-head">
+      <button id="model-back" class="icon model-back" type="button" title="Back" aria-label="Back to model settings" hidden>‹</button>
       <span id="model-sheet-title">Model</span>
       <button id="model-close" class="icon" title="Close" aria-label="Close model settings">×</button>
     </div>
-    <div class="model-sheet-body">
-      <div class="model-card">
-        <button id="model-choice" class="model-config-row model-choice" type="button" aria-expanded="false">
-          <span class="model-config-copy">
-            <strong>Model</strong>
-            <small id="model-choice-label">Choose a model</small>
-          </span>
-          <span class="model-choice-chevron" aria-hidden="true">›</span>
-        </button>
-        <select id="model" title="Model" aria-label="Model" hidden></select>
+    <!--
+      Two pages on one rail. Choosing a model is a place you go to, not a
+      drawer that unfolds under the row you tapped: the list arrives from the
+      right over the whole dialog and leaves the same way.
+    -->
+    <div id="model-pages" class="model-pages">
+      <section class="model-page" data-page="settings" aria-label="Model settings">
+        <div class="model-page-inner">
+          <div class="model-card">
+            <button id="model-choice" class="model-config-row model-choice" type="button" aria-expanded="false">
+              <span class="model-config-copy">
+                <strong>Model</strong>
+                <small id="model-choice-label">Choose a model</small>
+              </span>
+              <span class="model-choice-chevron" aria-hidden="true">›</span>
+            </button>
+            <select id="model" title="Model" aria-label="Model" hidden></select>
+          </div>
 
-        <div id="model-list-pane" class="model-list-pane" hidden>
+          <div id="model-parameters-group" class="model-group" hidden>
+            <h2 class="model-group-title">Parameters</h2>
+            <div id="model-parameters" class="model-card model-parameter-list"></div>
+          </div>
+
+          <div id="model-status" class="sheet-note model-status" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section id="model-list-pane" class="model-page" data-page="list" aria-label="Models" inert>
+        <div class="model-page-inner model-list-pane">
           <input id="model-filter" type="search" placeholder="Search models…" aria-label="Search models" autocomplete="off" />
           <div id="model-list" role="listbox" aria-label="Models"></div>
         </div>
-      </div>
-
-      <div id="model-parameters-group" class="model-group" hidden>
-        <h2 class="model-group-title">Parameters</h2>
-        <div id="model-parameters" class="model-card model-parameter-list"></div>
-      </div>
-
-      <div id="model-status" class="sheet-note model-status" aria-live="polite"></div>
+      </section>
     </div>
   </div>
 </div>

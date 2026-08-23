@@ -2631,8 +2631,7 @@ button.icon.active {
   -webkit-backdrop-filter: blur(6px);
 }
 
-#model-sheet[hidden],
-.model-list-pane[hidden] {
+#model-sheet[hidden] {
   display: none;
 }
 
@@ -2673,18 +2672,108 @@ button.icon.active {
   background: transparent;
   font-size: 16px;
   font-weight: 650;
+  transition: padding-left 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.model-sheet-body {
+/* Back takes the space the title's inset was using, so nothing jumps. */
+.model-panel[data-page='list'] .sheet-head {
+  padding-left: 6px;
+}
+
+/* Drawn like the select's chevron, and for the same reason: a ‹ sits on its
+   baseline and looks dropped next to a title. */
+button.model-back {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 0;
+}
+
+button.model-back::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border: 0 solid currentColor;
+  border-left-width: 1.8px;
+  border-bottom-width: 1.8px;
+  border-radius: 0 0 0 2px;
+  transform: rotate(45deg) translate(1px, -1px);
+}
+
+button.model-back:hover {
+  color: var(--text);
+}
+
+button.model-back[hidden] {
+  display: none;
+}
+
+/*
+ * The rail the two pages ride on.
+ *
+ * Both pages are taken out of flow so neither props the dialog open at the
+ * other's height; the rail's own height is set from the page on screen and
+ * eased, which is what makes the dialog grow into the list rather than jump.
+ * `max-height` caps it, and the page inside scrolls once it is capped.
+ */
+.model-pages {
+  position: relative;
+  flex: 0 1 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  max-height: min(62dvh, 480px);
+  overflow: hidden;
+  transition: height 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.model-page {
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  transition:
+    transform 0.3s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.22s ease;
+}
+
+/* The page off screen keeps its box — it is `inert`, not hidden, or it could
+   not slide. Only the rail's clipping keeps it out of sight. */
+.model-pages-still {
+  transition: none;
+}
+
+/* Settings is home; the list waits off the right edge until it is asked for. */
+.model-page[data-page='list'] {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+/* Home does not sit still while the list covers it — it steps back, as a
+   pushed page does, so the two read as one stack rather than a cross-fade. */
+.model-panel[data-page='list'] .model-page[data-page='settings'] {
+  transform: translateX(-24%);
+  opacity: 0;
+}
+
+.model-panel[data-page='list'] .model-page[data-page='list'] {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.model-page-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   padding: 2px 14px 14px;
   padding-bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-pages,
+  .model-page {
+    transition: none;
+  }
 }
 
 /*
@@ -2853,19 +2942,17 @@ button.icon.active {
 }
 
 .model-list-pane {
-  padding: 0 10px 10px;
-  background: transparent;
+  gap: 8px;
 }
 
 .model-list-pane input[type='search'] {
   width: 100%;
   box-sizing: border-box;
-  margin-bottom: 8px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--line-2);
-  border-radius: 10px;
+  border-radius: 12px;
   outline: none;
-  background: var(--bg);
+  background: var(--bg-2);
   color: var(--text);
   font-size: 16px;
 }
@@ -2875,14 +2962,11 @@ button.icon.active {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
 }
 
+/* The list is the page now, so it does not scroll inside itself as well. */
 #model-list {
-  max-height: min(42vh, 340px);
   display: flex;
   flex-direction: column;
   gap: 4px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 2px;
 }
 
 /*

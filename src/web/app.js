@@ -69,6 +69,10 @@ const els = {
   modelSummary: $('model-summary'),
   modelSheet: $('model-sheet'),
   modelPanel: document.querySelector('.model-panel'),
+  modelPages: $('model-pages'),
+  modelSettingsPage: document.querySelector('.model-page[data-page="settings"]'),
+  modelSheetTitle: $('model-sheet-title'),
+  modelBack: $('model-back'),
   modelClose: $('model-close'),
   modelAuto: $('model-auto'),
   modelChoice: $('model-choice'),
@@ -2641,15 +2645,50 @@ function updateModelPresentation() {
   els.modelSummary.textContent = parts.join(' · ') || 'Model';
 }
 
-function setModelList(open) {
-  const show = Boolean(open) && !els.modelChoice.disabled;
-  els.modelListPane.hidden = !show;
-  els.modelChoice.setAttribute('aria-expanded', String(show));
-  if (show) {
+/**
+ * Tell the rail how tall the page on it is.
+ *
+ * Both pages are absolutely positioned so neither props the dialog open at
+ * the other's height, which leaves the rail with no height of its own. Easing
+ * it to the measured one is what makes the dialog grow into the list rather
+ * than snap; `animate: false` is for the frame the sheet opens on, where
+ * there is nothing to grow from.
+ */
+function sizeModelRail({ animate = true } = {}) {
+  if (!els.modelPages || els.modelSheet.hidden) return;
+  const onList = els.modelPanel.dataset.page === 'list';
+  const inner = (onList ? els.modelListPane : els.modelSettingsPage).firstElementChild;
+  const height = Math.ceil(inner.getBoundingClientRect().height);
+  if (!height) return;
+  if (animate) {
+    els.modelPages.style.height = `${height}px`;
+    return;
+  }
+  els.modelPages.classList.add('model-pages-still');
+  els.modelPages.style.height = `${height}px`;
+  void els.modelPages.offsetHeight;
+  els.modelPages.classList.remove('model-pages-still');
+}
+
+/** Move between the sheet's two pages: settings, and the list of models. */
+function setModelPage(page) {
+  const onList = page === 'list' && !els.modelChoice.disabled;
+  els.modelPanel.dataset.page = onList ? 'list' : 'settings';
+  els.modelChoice.setAttribute('aria-expanded', String(onList));
+  els.modelBack.hidden = !onList;
+  els.modelSheetTitle.textContent = onList ? 'Choose model' : 'Model';
+  els.modelListPane.inert = !onList;
+  els.modelSettingsPage.inert = onList;
+  if (onList) {
     els.modelFilter.value = '';
     renderModelList();
-    setTimeout(() => els.modelFilter.focus(), 0);
+    // A phone raising its keyboard over the list it has just opened is worse
+    // than arriving without a caret, so only a mouse gets the search focused.
+    if (window.matchMedia('(hover: hover)').matches) {
+      setTimeout(() => els.modelFilter.focus(), 0);
+    }
   }
+  sizeModelRail();
 }
 
 function renderModelList() {
@@ -2668,7 +2707,7 @@ function renderModelList() {
     }</span>`;
     button.onclick = () => {
       els.model.value = option.value;
-      setModelList(false);
+      setModelPage('settings');
       els.model.onchange();
     };
     els.modelList.append(button);
@@ -2679,6 +2718,7 @@ function renderModelList() {
     empty.textContent = 'No matching models';
     els.modelList.append(empty);
   }
+  if (els.modelPanel?.dataset.page === 'list') sizeModelRail();
 }
 
 function setModelUpdating(updating, text = 'Updating Cursor…') {
@@ -2697,9 +2737,11 @@ function setModelSheet(open) {
   if (open && els.modelAuto.checked) return;
   els.modelSheet.hidden = !open;
   if (!open) {
-    setModelList(false);
+    setModelPage('settings');
     return;
   }
+  setModelPage('settings');
+  sizeModelRail({ animate: false });
   const meta = state.sessions.find((session) => session.id === state.sessionId);
   if (meta?.kind === 'desktop') {
     setModelUpdating(true, 'Reading Cursor…');
@@ -2716,10 +2758,11 @@ function renderModelControls(controls) {
   els.modelAuto.checked = automatic;
   els.modelParameters.innerHTML = '';
   els.modelParametersGroup.hidden = true;
-  setModelList(false);
+  setModelPage('settings');
   updateModelPresentation();
   if (!state.modelControls || automatic) {
     setModelUpdating(false);
+    sizeModelRail();
     return;
   }
 
@@ -2795,6 +2838,7 @@ function renderModelControls(controls) {
   els.modelParametersGroup.hidden = !els.modelParameters.children.length;
   setModelUpdating(false);
   updateModelPresentation();
+  sizeModelRail();
 }
 
 /**
@@ -4170,7 +4214,10 @@ document.addEventListener('keydown', (e) => {
   // tool view, which sits over the rail.
   if (!$('lightbox').hidden) closeLightbox();
   else if (!els.planSheet.hidden) setPlanSheet(false);
-  else if (!els.modelSheet.hidden) setModelSheet(false);
+  // Escape leaves the list before it leaves the sheet: one step back at a time.
+  else if (!els.modelSheet.hidden && els.modelPanel.dataset.page === 'list') {
+    setModelPage('settings');
+  } else if (!els.modelSheet.hidden) setModelSheet(false);
   else if (!els.usageSheet.hidden) setUsageSheet(false);
   else if (!$('newbie').hidden) setNewbie(false);
   else if (!els.sheet.hidden) setSheet(false);
@@ -4190,7 +4237,7 @@ els.model.onchange = () => {
 };
 els.modelAuto.onchange = () => {
   const automatic = els.modelAuto.checked;
-  setModelList(false);
+  setModelPage('settings');
   setModelUpdating(true);
   if (automatic) setModelSheet(false);
   sendOp({
@@ -4206,7 +4253,9 @@ els.modelClose.onclick = () => setModelSheet(false);
 els.modelSheet.onclick = (e) => {
   if (e.target === els.modelSheet) setModelSheet(false);
 };
-els.modelChoice.onclick = () => setModelList(els.modelListPane.hidden);
+els.modelChoice.onclick = () =>
+  setModelPage(els.modelPanel.dataset.page === 'list' ? 'settings' : 'list');
+els.modelBack.onclick = () => setModelPage('settings');
 els.modelFilter.addEventListener('input', renderModelList);
 els.policy.onchange = () =>
   sendOp({ op: 'session.policy', sessionId: state.sessionId, policy: els.policy.value });
