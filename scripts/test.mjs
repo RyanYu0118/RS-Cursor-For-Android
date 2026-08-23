@@ -2737,6 +2737,24 @@ if (existsSync(SRC)) {
     fail('the model sheet needs a veil layer a drag can set');
     failed = true;
   }
+  const modelSheetAt = css.indexOf('#model-sheet {');
+  const modelSheetCss =
+    modelSheetAt < 0 ? '' : css.slice(modelSheetAt, css.indexOf('}', modelSheetAt) + 1);
+  if (/backdrop-filter\s*:/.test(modelSheetCss)) {
+    fail('the model sheet root must not blur its header or its own panel');
+    failed = true;
+  }
+  const modelVeilAt = css.indexOf('#model-sheet::before');
+  const modelVeilCss =
+    modelVeilAt < 0 ? '' : css.slice(modelVeilAt, css.indexOf('}', modelVeilAt) + 1);
+  if (!/z-index:\s*0/.test(modelVeilCss) || !/pointer-events:\s*none/.test(modelVeilCss)) {
+    fail('the model sheet veil must be an inert layer behind the panel');
+    failed = true;
+  }
+  if (!/\.model-panel\s*\{[^}]*position:\s*relative[^}]*z-index:\s*1/.test(css)) {
+    fail('the model panel must stay explicitly above its blur veil');
+    failed = true;
+  }
   if (!/data-panel='out'\] \.model-panel\s*\{[^}]*translateY\(100%\)/.test(css)) {
     fail('the model sheet must be able to fall away below the screen');
     failed = true;

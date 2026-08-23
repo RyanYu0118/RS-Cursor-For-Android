@@ -2649,8 +2649,7 @@ button.icon.active {
   justify-content: center;
   padding: 16px;
   background: color-mix(in srgb, #000 52%, transparent);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  isolation: isolate;
 }
 
 /*
@@ -2659,13 +2658,16 @@ button.icon.active {
  * The chat behind the sheet softens as the sheet arrives and sharpens as it
  * leaves, and while a finger is dragging the sheet down the veil is set from
  * the finger — the chat is already sharp again by the time the sheet would
- * have gone. The backdrop keeps a constant 6px on top of it so the sheet's
- * own edges never sit on raw text.
+ * have gone. The sheet itself cannot own a backdrop filter: WebKit can fold
+ * its transformed panel into that layer, and a full-screen filter also blurs
+ * the topbar. This layer alone owns the blur and stays behind the panel.
  */
 #model-sheet::before {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background: color-mix(in srgb, var(--bg) 30%, transparent);
   backdrop-filter: blur(8px) saturate(1.1);
   -webkit-backdrop-filter: blur(8px) saturate(1.1);
@@ -2685,6 +2687,8 @@ button.icon.active {
 
 /* The panel rides the same spring, so a finger and a tap agree on the way. */
 .model-panel {
+  position: relative;
+  z-index: 1;
   transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
