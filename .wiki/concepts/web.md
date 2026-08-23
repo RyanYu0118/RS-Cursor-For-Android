@@ -233,6 +233,25 @@ meta also asks for `interactive-widget=resizes-content` where supported.
   **GitHub callouts** (`> [!NOTE]` etc.) render like Cursor's chat — diagrams
   and math load from `/vendor/` on demand via `enrich.js` after the HTML is
   painted; Telegram still gets plain text.
+- **Pictures an answer points at.** `![alt](…)` is a real image. An `http(s)`
+  URL or a `data:` image is fetched by the browser; anything else is a file on
+  the host, which the page cannot read, so it travels as `data-file` and the
+  app turns it into `/api/image?session=…&path=…` — only the app knows which
+  chat named it, and a path relative to "the repo" means nothing without one.
+  Tap one for the same full-screen viewer as an attachment. A file the host
+  refuses collapses to its alt text: a caption is still an answer, a broken
+  picture icon is not.
+
+  Serving those files is a read reachable over Tailscale, so `/api/image` is
+  fenced on every side rather than trusting the path in the message: raster
+  formats only (**no SVG** — it is a script document, and served from this
+  origin a tab opened straight at it would run inside Auto), inside a known
+  root only (the chat's own folder, where Cursor drops its screenshots, and
+  Auto's `state/`), and checked by **real** path so a symlink cannot point out
+  of the repo and `..` is spent before the check rather than after. Telegram
+  cannot show these — a bot photo is a separate message and would arrive apart
+  from the reply it belongs to — so there `![what it shows](…)` reads as
+  "🖼 what it shows" instead of leaking a path nobody on a phone can open.
 
 ## Composer
 

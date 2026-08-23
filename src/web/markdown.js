@@ -16,6 +16,34 @@ const esc = (s) =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+/**
+ * Safe inside a double-quoted attribute.
+ *
+ * `esc` has already been over the text, so `<`, `>` and `&` are gone — but it
+ * leaves quotes alone, and a quote in a URL is all it takes to step out of the
+ * attribute and write another one. A src is the first place agent prose ever
+ * reached an attribute, so this is where that has to be stopped.
+ */
+const attr = (s) => String(s ?? '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+/**
+ * An image the browser can fetch on its own, or nothing.
+ *
+ * Only `http(s)` and a `data:` image are given a `src` here. Everything else —
+ * a Windows path, an absolute POSIX path, a path relative to the repo — is a
+ * file on the host, which the page cannot read; it travels as `data-file` and
+ * the app turns it into a host URL, because only the app knows which chat (and
+ * so which folder) the picture was named in.
+ */
+function image(alt, src) {
+  const name = attr(alt);
+  const raw = String(src);
+  if (/^https?:\/\/./i.test(raw) || /^data:image\/[\w.+-]+[,;]/i.test(raw)) {
+    return `<img class="md-img" src="${attr(raw)}" alt="${name}" loading="lazy">`;
+  }
+  return `<img class="md-img" data-file="${attr(raw)}" alt="${name}" loading="lazy">`;
+}
+
 /** Inline markup. Code spans are already gone by now, so `**` inside
     backticks cannot be eaten here. */
 function inline(text) {
@@ -28,6 +56,9 @@ function inline(text) {
       // italicise itself — identifiers are everywhere in agent prose.
       .replace(/(^|[\s(])_([^_\n]+?)_(?=[\s).,;:!?]|$)/g, '$1<em>$2</em>')
       .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+      // Images before links, or the bang is orphaned and the picture becomes
+      // its own caption — `![shot](…)` used to render as "!" and a code chip.
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => image(alt, src))
       .replace(
         /\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
         '<a href="$2" target="_blank" rel="noopener">$1</a>',

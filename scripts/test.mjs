@@ -24,7 +24,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname, relative } from 'node:path';
+import { basename, join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -2180,6 +2180,54 @@ if (existsSync(SRC)) {
       fail('a url in code must stay code');
       failed = true;
     }
+
+    /*
+     * A picture in an answer. `![alt](…)` used to fall through to the
+     * relative-link rule, which orphaned the bang and turned the picture into
+     * its own caption: "!" followed by a code chip.
+     */
+    has('![a shot](https://example.com/x.png)', [
+      '<img class="md-img" src="https://example.com/x.png" alt="a shot"',
+    ]);
+    has('![tiny](data:image/png;base64,iVBORw0KGgo=)', ['<img class="md-img" src="data:image/png']);
+    // A host file cannot be fetched by name alone — the app adds the chat.
+    has('![shot](C:\\Users\\me\\page.png)', ['<img class="md-img" data-file="C:\\Users\\me\\page.png"']);
+    has('![plot](out/plot.png)', ['data-file="out/plot.png"']);
+    for (const [what, md] of [
+      ['a bang', '![a shot](https://example.com/x.png)'],
+      ['a code chip', '![shot](C:\\x\\y.png)'],
+    ]) {
+      const out = renderMarkdown(md);
+      if (out.includes('>!') || out.includes('!<') || /<code>[^<]*shot/.test(out)) {
+        fail(`an image must not leave ${what} behind: ${out}`);
+        failed = true;
+      }
+    }
+    /*
+     * An attribute is the one place agent prose had never reached before an
+     * image had a src. `esc()` takes `<`, `>` and `&` but leaves quotes alone,
+     * so a quote in the alt or the path would close the attribute and start
+     * writing its own — the image writer has to escape them itself.
+     */
+    for (const md of [
+      '![a" onerror="boom](http://e.com/x.png)',
+      '![x](http://e.com/a".png)',
+      '![x](out/a".png)',
+    ]) {
+      const out = renderMarkdown(md);
+      if (/onerror="/.test(out) || !out.includes('&quot;')) {
+        fail(`a quote in an image must not open an attribute: ${out}`);
+        failed = true;
+      }
+    }
+    // Only a picture the browser can fetch on its own gets a src.
+    for (const bad of ['javascript:alert(1)', 'data:text/html,<script>', 'file:///etc/passwd']) {
+      const out = renderMarkdown(`![x](${bad})`);
+      if (/\bsrc=/.test(out)) {
+        fail(`an image src must be http(s) or a data image, not ${bad}: ${out}`);
+        failed = true;
+      }
+    }
     has('## Title', ['<h4>Title</h4>']);
     has('---', ['<hr>']);
     has('> quoted', ['<blockquote><p>quoted</p></blockquote>']);
@@ -2663,6 +2711,13 @@ if (existsSync(SRC)) {
   }
   if (!js.includes('function setModelPage') || !js.includes('function sizeModelRail')) {
     fail('the rail needs a page switch and a measured height — absolute pages have none of their own');
+    failed = true;
+  }
+  // Context size is the denominator under the composer dial, so a chat that
+  // just moved from 300K to 200K is reading wrong until usage is asked again.
+  const modelControlsAt = js.indexOf("msg.type === 'model.controls'");
+  if (modelControlsAt < 0 || !js.slice(modelControlsAt, modelControlsAt + 500).includes('refreshUsage(')) {
+    fail('changing a model parameter must refresh the context dial');
     failed = true;
   }
   const escapeAt = js.indexOf("if (e.key !== 'Escape') return;");
@@ -5508,6 +5563,48 @@ try {
         else ok(`route ${path.split('?')[0]}`);
       } catch (e) {
         fail(`${path} failed: ${e.message}`);
+      }
+    }
+
+    /*
+     * Pictures an answer points at. This is a file read reachable over
+     * Tailscale, so the fence matters more than the feature: a raster image
+     * inside the chat's own folder and nothing else. `..` is spent before the
+     * check, so a path that climbs out is refused even though it exists.
+     */
+    {
+      const outside = join(tmpdir(), 'auto-image-guard-test.png');
+      writeFileSync(outside, Buffer.from('89504e470d0a1a0a', 'hex'));
+      const ask = (path) =>
+        fetch(`http://127.0.0.1:${PORT}/api/image?path=${encodeURIComponent(path)}`, {
+          signal: AbortSignal.timeout(8000),
+        });
+      try {
+        const good = await ask('src/web/icon-192.png');
+        if (!good.ok || !String(good.headers.get('content-type')).startsWith('image/')) {
+          fail(`/api/image should serve an image from the chat's folder: ${good.status}`);
+        } else if (good.headers.get('x-content-type-options') !== 'nosniff') {
+          fail('/api/image must forbid content sniffing');
+        } else {
+          const refused = [];
+          for (const [what, path] of [
+            ['a file outside the folder', outside],
+            // The same file again, reached by climbing out of a root that is
+            // allowed — so this only passes if `..` is spent before the check.
+            ['a path that climbs out of an allowed root', join(tmpdir(), 'cursor', '..', basename(outside))],
+            ['something that is not an image', join(ROOT, 'package.json')],
+            ['an SVG, which is a script document', join(ROOT, 'src', 'web', 'icon.svg')],
+          ]) {
+            const r = await ask(path);
+            if (r.ok) refused.push(`${what} (${path})`);
+          }
+          if (refused.length) fail(`/api/image served what it should refuse: ${refused.join('; ')}`);
+          else ok('route /api/image serves a chat’s own images and refuses the rest');
+        }
+      } catch (e) {
+        fail(`/api/image failed: ${e.message}`);
+      } finally {
+        rmSync(outside, { force: true });
       }
     }
 

@@ -2221,6 +2221,28 @@ html[data-standalone] .composer-auto {
   cursor: zoom-in;
 }
 
+/* A picture an answer points at, sunk into the bubble like a tool screenshot. */
+.md-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--sunken);
+  cursor: zoom-in;
+}
+
+/* A file the host would not serve is still a caption, not a broken icon. */
+.md-img-missing {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px dashed var(--line-2);
+  border-radius: 8px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
 .msg.user .thumbs {
   display: flex;
   flex-wrap: wrap;

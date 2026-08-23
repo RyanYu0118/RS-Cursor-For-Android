@@ -115,6 +115,21 @@ export function failureNote(rec) {
 }
 
 /**
+ * A picture in an answer, said out loud.
+ *
+ * The web fetches the file and shows it; Telegram cannot, because the bot
+ * would have to upload a separate photo message and the reply it belongs to
+ * would arrive without it. So the picture becomes its caption — `![what it
+ * shows](…)` reads as "🖼 what it shows" instead of leaking a host path
+ * nobody on a phone can open.
+ */
+export function sayImages(text) {
+  return String(text ?? '').replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt) =>
+    alt.trim() ? `🖼 ${alt.trim()}` : '🖼 image',
+  );
+}
+
+/**
  * Render one turn into a single Telegram message: what the agent is doing on
  * top, what it is saying underneath. The tool list is reserved space, so a long
  * answer cannot push the status out of view.
@@ -132,7 +147,7 @@ export function renderTurn({ text = '', tools = [], conclusion = '' } = {}) {
     .join('\n');
   const done = conclusion ? `<i>${esc(conclusion)}</i>` : '';
   const room = LIMIT - head.length - done.length - 8;
-  const body = linkify(clamp(esc(String(text).trim()), Math.max(500, room)), '');
+  const body = linkify(clamp(esc(sayImages(String(text).trim())), Math.max(500, room)), '');
   return [head, body, done].filter(Boolean).join('\n\n') || '…';
 }
 

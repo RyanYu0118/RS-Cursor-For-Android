@@ -10,8 +10,9 @@
  */
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, statSync, writeFileSync, rmSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { readFileSync, existsSync, realpathSync, statSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { SessionManager, POLICY, STATUS } from '../core/sessions.mjs';
@@ -562,6 +563,95 @@ function vendorFile(rel) {
   return null;
 }
 
+/*
+ * Pictures an answer points at.
+ *
+ * An agent writing `![shot](C:\…\page.png)` means a file on this machine, and
+ * a phone cannot read this machine's disk — so the host hands it over. That is
+ * a file read reachable over Tailscale, so it is fenced on every side rather
+ * than trusted to the path in the message:
+ *
+ *  - raster images only. No SVG: it is a script document, and served from this
+ *    origin a tab opened straight at it would run inside Auto;
+ *  - inside a known root only. A chat's own folder (the repo it works in), the
+ *    place Cursor drops its screenshots, and Auto's own state;
+ *  - by real path. Symlinks are resolved first, so a link inside the repo
+ *    cannot point out of it, and `..` is spent before the check, not after.
+ */
+const IMAGE_TYPES = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+};
+
+const realOrNull = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
+};
+
+/** Every folder an image is allowed to come from, for this session. */
+function imageRoots(sessionId) {
+  const roots = [join(tmpdir(), 'cursor'), STATE_DIR];
+  const folder = sessionId && sessions.get(sessionId)?.folder;
+  if (folder) roots.push(folder);
+  return roots.map(realOrNull).filter(Boolean);
+}
+
+const within = (root, path) => {
+  const a = process.platform === 'win32' ? root.toLowerCase() : root;
+  const b = process.platform === 'win32' ? path.toLowerCase() : path;
+  return b === a || b.startsWith(a.endsWith(sep) ? a : a + sep);
+};
+
+function serveImage(req, res, url) {
+  const asked = url.searchParams.get('path') || '';
+  const sessionId = url.searchParams.get('session') || sessions.activeId;
+  if (!asked) return res.writeHead(400).end('no path');
+
+  const folder = sessionId && sessions.get(sessionId)?.folder;
+  // A relative path is relative to the chat that named it, nothing else.
+  const full = isAbsolute(asked) ? resolve(asked) : folder ? resolve(folder, asked) : null;
+  if (!full) return res.writeHead(400).end('no folder for a relative path');
+
+  if (!IMAGE_TYPES[extname(full).toLowerCase()]) {
+    return res.writeHead(415).end('not an image this host will serve');
+  }
+  const real = realOrNull(full);
+  if (!real) return res.writeHead(404).end('not found');
+  if (!imageRoots(sessionId).some((root) => within(root, real))) {
+    return res.writeHead(403).end('outside this session');
+  }
+
+  let stat;
+  try {
+    stat = statSync(real);
+  } catch {
+    return res.writeHead(404).end('not found');
+  }
+  if (!stat.isFile()) return res.writeHead(404).end('not a file');
+
+  const etag = `W/"${stat.size.toString(36)}-${Math.round(stat.mtimeMs).toString(36)}"`;
+  const headers = {
+    'Content-Type': IMAGE_TYPES[extname(real).toLowerCase()],
+    'Cache-Control': 'private, max-age=60',
+    'X-Content-Type-Options': 'nosniff',
+    ETag: etag,
+  };
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, headers);
+    return res.end();
+  }
+  res.writeHead(200, headers);
+  return res.end(readFileSync(real));
+}
+
 function serveStatic(req, res) {
   const url = new URL(req.url, 'http://localhost');
   let rel = url.pathname === '/' ? '/index.html' : url.pathname;
@@ -702,6 +792,10 @@ async function route(req, res) {
     json(res, { ok: true, restarting: true });
     restartHost({ reason: body.reason || 'api' });
     return undefined;
+  }
+
+  if (pathname === '/api/image' && req.method === 'GET') {
+    return serveImage(req, res, new URL(req.url, 'http://localhost'));
   }
 
   if (pathname === '/api/session/active' && req.method === 'POST') {

@@ -433,10 +433,45 @@ function decorate(root) {
     };
     pre.prepend(b);
   }
+  paintMarkdownImages(root);
   const msgs =
     root.matches?.('.msg.agent') ? [root] : [...(root.querySelectorAll?.('.msg.agent') ?? [])];
   for (const msg of msgs) syncAgentMdCopy(msg);
   enrichMarkdown(root);
+}
+
+/**
+ * Point a picture named in an answer at the host, and let it be opened.
+ *
+ * The renderer leaves a host file as `data-file` because it cannot know which
+ * chat named it, and a path relative to "the repo" means nothing without one.
+ * Here we do: the open session decides the folder. A file the host refuses —
+ * outside the chat's folder, or not an image — collapses to its alt text
+ * rather than a broken-picture icon, because a caption is still an answer.
+ */
+function paintMarkdownImages(root) {
+  for (const img of root.querySelectorAll?.('img[data-file]') ?? []) {
+    const path = img.dataset.file;
+    img.removeAttribute('data-file');
+    if (!path || !state.sessionId) {
+      img.replaceWith(captionFor(img));
+      continue;
+    }
+    img.onerror = () => img.replaceWith(captionFor(img));
+    img.src = `/api/image?session=${encodeURIComponent(state.sessionId)}&path=${encodeURIComponent(path)}`;
+  }
+  for (const img of root.querySelectorAll?.('img.md-img:not([data-zoom])') ?? []) {
+    img.dataset.zoom = '1';
+    img.onclick = () => openLightbox(img.currentSrc || img.src);
+  }
+}
+
+function captionFor(img) {
+  const said = document.createElement('span');
+  said.className = 'md-img-missing';
+  said.textContent = img.alt || 'image';
+  said.title = 'This host would not serve that file';
+  return said;
 }
 
 /**
@@ -3328,6 +3363,10 @@ function connect() {
     if (msg.type === 'model.controls') {
       if (msg.sessionId !== state.sessionId) return;
       renderModelControls(msg);
+      // Context size is the denominator under the composer's dial, so a chat
+      // whose window just went from 300K to 200K is showing the wrong figure
+      // until something asks again.
+      refreshUsage(true);
       return;
     }
 

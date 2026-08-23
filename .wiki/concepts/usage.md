@@ -57,6 +57,13 @@ send. See [Cursor window](cursor-window.md).
 ACP-only sessions have no `composerData`; the dial still opens the account
 sheet and says context fill is desktop-only.
 
+The web pulls usage; nothing pushes it. A 20s poll, attaching, the tab
+coming back, and opening the sheet each ask. **A model change asks too** —
+context size is the denominator under the dial, so a chat that just moved
+from 300K to 200K would otherwise read wrong until the next poll. Every
+`model.controls` reply (parameter change, model change, Auto on or off) is
+followed by a fresh `usage.get`.
+
 ## Account (Cursor Models / Other Models)
 
 Same Connect RPC the settings page uses, with the JWT at
