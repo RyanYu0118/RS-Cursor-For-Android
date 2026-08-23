@@ -2817,6 +2817,20 @@ if (existsSync(SRC)) {
     fail('the model sheet’s veil must start below the topbar');
     failed = true;
   }
+  /*
+   * A parameter row's label is the part you cannot guess, so it is never
+   * truncated to make room for its control: the copy is capped so the control
+   * keeps its seat, and a description wraps rather than ellipsising. The model
+   * row is exempt — its value is the headline, and a name is one line.
+   */
+  if (!/model-config-row:has\(\.model-select, \.model-switch\) \.model-config-copy\s*\{[^}]*max-width/.test(css)) {
+    fail('a parameter row’s label must be capped so its control keeps its seat');
+    failed = true;
+  }
+  if (!/\.model-config-copy small\s*\{[^}]*white-space:\s*normal/.test(css)) {
+    fail('a parameter description must wrap, not truncate');
+    failed = true;
+  }
   if (!css.includes('.usage-dial') || !css.includes('conic-gradient')) {
     fail('usage dial must be a fillable ring');
     failed = true;

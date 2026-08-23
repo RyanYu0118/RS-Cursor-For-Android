@@ -311,6 +311,14 @@ hidden cannot slide. The search box takes focus only where there is a
 mouse; a phone raising its keyboard over the list it has just opened is
 worse than arriving without a caret.
 
+A parameter row's label is the part you cannot guess, so it is never
+truncated to make room for its control: the copy is capped so the control
+keeps its seat, and a description wraps rather than ellipsising — "300K" cut
+to "300…" is a setting you cannot read. The Model row is exempt, because its
+value is the sheet's headline and a name is one line. A switch is small
+enough to sit beside its label even on a phone; only a select with a long
+description stacks.
+
 **The sheet can be dragged away.** A sheet that rises from the bottom edge
 should be able to leave by the same edge, and the grabber is only there
 because it says so. The drag is direction-locked — a mostly-vertical pull on

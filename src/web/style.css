@@ -2925,10 +2925,14 @@ button.model-back[hidden] {
   color: var(--text);
   font-size: 16px;
   font-weight: 600;
+  /* The model's name is one line; it is a name, not a description. */
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .model-config-copy {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -2939,13 +2943,18 @@ button.model-back[hidden] {
   font-weight: 600;
 }
 
+/*
+ * The value under a label is the answer, and a phone's row is narrow — it
+ * wraps rather than truncating, because "300K" cut to "300…" is a setting
+ * you cannot read.
+ */
 .model-config-copy small {
   overflow: hidden;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .model-choice-chevron {
@@ -2966,13 +2975,14 @@ button.model-back[hidden] {
   position: relative;
   display: inline-flex;
   align-items: center;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
 .model-panel .model-config-row select {
   appearance: none;
   -webkit-appearance: none;
+  width: 100%;
   min-width: 108px;
   max-width: 13rem;
   padding: 7px 28px 7px 11px;
@@ -2994,6 +3004,31 @@ button.model-back[hidden] {
 .model-panel .model-config-row select:focus-visible {
   outline: none;
   border-color: var(--focus);
+}
+
+/*
+ * A label with room to spare keeps its control on the same line; a long one
+ * stacks instead of squeezing into an ellipsis, because the label is the part
+ * you cannot guess. The copy is capped so a long description leaves the
+ * control its seat rather than pushing it onto the next row.
+ */
+/*
+ * The copy is capped so a long description leaves the control its seat rather
+ * than pushing it onto the next row. The Model row is exempt — its value is
+ * the sheet's headline, not a setting with a control beside it.
+ */
+.model-panel .model-config-row:has(.model-select, .model-switch) .model-config-copy {
+  max-width: calc(100% - 120px);
+}
+
+.model-panel .model-config-row .model-select,
+.model-panel .model-config-row .model-switch {
+  margin-left: auto;
+}
+
+/* A switch is small enough to sit beside its label even on a phone. */
+.model-panel .model-config-row:has(.model-switch) {
+  flex-wrap: nowrap;
 }
 
 /* Drawn, not typed: a glyph sits on its baseline and never centres cleanly. */

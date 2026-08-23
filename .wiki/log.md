@@ -5,6 +5,7 @@
 * **Fix**: Leaving Auto picks Cursor's own first-listed model — `auto-mode-select` is a choice in the list, not a toggle, so pressing it while Auto was on did nothing and the phone's switch snapped back.
 * **Update**: `namedModels` reads the model list without choosing; menu rows are marked `row` so a badge ("Max", "High Fast") is never mistaken for a model.
 * **Update**: The web Auto switch moved out of the model sheet and onto the composer beside the mode chip, styled to match it; the model chip hides while Auto is on and the sheet no longer offers Auto.
+* **Fix**: Model-sheet parameter rows no longer squeeze their label into an ellipsis — the copy is capped so the control keeps its seat, a description wraps instead of truncating, and a switch stays beside its label where a select with a long description stacks.
 * **Fix**: The model sheet's blur veil started at the very top of the screen, so the topbar read as blurred chrome; it now starts below the topbar, which is chrome and not chat.
 * **Update**: Composer image attachments doubled to 112px — a 56px chip is a checkbox, not a preview.
 * **Update**: The model sheet can be dragged away with a finger — direction-locked, the chat behind deblurs in step with the drag via a `--veil` pseudo-layer, past a third or a flick dismisses, and open/close are the same rise/fall played both ways (close now waits for the fall before hiding).
