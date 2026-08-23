@@ -495,26 +495,40 @@ ${HELPERS}
 })()`;
 
 /**
- * Start a new chat in this window, by the control Cursor labels New Agent.
+ * Where the real New Agent control is, so it can be pressed with a real mouse.
  *
- * The words on it include the shortcut and an Alt-action ("New Agent (Ctrl+N)
- * [Alt] Replace Agent"), so it is found by the name it begins with rather than
- * by an exact match — asking for the whole string would break the moment the
- * hint changed. It is a workbench action, not a React button, so it is pressed
- * with a mouse the way a tab is.
+ * Cursor labels several things "New Agent": the chat tab, the editor-group
+ * chrome ("New Agent, Chat Editors: …"), and the small workbench button whose
+ * hint is "(Ctrl+N) [Alt] Replace Agent". Only the last one opens a chat, and
+ * like the model/mode pickers it ignores a dispatched click — the coordinates
+ * are for `Input.dispatchMouseEvent`, not `element.click()`.
  */
 export const NEW_AGENT = `(() => {
 ${HELPERS}
   const pane = __pane();
+  const candidates = [];
   for (const el of pane.querySelectorAll('[aria-label], [title]')) {
     const name = String(el.getAttribute('aria-label') || el.getAttribute('title') || '').trim();
     if (!/^New Agent\\b/i.test(name)) continue;
     const rect = el.getBoundingClientRect();
     if (!rect.width || !rect.height) continue;
-    __mouse(el);
-    return { pressed: true, name };
+    let rank = 1;
+    if (/Chat Editors/i.test(name)) rank = 0;
+    else if (/\\(Ctrl\\+N\\)/.test(name)) rank = 3;
+    else if (name === 'New Agent') rank = 1;
+    candidates.push({ name, rank, rect });
   }
-  return { pressed: false, reason: 'no New Agent control' };
+  if (!candidates.length) return { pressed: false, reason: 'no New Agent control' };
+  const best = candidates.sort((a, b) => b.rank - a.rank)[0];
+  const rect = best.rect;
+  return {
+    pressed: true,
+    name: best.name,
+    at: {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+    },
+  };
 })()`;
 
 /**

@@ -336,8 +336,11 @@ export class CursorWindow {
   }
 
   /** Press the New Agent control in the chat pane. */
-  newAgent() {
-    return this.evaluate(NEW_AGENT);
+  async newAgent() {
+    const loc = await this.evaluate(NEW_AGENT);
+    if (!loc?.pressed || !loc.at) return loc || { pressed: false, reason: 'no New Agent control' };
+    await this.mouseAt(loc.at);
+    return loc;
   }
 
   /**

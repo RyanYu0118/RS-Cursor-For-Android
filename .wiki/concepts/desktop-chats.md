@@ -11,7 +11,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Session attach / catch-up
-generated: { by: agent, at: 2026-08-21T21:40:00Z }
+generated: { by: agent, at: 2026-08-23T06:55:00Z }
 ---
 
 # Continuing Cursor desktop chats
@@ -25,8 +25,11 @@ interface, and that can change under us.
 ## Starting a chat from Auto
 
 A session started from the web or Telegram is a new chat in Cursor. Auto
-presses **New Agent** in a window that already has that folder, waits for a
-new thread id, and attaches. The model picker is then set to **Auto**
+presses the small **New Agent** workbench button (the one whose hint includes
+`(Ctrl+N)`), not the editor-group chrome or tab labels that also say "New Agent",
+and uses a real mouse click like the model/mode pickers — a dispatched click on
+the wrong control looked like success but opened nothing. It waits for a new
+thread id, then attaches. The model picker is then set to **Auto**
 (Auto-select / `default[]`) — Cursor otherwise keeps whatever the last chat
 in that window used. If no window has the folder, Auto asks Cursor for
 `--new-window`. If Cursor is not running, it starts it with

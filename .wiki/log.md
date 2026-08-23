@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-08-23
+* **Fix**: New Agent from the phone hits the real `(Ctrl+N)` workbench button with a CDP mouse click — editor-group chrome that also says "New Agent" no longer fakes success and forces ACP fallback.
+
 ## 2026-08-22
 * **Update**: Agent-requested Agent ↔ Plan transitions reach web and Telegram as Cursor approval choices; Auto recognizes the observed Switch / Skip labels, strips Switch's inline shortcut hint, and presses the selected action in the owning chat.
 * **Documentation**: iOS Previous / Next / Done keyboard bar is native Safari form-assistant chrome; a browser/PWA cannot hide it, and doing so requires a native wrapper.
