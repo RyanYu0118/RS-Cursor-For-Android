@@ -2640,9 +2640,17 @@ button.icon.active {
  * a settings list is the one thing the rest of this app never looks like.
  */
 
+/*
+ * Track the visual viewport, not the layout one. On iOS the keyboard shrinks
+ * the former while the sheet would otherwise stay bottom-anchored under it —
+ * and a short filter result is exactly the content that vanishes there.
+ */
 #model-sheet {
   position: fixed;
-  inset: 0;
+  top: var(--vv-top, 0px);
+  left: 0;
+  right: 0;
+  height: var(--vv-height, 100dvh);
   z-index: 40;
   display: flex;
   align-items: center;
@@ -2650,6 +2658,7 @@ button.icon.active {
   padding: 16px;
   background: color-mix(in srgb, #000 52%, transparent);
   isolation: isolate;
+  box-sizing: border-box;
 }
 
 /*
@@ -2711,7 +2720,7 @@ button.icon.active {
 .model-panel {
   --mode-color: var(--mode-agent);
   width: min(460px, 100%);
-  max-height: min(720px, calc(100dvh - 32px));
+  max-height: min(720px, calc(var(--vv-height, 100dvh) - 32px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2794,7 +2803,7 @@ button.model-back[hidden] {
   position: relative;
   flex: 0 1 auto;
   min-height: 0;
-  max-height: min(62dvh, 480px);
+  max-height: min(calc(var(--vv-height, 100dvh) * 0.62), 480px);
   overflow: hidden;
   transition: height 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -3188,7 +3197,10 @@ button.model-choice:disabled {
 
   .model-panel {
     width: 100%;
-    max-height: min(88dvh, calc(100dvh - max(10px, env(safe-area-inset-top))));
+    max-height: min(
+      calc(var(--vv-height, 100dvh) * 0.88),
+      calc(var(--vv-height, 100dvh) - max(10px, env(safe-area-inset-top)))
+    );
     margin: 0;
     border-radius: 20px 20px 0 0;
     border-bottom: 0;

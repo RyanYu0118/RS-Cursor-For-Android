@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-08-24
+* **Fix**: The model sheet now tracks the visual viewport like New session does, so a short filtered result list stays above the iOS keyboard instead of bottom-anchoring under it.
 * **Update**: Browser frames and explicit screenshots emulate the attached web client's `prefers-color-scheme` (dark by default until one attaches), so captures match what that client is showing.
 * **Update**: The model list keeps its search box pinned while rows scroll, and drops the under-search `$ / $$ / $$$` legend; exact rates remain on the badge tooltip and accessible label.
 

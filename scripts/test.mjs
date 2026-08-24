@@ -2776,6 +2776,16 @@ if (existsSync(SRC)) {
     fail('the model sheet root must not blur its header or its own panel');
     failed = true;
   }
+  if (
+    !/top:\s*var\(--vv-top/.test(modelSheetCss) ||
+    !/height:\s*var\(--vv-height/.test(modelSheetCss) ||
+    !css.includes('max-height: min(calc(var(--vv-height, 100dvh) * 0.62), 480px)') ||
+    !css.includes('max-height: min(720px, calc(var(--vv-height, 100dvh) - 32px))') ||
+    !css.includes('calc(var(--vv-height, 100dvh) * 0.88)')
+  ) {
+    fail('the model sheet must track the visual viewport so iOS keyboard cannot cover results');
+    failed = true;
+  }
   const modelVeilAt = css.indexOf('#model-sheet::before');
   const modelVeilCss =
     modelVeilAt < 0 ? '' : css.slice(modelVeilAt, css.indexOf('}', modelVeilAt) + 1);

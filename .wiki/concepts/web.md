@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-08-24T04:05:00Z }
+generated: { by: agent, at: 2026-08-24T04:16:00Z }
 ---
 
 # Web app
@@ -314,6 +314,12 @@ spend. An id whose encoded defaults include `fast=true` uses that published
 Fast rate. A future model with no known published rate gets no badge rather
 than a guessed price. The search box is sticky, so it stays at the top while
 the model rows scroll under it.
+
+Like the New session sheet, the model sheet tracks the visual viewport
+(`--vv-top` / `--vv-height`) rather than the layout viewport. On iOS the soft
+keyboard shrinks the visual viewport while leaving layout height alone; a
+bottom-anchored sheet sized from layout height would leave a short filtered
+list under the keys. The panel and rail caps use the same visual height.
 
 Both pages are absolutely positioned so neither props the dialog open at
 the other's height, which leaves the rail no height of its own: it is
