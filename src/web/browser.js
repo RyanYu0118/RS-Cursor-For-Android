@@ -30,6 +30,16 @@ let sendOp = () => {};
 let status = { running: false, viewport: { width: 1280, height: 800 } };
 let attached = false;
 
+function clientColorScheme() {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
+
+/** Screenshots and screencast frames follow the theme this client is showing. */
+export function syncBrowserTheme() {
+  if (!attached) return;
+  sendOp({ op: 'browser.theme', colorScheme: clientColorScheme() });
+}
+
 export function initBrowser(send) {
   sendOp = send;
 
@@ -134,6 +144,7 @@ function attach() {
       op: 'browser.attach',
       width: Math.round(box.width) || 1280,
       height: Math.round(box.height) || 800,
+      colorScheme: clientColorScheme(),
     });
   });
 }

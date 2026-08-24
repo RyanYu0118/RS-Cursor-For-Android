@@ -2658,10 +2658,12 @@ if (existsSync(SRC)) {
     !js.includes("from './model-pricing.js'") ||
     !js.includes('modelPrice(option.value)') ||
     !js.includes('price.ariaLabel') ||
-    !html.includes('model-price-legend') ||
+    html.includes('model-price-legend') ||
+    !html.includes('class="model-list-search"') ||
+    !/\.model-list-search\s*\{[^}]*position:\s*sticky[^}]*top:\s*0/.test(css) ||
     !css.includes('.model-price')
   ) {
-    fail('the model list must show an explained relative price for each known model');
+    fail('the model list must show relative prices and pin search without a legend');
     failed = true;
   }
   const { modelPrice } = await import('../src/web/model-pricing.js');
@@ -3580,9 +3582,32 @@ if (existsSync(SRC)) {
       fail('prose should become a search');
       failed = true;
     }
+
+    const browserCore = readFileSync(join(ROOT, 'src/core/browser.mjs'), 'utf8');
+    const browserWeb = readFileSync(join(ROOT, 'src/web/browser.js'), 'utf8');
+    const server = readFileSync(join(ROOT, 'src/server/index.mjs'), 'utf8');
+    const app = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
+    if (
+      !browserWeb.includes('function clientColorScheme') ||
+      !browserWeb.includes('colorScheme: clientColorScheme()') ||
+      !browserWeb.includes("op: 'browser.theme'") ||
+      !app.includes('syncBrowserTheme()')
+    ) {
+      fail('the web client must send its color scheme to the browser and keep it in sync');
+      failed = true;
+    }
+    if (
+      !server.includes("async 'browser.theme'") ||
+      !server.includes('await browser.setColorScheme(msg.colorScheme)') ||
+      !browserCore.includes('Emulation.setEmulatedMedia') ||
+      !browserCore.includes("name: 'prefers-color-scheme'")
+    ) {
+      fail('browser screenshots must emulate the attached client color scheme');
+      failed = true;
+    }
     if (!findChrome()) console.log('skip: no Chrome found for the browser panel');
 
-    if (!failed) ok('v2 browser: address bar normalisation');
+    if (!failed) ok('v2 browser: address bar normalisation and client-themed captures');
   } catch (e) {
     fail(`v2 browser: ${e.message}`);
   }

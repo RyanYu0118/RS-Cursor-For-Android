@@ -3055,6 +3055,16 @@ button.model-back[hidden] {
   gap: 8px;
 }
 
+/* Search stays put while the model rows scroll under it. */
+.model-list-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -2px -14px 0;
+  padding: 2px 14px 8px;
+  background: var(--bg);
+}
+
 .model-list-pane input[type='search'] {
   width: 100%;
   box-sizing: border-box;
@@ -3070,20 +3080,6 @@ button.model-back[hidden] {
 .model-list-pane input[type='search']:focus {
   border-color: var(--focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
-}
-
-.model-price-legend {
-  margin: -1px 2px 1px;
-  color: var(--faint);
-  font-size: 11px;
-  line-height: 1.2;
-  text-align: right;
-}
-
-.model-price-legend strong {
-  color: var(--usage-accent);
-  font-family: var(--mono);
-  font-weight: 650;
 }
 
 /* The list is the page now, so it does not scroll inside itself as well. */

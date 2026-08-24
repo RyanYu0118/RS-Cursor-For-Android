@@ -14,7 +14,7 @@ sources:
   - id: workspace
     resource: /src/web/workspace.js
     title: View tabs
-generated: { by: agent, at: 2026-08-17T18:05:00Z }
+generated: { by: agent, at: 2026-08-24T04:05:00Z }
 ---
 
 # Browser
@@ -33,6 +33,12 @@ left or closed.
 Headed by default, parked off-screen; `AUTO_BROWSER_HEADLESS=1` is there
 and trips more bot checks. Address bar: a URL is opened, anything else is
 searched (DuckDuckGo). `localhost` becomes `http://`.
+
+Frames and explicit screenshots emulate the attached web client's color
+scheme: the pane sends `light` or `dark` on attach and whenever the theme
+changes, and the host applies it with CDP `Emulation.setEmulatedMedia`
+(`prefers-color-scheme`) before screencast or capture. With no client, the
+host falls back to Auto's dark default.
 
 ## Related
 

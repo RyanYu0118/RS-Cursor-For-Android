@@ -14,7 +14,7 @@ sources:
   - id: host
     resource: /src/server/index.mjs
     title: Host process
-generated: { by: agent, at: 2026-08-23T21:27:00Z }
+generated: { by: agent, at: 2026-08-24T04:05:00Z }
 ---
 
 # Auto
@@ -53,7 +53,7 @@ default (that would close every window) and falls back to ACP unless
 | [Supervise](concepts/supervise.md) | Keep the host alive across crash and reboot |
 | [Web](concepts/web.md) | PWA that caches and replays the transcript |
 | [Telegram](concepts/telegram.md) | Prompt, watch, approve, switch, restart |
-| [Browser](concepts/browser.md) | Real Chrome on this machine, live frames only |
+| [Browser](concepts/browser.md) | Real Chrome on this machine, live frames in the client's color scheme |
 | [Terminals](concepts/terminals.md) | PTYs for you and (when ACP uses them) the agent |
 
 ## Standing rules

@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-08-23T21:27:00Z }
+generated: { by: agent, at: 2026-08-24T04:05:00Z }
 ---
 
 # Web app
@@ -306,13 +306,14 @@ leaves the sheet. The header follows, growing a back chevron and changing
 to **Choose model**.
 
 Known model rows carry an amber relative token-price mark: **$** lower,
-**$$** moderate, **$$$** higher. A small legend explains the scale; the
-badge's accessible label / desktop tooltip gives the published base input
-and output rates. The bands are deliberately broad because cache use,
+**$$** moderate, **$$$** higher. There is no legend under the search box;
+the badge's accessible label / desktop tooltip gives the published base
+input and output rates. The bands are deliberately broad because cache use,
 input/output mix, context length, plan, and regional uplifts change actual
 spend. An id whose encoded defaults include `fast=true` uses that published
 Fast rate. A future model with no known published rate gets no badge rather
-than a guessed price.
+than a guessed price. The search box is sticky, so it stays at the top while
+the model rows scroll under it.
 
 Both pages are absolutely positioned so neither props the dialog open at
 the other's height, which leaves the rail no height of its own: it is

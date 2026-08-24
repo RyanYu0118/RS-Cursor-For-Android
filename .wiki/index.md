@@ -20,7 +20,7 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [Telegram](concepts/telegram.md) - Bot projection with model price bands
 * [Web](concepts/web.md) - PWA lifecycle, transcript cache, responsive model sheet with price bands, and Home Screen behaviour
 * [Usage](concepts/usage.md) - Context dial, relative model price bands, and Cursor Models / Other Models account quotas
-* [Browser](concepts/browser.md) - Headed Chrome, screencast, not recorded
+* [Browser](concepts/browser.md) - Headed Chrome, client-themed screencast, not recorded
 * [Terminals](concepts/terminals.md) - node-pty shells for the user and the agent
 * [Projects](concepts/projects.md) - Folders as Cursor itself sees them
 * [Skills](concepts/skills.md) - Agent instructions, repo workflow, this wiki

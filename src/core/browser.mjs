@@ -118,6 +118,8 @@ export class BrowserHost extends EventEmitter {
     this.targetId = null;
     this.streaming = false;
     this.viewport = { width: 1280, height: 800 };
+    // Auto's own fallback theme is dark; an attached client replaces this.
+    this.colorScheme = 'dark';
     this.url = 'about:blank';
     this.title = '';
     this.loading = false;
@@ -211,6 +213,7 @@ export class BrowserHost extends EventEmitter {
         deviceScaleFactor: 1,
         mobile: false,
       });
+      await this.#applyColorScheme();
 
       this.emit('status', this.status);
       return this.status;
@@ -226,6 +229,12 @@ export class BrowserHost extends EventEmitter {
   #call(method, params) {
     if (!this.cdp || !this.sessionId) throw new Error('Browser is not running');
     return this.cdp.send(method, params, this.sessionId);
+  }
+
+  async #applyColorScheme() {
+    await this.#call('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-color-scheme', value: this.colorScheme }],
+    });
   }
 
   async #onEvent(msg) {
@@ -315,6 +324,7 @@ export class BrowserHost extends EventEmitter {
 
   async startScreencast({ maxWidth = 1280, quality = 60 } = {}) {
     await this.ensure();
+    await this.#applyColorScheme();
     await this.#call('Page.startScreencast', {
       format: 'jpeg',
       quality,
@@ -341,9 +351,17 @@ export class BrowserHost extends EventEmitter {
 
   async screenshot() {
     await this.ensure();
+    await this.#applyColorScheme();
     const { data } = await this.#call('Page.captureScreenshot', { format: 'jpeg', quality: 70 });
     this.emit('frame', { data, metadata: null });
     return data;
+  }
+
+  async setColorScheme(scheme) {
+    if (scheme !== 'light' && scheme !== 'dark') return;
+    this.colorScheme = scheme;
+    if (!this.running) return;
+    await this.#applyColorScheme();
   }
 
   async setViewport(width, height) {

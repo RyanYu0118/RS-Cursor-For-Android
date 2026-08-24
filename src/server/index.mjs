@@ -433,6 +433,7 @@ const OPS = {
 
   async 'browser.attach'(ws, state, msg) {
     state.browser = true;
+    await browser.setColorScheme(msg.colorScheme);
     if (msg.width && msg.height) await browser.setViewport(msg.width, msg.height);
     await browser.ensure();
     send(ws, { type: 'browser.status', status: browser.status });
@@ -472,6 +473,10 @@ const OPS = {
 
   async 'browser.viewport'(_ws, _state, msg) {
     await browser.setViewport(msg.width, msg.height);
+  },
+
+  async 'browser.theme'(_ws, _state, msg) {
+    await browser.setColorScheme(msg.colorScheme);
   },
 
   async 'browser.shot'() {

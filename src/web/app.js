@@ -20,7 +20,7 @@ import { lineDiff, collapseContext, diffStats } from './diff.js';
 import { renderMarkdown, linkify } from './markdown.js';
 import { enrichMarkdown } from './enrich.js';
 import { modelPrice } from './model-pricing.js';
-import { initBrowser, onFrame, onStatus } from './browser.js';
+import { initBrowser, onFrame, onStatus, syncBrowserTheme } from './browser.js';
 import { initWorkspace, isOpen as workspaceIsOpen, showChat, onViewsChange, restoreViews } from './workspace.js';
 import {
   activityCopy,
@@ -4124,6 +4124,7 @@ function applyTheme(choice = themeChoice()) {
     b.setAttribute('aria-pressed', String(b.dataset.themeChoice === choice));
   }
   retheme();
+  syncBrowserTheme();
 }
 
 for (const b of document.querySelectorAll('#theme-seg button')) {

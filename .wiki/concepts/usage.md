@@ -29,7 +29,7 @@ sources:
   - id: openai-gpt-5-1
     resource: https://developers.openai.com/api/docs/models/gpt-5.1
     title: GPT-5.1 API pricing
-generated: { by: agent, at: 2026-08-23T21:27:00Z }
+generated: { by: agent, at: 2026-08-24T04:05:00Z }
 ---
 
 # Usage dial and account quotas
@@ -93,7 +93,8 @@ two rates behind the band; Telegram explains the scale as
 `$ lower / $$$ higher`. Rates live in `src/web/model-pricing.js`, with the
 source and checked date beside them; unknown future models are left
 unlabelled rather than classified by name. Exact spend still comes from
-Cursor's usage records below.
+Cursor's usage records below. The web list keeps search pinned and does not
+repeat the legend under it.
 
 ## Account (Cursor Models / Other Models)
 

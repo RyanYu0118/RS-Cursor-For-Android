@@ -1,8 +1,12 @@
 # Directory Update Log
 
+## 2026-08-24
+* **Update**: Browser frames and explicit screenshots emulate the attached web client's `prefers-color-scheme` (dark by default until one attaches), so captures match what that client is showing.
+* **Update**: The model list keeps its search box pinned while rows scroll, and drops the under-search `$ / $$ / $$$` legend; exact rates remain on the badge tooltip and accessible label.
+
 ## 2026-08-23
 * **Fix**: Telegram's ACP and desktop `/model` keyboards append the shared **$ / $$ / $$$** signal to known models, explain `$ lower / $$$ higher`, and leave callback labels, model ids, and unknown-model rows unchanged.
-* **Update**: The searchable model list shows amber **$ / $$ / $$$** relative token-price bands from published base input/output rates, with a small legend and exact-rate tooltip / accessible label; Fast defaults use Fast rates, while unknown future models stay unlabelled rather than guessed.
+* **Update**: The searchable model list shows amber **$ / $$ / $$$** relative token-price bands from published base input/output rates, with exact-rate tooltip / accessible label; Fast defaults use Fast rates, while unknown future models stay unlabelled rather than guessed.
 * **Fix**: Auto-select's own sheet (`selected-auto-menu` — description, Model row, "Auto" as its value) is now crossed by pressing Model like any other sheet; ruling a sheet out because it says "Auto" was why every model looked missing while Auto was on ("Cursor has no model matching …").
 * **Fix**: Leaving Auto picks Cursor's own first-listed model — `auto-mode-select` is a choice in the list, not a toggle, so pressing it while Auto was on did nothing and the phone's switch snapped back.
 * **Update**: `namedModels` reads the model list without choosing; menu rows are marked `row` so a badge ("Max", "High Fast") is never mistaken for a model.
