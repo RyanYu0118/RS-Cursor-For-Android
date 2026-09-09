@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-08-24T04:16:00Z }
+generated: { by: agent, at: 2026-09-09T19:50:00Z }
 ---
 
 # Web app
@@ -91,7 +91,11 @@ Installed on iOS, `black-translucent` draws under the status bar.
 Standalone marks `data-standalone` before first paint. JS sizes `#app` to
 the visual viewport and forces 8px under the composer — never
 `env(safe-area-inset-bottom)`, which is ~80px on a Home Screen app even
-with the keyboard up. The shell is `Cache-Control: no-store`; every
+with the keyboard up. The topbar and rail head floor
+`env(safe-area-inset-top)` at 59px (Dynamic Island): that env can be `0`
+on cold start or some WebKit builds, and without the floor the title sits
+under the translucent status bar and looks frosted. The same rule is inlined
+in `index.html` so a cached `style.css` cannot resurrect the bug. The shell is `Cache-Control: no-store`; every
 css/js URL in it is stamped `?v=<size>-<mtime>` on the way out, so a
 change is a new URL and the installed app downloads it instead of
 keeping the first stylesheet it ever saw. A `webBuild` fingerprint hashes

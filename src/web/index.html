@@ -23,6 +23,12 @@
   /* Wins over a cached style.css. iOS reports ~80px of bottom inset on a Home
      Screen app; the layout viewport already ends above the home bar / keyboard. */
   html[data-standalone] #composer { padding-bottom: 8px !important; }
+  /* env(safe-area-inset-top) can be 0 on an installed iOS app; without a floor
+     the title sits under the translucent status bar and looks frosted. */
+  html[data-standalone] #topbar,
+  html[data-standalone] .rail-head {
+    padding-top: max(14px, env(safe-area-inset-top, 0px), 59px) !important;
+  }
   /* Mode/model draw at 12px in the installed PWA, where maximum-scale=1 makes
      focus-zoom impossible — see style.css. A cached sheet must not resurrect
      the old zoom: 0.75 trick or leave transform: scale on the pickers group. */

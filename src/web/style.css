@@ -222,6 +222,20 @@ html[data-standalone] #app {
   height: 100dvh;
 }
 
+/*
+ * iOS Home Screen: env(safe-area-inset-top) can be 0 on cold start / some
+ * WebKit builds even with viewport-fit=cover + black-translucent. Then the
+ * topbar only gets its 14px floor and the title sits under the translucent
+ * status bar — it reads as a frosted blur over "Desktop chat". A 59px floor
+ * matches Dynamic Island; when env reports the real inset, max() takes it.
+ */
+html[data-standalone] #topbar {
+  padding-top: max(14px, env(safe-area-inset-top, 0px), 59px);
+}
+html[data-standalone] .rail-head {
+  padding-top: max(14px, env(safe-area-inset-top, 0px), 59px);
+}
+
 /* Chat stays whole; tool views replace it via tabs under the header.
    The composer floats over the transcript so messages scroll under the
    box — no hairline splitting the pane. --composer-height is measured

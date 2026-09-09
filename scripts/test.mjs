@@ -24,7 +24,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, dirname, relative } from 'node:path';
+import { basename, join, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -3193,6 +3193,15 @@ if (existsSync(SRC)) {
     fail('the topbar must pad by safe-area-inset-top or it sits under the iOS status bar');
     failed = true;
   }
+  const standaloneTop = css.slice(css.indexOf('html[data-standalone] #topbar'));
+  if (!standaloneTop.includes('59px') || !/html\[data-standalone\] #topbar[^}]*safe-area-inset-top/.test(css)) {
+    fail('standalone topbar must floor safe-area-inset-top at 59px — env can be 0 and the title frosts under the status bar');
+    failed = true;
+  }
+  if (!html.includes('html[data-standalone] #topbar') || !html.includes('59px')) {
+    fail('standalone topbar safe-area floor must live in index.html so a cached style.css cannot keep the frosted header');
+    failed = true;
+  }
   if (!css.includes('overflow: hidden') || !/html,\s*body \{[^}]*overflow:\s*hidden/.test(css)) {
     fail('html/body must not scroll — a too-tall page clips the header on iOS');
     failed = true;
@@ -5782,15 +5791,29 @@ try {
      * Tailscale, so the fence matters more than the feature: a raster image
      * inside the chat's own folder and nothing else. `..` is spent before the
      * check, so a path that climbs out is refused even though it exists.
+     * Pin a session whose folder is this repo — the host's active chat may be
+     * somewhere else, and a relative path would 404 for the wrong reason.
      */
     {
       const outside = join(tmpdir(), 'auto-image-guard-test.png');
       writeFileSync(outside, Buffer.from('89504e470d0a1a0a', 'hex'));
-      const ask = (path) =>
-        fetch(`http://127.0.0.1:${PORT}/api/image?path=${encodeURIComponent(path)}`, {
+      const sameFolder = (a, b) =>
+        resolve(a).toLowerCase() === resolve(b).toLowerCase();
+      const imageSession =
+        (Array.isArray(s.sessions) &&
+          s.sessions.find((row) => row?.folder && sameFolder(row.folder, ROOT))?.id) ||
+        '';
+      const ask = (path) => {
+        const q = new URLSearchParams({ path });
+        if (imageSession) q.set('session', imageSession);
+        return fetch(`http://127.0.0.1:${PORT}/api/image?${q}`, {
           signal: AbortSignal.timeout(8000),
         });
+      };
       try {
+        if (!imageSession) {
+          fail('/api/image check needs a session whose folder is this repo');
+        } else {
         const good = await ask('src/web/icon-192.png');
         if (!good.ok || !String(good.headers.get('content-type')).startsWith('image/')) {
           fail(`/api/image should serve an image from the chat's folder: ${good.status}`);
@@ -5811,6 +5834,7 @@ try {
           }
           if (refused.length) fail(`/api/image served what it should refuse: ${refused.join('; ')}`);
           else ok('route /api/image serves a chat’s own images and refuses the rest');
+        }
         }
       } catch (e) {
         fail(`/api/image failed: ${e.message}`);
