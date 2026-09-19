@@ -5977,6 +5977,53 @@ try {
   }
 }
 
+// 2a3. Sessions started outside Auto are adopted from the agent's own list:
+// tagged with their agent, deduplicated, and only when the folder still exists.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'auto-adopt-'));
+  try {
+    const { SessionManager } = await import('../src/core/sessions.mjs');
+    let bad = false;
+    const sessions = new SessionManager({ stateDir: dir, defaultFolder: ROOT }).init();
+
+    const rows = [
+      { sessionId: 'ses_ext1', cwd: ROOT, title: 'External one', updatedAt: '2026-09-19T10:00:00.000Z' },
+      { sessionId: 'ses_ext1', cwd: ROOT, title: 'Duplicate row' },
+      { sessionId: 'ses_gone', cwd: join(ROOT, 'definitely-not-here'), title: 'Gone' },
+      { sessionId: '', cwd: ROOT, title: 'No id' },
+    ];
+    const first = sessions.adoptSessions('opencode', rows);
+    if (first !== 1) {
+      fail(`adoptSessions should take exactly one, took ${first}`);
+      bad = true;
+    }
+    if (sessions.adoptSessions('opencode', rows) !== 0) {
+      fail('adoptSessions must not adopt the same session twice');
+      bad = true;
+    }
+    const meta = sessions.list().find((s) => s.acpSessionId === 'ses_ext1');
+    if (!meta || meta.agent !== 'opencode' || meta.adopted !== true) {
+      fail(`adopted session should be agent-tagged, got ${JSON.stringify(meta)}`);
+      bad = true;
+    }
+    if (meta?.title !== 'External one' || meta?.titleLocked !== true) {
+      fail(`adopted session should keep the agent's title, got ${meta?.title}`);
+      bad = true;
+    }
+    // An adopted session has no transcript yet; the load replay becomes it.
+    const recs = await sessions.history(meta.id);
+    if (recs.length !== 0) {
+      fail('an adopted session should start with an empty transcript');
+      bad = true;
+    }
+    if (!bad) ok('v2 core: external agent sessions are adopted once and agent-tagged');
+  } catch (e) {
+    fail(`adopt agent sessions: ${e.message}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 // 2b. Auto's own skills: every .claude/skills/<name>/SKILL.md must have valid
 // frontmatter (name matching the directory, non-empty description).
 const SKILLS_DIR = join(ROOT, '.claude', 'skills');

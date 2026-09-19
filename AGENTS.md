@@ -197,8 +197,12 @@ Auto drives an agent over ACP. Two are known, named in `src/acp/resolve.mjs`:
 
 Every session records its `agent` and keeps it; `AUTO_AGENT` is only the
 default for new ones. The web New session sheet, Telegram `/new [agent]
-[folder]`, and `/agents` choose per session. Model and mode lists are kept
-**per agent** — Cursor returns `models`/`modes` and takes `session/set_model` /
+[folder]`, and `/agents` choose per session. Sessions started outside Auto are
+adopted at boot from each agent's own `session/list` (agent-tagged, deduped,
+folder must exist), and an adopted session's history is captured from its first
+`session/load` replay — so resume suppression lasts until the first prompt, not
+just until the load answers. Model and mode lists are kept **per agent** —
+Cursor returns `models`/`modes` and takes `session/set_model` /
 `session/set_mode`; opencode returns `configOptions` and takes
 `session/set_config_option`. `src/acp/config-options.mjs` flattens both to one
 picker shape; never let one agent's catalog refill the other's picker. Describe

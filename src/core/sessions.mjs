@@ -674,6 +674,11 @@ export class SessionManager extends EventEmitter {
     if (existing?.client?.running) return existing;
 
     await this.transcripts.get(id); // make sure the transcript is open for #record
+    const transcript = this.transcripts.open.get(id);
+    // An adopted session has no history of ours yet; a resumed one has it all
+    // on disk already. That decides whether the load replay is the conversation
+    // or a duplicate of it (see below).
+    const hasHistory = (transcript?.seq || 0) > 0;
     this.#update(id, { status: STATUS.starting });
 
     const client = new AcpClient({
@@ -711,6 +716,10 @@ export class SessionManager extends EventEmitter {
     });
     client.on('update', ({ update }) => this.#onUpdate(id, update));
     client.on('exit', ({ code, signal }) => {
+      // A stopped process can report its exit after a new one has already
+      // replaced it (stop() then ensureLive() in quick succession). Acting on
+      // it would delete the live runtime and mark a working session failed.
+      if (this.live.get(id) !== runtime) return;
       this.live.delete(id);
       this.permissions.cancelForSession(id, 'agent exited');
       this.#record(id, KIND.error, {
@@ -727,9 +736,14 @@ export class SessionManager extends EventEmitter {
     if (meta.acpSessionId) {
       try {
         // Resuming makes the agent replay the whole conversation as updates.
-        // We already have all of it on disk, so recording it again would
-        // duplicate the history on every restart.
+        // Suppress that when we already have it on disk, or every restart
+        // duplicates the history. An adopted session has none of it yet, so
+        // there the replay *is* the history: record it once, quietly.
+        // Suppression lasts until the first prompt, because part of the replay
+        // can arrive after loadSession resolves (opencode sends it as
+        // notifications, not as the reply).
         runtime.replaying = true;
+        runtime.capturingHistory = !hasHistory;
         session = await client.loadSession({ sessionId: meta.acpSessionId, cwd: meta.folder });
         session = { sessionId: meta.acpSessionId, ...(session || {}) };
         resumed = true;
@@ -739,10 +753,15 @@ export class SessionManager extends EventEmitter {
           text: `Could not resume the previous agent session, so a new one was started. History above is preserved.`,
         });
         session = null;
+      } finally {
+        runtime.capturingHistory = false;
       }
     }
     if (!session) session = await client.newSession({ cwd: meta.folder });
-    runtime.replaying = false;
+    // A resumed session's replay may still be arriving after loadSession
+    // resolves, so suppression stays on until the first prompt (see prompt).
+    // A fresh session, or one whose resume failed, has nothing to suppress.
+    if (!resumed) runtime.replaying = false;
 
     runtime.acpSessionId = session.sessionId;
     runtime.capabilities = info;
@@ -847,8 +866,11 @@ export class SessionManager extends EventEmitter {
 
   #onUpdate(id, update) {
     // History being replayed back to us on resume: already on disk, and
-    // clients replay from the transcript rather than from the agent.
-    if (this.live.get(id)?.replaying) return;
+    // clients replay from the transcript rather than from the agent. An
+    // adopted session has none of it yet, so there the replay is captured
+    // rather than dropped (capturingHistory).
+    const capture = this.live.get(id);
+    if (capture?.replaying && !capture.capturingHistory) return;
 
     // opencode reports a model or mode change as a fresh config-option list.
     // Folding it in here keeps runtime, catalog, and session metadata in step;
@@ -861,12 +883,17 @@ export class SessionManager extends EventEmitter {
     if (!mapped) return;
 
     // Watch assistant prose for upstream failures masquerading as answers.
+    // Not while replaying an adopted session's history: old prose is not this
+    // turn's answer, and a stray shape in it must not be reported as a failure.
     if (mapped.kind === KIND.agentDelta) {
       const rt = this.live.get(id);
       if (rt) {
         if (mapped.payload.text) rt.spoke = true;
         rt.streamBuffer = (rt.streamBuffer + (mapped.payload.text || '')).slice(-600);
-        const complaint = rt.upstreamErrorFlagged ? null : upstreamComplaint(rt.streamBuffer);
+        const complaint =
+          rt.capturingHistory || rt.upstreamErrorFlagged
+            ? null
+            : upstreamComplaint(rt.streamBuffer);
         if (complaint) {
           rt.upstreamErrorFlagged = true;
           this.#record(id, KIND.error, {
@@ -941,6 +968,9 @@ export class SessionManager extends EventEmitter {
     runtime.upstreamErrorFlagged = false;
     runtime.spoke = false;
     runtime.interrupted = false;
+    // From here the agent's updates are this turn's, not a resume replay.
+    runtime.replaying = false;
+    runtime.capturingHistory = false;
 
     try {
       const res = await runtime.client.prompt({
@@ -1504,55 +1534,93 @@ export class SessionManager extends EventEmitter {
   }
 
   /**
-   * Ask the agent for every session it knows about — including ones started
+   * Ask the agents for every session they know about — including ones started
    * from a terminal or by a previous install of Auto — and register the ones
    * we are missing. Without this, Auto shows only its own history while the
-   * desktop shows more, which is exactly the wrong way round for a remote
-   * control.
+   * agent's own CLI shows more, which is exactly the wrong way round for a
+   * remote control.
+   *
+   * Both agents are asked: Cursor's list must not hide opencode's, and their
+   * session ids do not overlap, so one `known` set covers them. An agent that
+   * is not installed (or whose list fails) is logged and skipped, not fatal.
    *
    * @returns {Promise<number>} how many sessions were newly adopted
    */
-  async syncFromAgent() {
-    const live = [...this.live.values()].find((r) => r.client?.running);
-    const client = live?.client || new AcpClient({ cwd: this.defaultFolder });
-    const throwaway = !live;
+  async syncFromAgent({ agents = AGENTS } = {}) {
+    let adopted = 0;
+    for (const agent of agents) {
+      if (!isAgentName(agent)) continue;
+      try {
+        adopted += await this.#adoptFrom(agent);
+      } catch (err) {
+        this.emit('log', `could not list ${agent} sessions: ${err.message}`);
+      }
+    }
+    if (adopted) {
+      this.#persist();
+      this.emit('log', `adopted ${adopted} session(s) from the agent(s)`);
+    }
+    return adopted;
+  }
 
+  /** List one agent's sessions and adopt the ones Auto has not seen. */
+  async #adoptFrom(agent) {
+    // Reuse a live child of the same agent when there is one; otherwise a
+    // short-lived process just for the list.
+    const live = [...this.live.values()].find(
+      (r) => r.client?.running && r.client.agent === agent,
+    );
+    const client = live?.client || new AcpClient({ agent, cwd: this.defaultFolder });
+    const throwaway = !live;
     try {
       if (throwaway) await client.start();
       const res = await client.call('session/list', {}, { timeoutMs: 20_000 });
-      const known = new Set(
-        [...this.meta.values()].map((s) => s.acpSessionId).filter(Boolean),
-      );
-
-      let adopted = 0;
-      for (const s of res?.sessions || []) {
-        if (!s.sessionId || known.has(s.sessionId) || !s.cwd) continue;
-        const id = randomUUID();
-        this.meta.set(id, {
-          id,
-          title: s.title || basename(s.cwd) || 'session',
-          titleLocked: Boolean(s.title),
-          folder: s.cwd,
-          mode: 'agent',
-          policy: this.defaultPolicy,
-          model: null,
-          modelName: null,
-          acpSessionId: s.sessionId,
-          status: STATUS.idle,
-          adopted: true,
-          createdAt: s.updatedAt || new Date().toISOString(),
-          updatedAt: s.updatedAt || new Date().toISOString(),
-        });
-        adopted += 1;
-      }
-      if (adopted) {
-        this.#persist();
-        this.emit('log', `adopted ${adopted} session(s) from the agent`);
-      }
-      return adopted;
+      return this.adoptSessions(agent, res?.sessions || []);
     } finally {
       if (throwaway) await client.stop().catch(() => {});
     }
+  }
+
+  /**
+   * Register a list of agent sessions Auto has not seen.
+   *
+   * Split from the listing so it can be exercised without spawning an agent.
+   * A session is skipped when it is already known by agent session id, has no
+   * id, or points at a folder that no longer exists on this machine — an
+   * adopted session you cannot open is worse than one left out.
+   *
+   * @param {'cursor'|'opencode'} agent
+   * @param {Array<object>} sessions rows from the agent's `session/list`
+   * @returns {number} how many were newly adopted
+   */
+  adoptSessions(agent, sessions) {
+    const known = new Set(
+      [...this.meta.values()].map((s) => s.acpSessionId).filter(Boolean),
+    );
+    let adopted = 0;
+    for (const s of sessions || []) {
+      if (!s?.sessionId || known.has(s.sessionId) || !s.cwd || !existsSync(s.cwd)) continue;
+      known.add(s.sessionId);
+      const id = randomUUID();
+      this.meta.set(id, {
+        id,
+        title: s.title || basename(s.cwd) || 'session',
+        titleLocked: Boolean(s.title),
+        folder: s.cwd,
+        agent,
+        mode: 'agent',
+        policy: this.defaultPolicy,
+        model: null,
+        modelName: null,
+        acpSessionId: s.sessionId,
+        status: STATUS.idle,
+        adopted: true,
+        createdAt: s.updatedAt || new Date().toISOString(),
+        updatedAt: s.updatedAt || new Date().toISOString(),
+      });
+      adopted += 1;
+    }
+    return adopted;
   }
 
   // --------------------------------------------------------- desktop threads

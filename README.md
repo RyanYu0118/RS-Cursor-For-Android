@@ -16,6 +16,8 @@ Auto can also drive [opencode](https://opencode.ai) over the same ACP protocol. 
 
 An opencode session is **Auto-only** — opencode has no window for Auto to type into, so it runs as a background `opencode acp` process. Prompts, streaming, tools, approvals, the queue, and the transcript all work as they do for Cursor, and the model and mode pickers are read from opencode itself. A session keeps the agent it was started with.
 
+Sessions you already have in opencode are picked up too: at startup (and on the web's **Refresh sessions**) Auto asks each agent for its session list and adopts the ones it has not seen, so a conversation you started in opencode's own terminal continues from the phone.
+
 ## Security
 
 Auto has **no login of its own**. Access control is [Tailscale](https://tailscale.com): a private mesh VPN so only your devices can open `http://100.x.y.z:4331/`. Do not port-forward 4331. Do not enable Tailscale Funnel on that port.

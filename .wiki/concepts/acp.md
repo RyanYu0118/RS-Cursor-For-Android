@@ -58,6 +58,22 @@ Auto resolves past them so nothing sits between us and stdio. That
 and `session/list`. `session/new` returns the session id plus picker choices.
 `session/load` resumes after a restart.
 
+## Adopting sessions started elsewhere
+
+A conversation begun in the agent's own CLI — an `opencode` TUI, a `run`, a
+previous install — is not lost to Auto. At boot and on the web's "Refresh
+sessions", `syncFromAgent` asks **both** agents for `session/list` and adopts
+what Auto has not seen: agent-tagged, deduped by agent session id, and only
+when the folder still exists on this machine (`adoptSessions`).
+
+An adopted session has an empty [transcript](transcripts.md) and no history of
+ours, so its `session/load` replay *is* its history: it is recorded once,
+quietly (`capturingHistory`), instead of being suppressed as it is for a
+session Auto already has on disk. Suppression for an ordinary resume lasts
+until the first prompt, not just until `loadSession` resolves — opencode sends
+part of its replay as notifications *after* the reply, and clearing it early
+appended the tail of the history as if it were new.
+
 ## Pickers — two shapes, one view
 
 Cursor's agent answers `session/new` with `models` and `modes`; opencode

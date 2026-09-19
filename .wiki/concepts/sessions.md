@@ -58,8 +58,11 @@ refresh of the phone browser to a different conversation.
 
 `state/sessions.json` is the registry. Transcripts are
 `state/transcripts/<id>.jsonl`. Sessions started outside Auto are adopted at
-boot. Archiving drops the live process, not the log. A watcher tick that
-lands afterwards cannot set the session back to idle — that used to
+boot (and on "Refresh sessions") from each agent's own `session/list`, with
+their agent recorded — see [ACP](acp.md#adopting-sessions-started-elsewhere).
+An adopted session's history is captured from its first `session/load` replay.
+Archiving drops the live process, not the log. A watcher tick that lands
+afterwards cannot set the session back to idle — that used to
 bring it back into the list, so × looked like it needed two taps.
 
 ## Failures caught by shape

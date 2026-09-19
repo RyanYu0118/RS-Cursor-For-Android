@@ -2,10 +2,13 @@
 
 ## 2026-09-19
 * **Feature**: Auto can remote-control **opencode** as well as Cursor. `src/acp/resolve.mjs` is now an agent registry (`cursor`, `opencode`); `opencode` is located on `PATH` or via `OPENCODE_BIN`, and `AcpClient` spawns whichever agent a session records.
+* **Feature**: Sessions started outside Auto are adopted. `syncFromAgent` now asks **both** agents for `session/list` (boot and "Refresh sessions") and registers unseen ones agent-tagged, deduped, and only when the folder still exists; their history is captured from the first `session/load` replay so the phone can read it.
+* **Fix**: Resume suppression now lasts until the first prompt. opencode sends part of its replay as notifications after `loadSession` resolves, so clearing the flag at the reply appended history as new records on every restart.
+* **Fix**: An agent's `exit` event no longer deletes a runtime a newer process has already replaced (stop-then-start races marked working sessions failed).
 * **Update**: Sessions carry an `agent` field. `AUTO_AGENT` sets the new-session default; the web New session sheet and Telegram `/new [agent] [folder]` (plus `/agents`) choose per session, and a session cannot change agents.
 * **Update**: opencode sessions are Auto-only — they never open a Cursor chat. They stream thinking, prose, tool calls, and usage over ACP, and approvals/queue/transcripts work unchanged.
 * **Update**: Cursor returns `models`/`modes`; opencode returns `configOptions`. `src/acp/config-options.mjs` flattens both to one picker shape and switches via `session/set_config_option` for opencode; catalogs are per agent so one never refills the other's picker.
-* **Test**: `npm test` now covers the agent registry, config-option normalisation, and that an opencode session is Auto-only and agent-tagged. Verified live against opencode 1.18.31: prompt, tool call, model and mode switch.
+* **Test**: `npm test` covers the agent registry, config-option normalisation, external-session adoption, and that an opencode session is Auto-only and agent-tagged. Verified live against opencode 1.18.31: prompt, tool call, model/mode switch, and adopt-then-resume across a fresh host.
 
 ## 2026-09-09
 * **Fix**: Installed iOS topbar/rail now floor `safe-area-inset-top` at 59px (and the same rule is inlined in the shell) — when that env is `0` the title was sitting under the translucent status bar and looking frosted.
