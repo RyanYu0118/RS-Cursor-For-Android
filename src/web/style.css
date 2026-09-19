@@ -473,22 +473,18 @@ html[data-standalone] .rail-head {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 9px 10px;
+  padding: 6px 10px;
   border-radius: 8px;
   cursor: pointer;
-  border: 1px solid transparent;
   min-width: 0;
   margin-left: 8px;
 }
 
 .session.busy { opacity: 0.55; }
 
-.session.active {
-  background: var(--bg-3);
-  border-color: var(--line-2);
-}
+.session.active { background: var(--bg-3); }
 
-/* The name and its agent tag share a row; the folder subtitle wraps below. */
+/* The name and its agent mark share a row. */
 .session .meta {
   min-width: 0;
   flex: 1;
