@@ -480,18 +480,40 @@ html[data-standalone] .rail-head {
   border-color: var(--line-2);
 }
 
-.session .meta { min-width: 0; flex: 1; }
+/* The name and its agent tag share a row; the folder subtitle wraps below. */
+.session .meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 6px;
+}
 
 .session .name {
-  display: block;
+  flex: 1;
+  min-width: 0;
   font-size: 13.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Which agent drives a session that is not a Cursor chat (opencode). */
+.session .agent-tag {
+  flex: none;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  color: var(--muted);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+
 .session .sub {
-  display: block;
+  flex-basis: 100%;
   font-size: 11.5px;
   color: var(--faint);
   white-space: nowrap;

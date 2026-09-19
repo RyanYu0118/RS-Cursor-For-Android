@@ -3372,7 +3372,17 @@ if (existsSync(SRC)) {
     fail('the agent choice needs styling');
     failed = true;
   }
-  if (!failed) ok('v2 web: New session offers the installed agents');
+  // The rail must say which agent a session drives, or opencode sessions look
+  // like any other chat and cannot be told apart from a Cursor one.
+  if (!js.includes('agent-tag') || !js.includes("item.agent !== 'cursor'")) {
+    fail('non-cursor sessions must be tagged in the rail');
+    failed = true;
+  }
+  if (!css.includes('.agent-tag')) {
+    fail('the agent tag needs styling');
+    failed = true;
+  }
+  if (!failed) ok('v2 web: New session offers the installed agents, and the rail tags them');
 }
 
 // Long chats get a Photos-style scrubber: handle while scrolling, labeled

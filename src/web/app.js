@@ -2287,6 +2287,17 @@ function sessionRow(item) {
   name.textContent = item.title || 'session';
   meta.append(name);
 
+  // A session that is not a Cursor chat says which agent it is. A badge beats
+  // a subtitle here: the same folder can hold both, and "opencode" in the tag
+  // is the one thing that tells two same-titled rows apart.
+  if (item.session && item.agent && item.agent !== 'cursor') {
+    const tag = document.createElement('span');
+    tag.className = `agent-tag agent-${item.agent}`;
+    tag.textContent = item.agent;
+    tag.title = `${item.agent} session — runs outside Cursor`;
+    meta.append(tag);
+  }
+
   // Anything with a thread id is the IDE's conversation, whether or not Auto
   // has opened it yet.
   const sub = document.createElement('span');
@@ -2346,6 +2357,9 @@ function conversations() {
     status: s.status,
     folder: s.folder,
     project: (s.folder || '').split(/[\\/]/).filter(Boolean).pop() || '',
+    // Which agent drives it. Cursor is the norm and stays unbadged; anything
+    // else (opencode) is worth a tag, because those sessions are Auto-only.
+    agent: s.agent || 'cursor',
     at: Date.parse(s.updatedAt || s.createdAt || '') || 0,
   }));
 
