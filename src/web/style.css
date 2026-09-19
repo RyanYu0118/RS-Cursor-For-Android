@@ -1188,6 +1188,15 @@ details.think .body {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+/* The +/− of the edits in a file-change bundle, on the line you read first. */
+.tool.bundle > summary > .row .stat {
+  flex: none;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.tool.bundle > summary > .row .stat:empty { display: none; }
+.tool.bundle > summary > .row .stat .plus { color: var(--green); }
+.tool.bundle > summary > .row .stat .minus { color: var(--red); }
 .tool.bundle.activity > .body,
 .tool.bundle.files > .body {
   border-top: 0;

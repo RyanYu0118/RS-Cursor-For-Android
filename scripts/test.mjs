@@ -4485,7 +4485,7 @@ if (existsSync(SRC)) {
 // reads fold together, and a few internal calls stay off the stream.
 {
   try {
-    const { classifyTool, displayLabel, foldTools, isSimpleLs, diffFromPrecomputed } = {
+    const { classifyTool, displayLabel, fileStats, foldTools, isSimpleLs, toolOutputText, diffFromPrecomputed } = {
       ...(await import('../src/core/desktop-tool-ui.mjs')),
       diffFromPrecomputed: (await import('../src/core/desktop-threads.mjs')).diffFromPrecomputed,
     };
@@ -4518,9 +4518,42 @@ if (existsSync(SRC)) {
     check('server with nameless tool', classifyTool({ title: 'cursor-ide-browser: tool' }).lane, 'hide');
     check('ask_question is the Question card, not OTHER', classifyTool({ title: 'ask_question' }).lane, 'hide');
     check('a real mcp call stays a card', classifyTool({ title: 'cursor-ide-browser: browser_cdp' }).lane, 'card');
-    check('ACP Edit File stays a card', classifyTool({ title: 'Edit File', toolKind: 'edit' }).lane, 'card');
+    check('ACP Edit File is a file change, not a card', classifyTool({ title: 'Edit File', toolKind: 'edit' }).lane, 'fileChange');
+    check('an ACP tool with no title reads by its kind', classifyTool({ title: 'read', toolKind: 'read' }).lane, 'group');
+    check('an ACP search groups', classifyTool({ title: 'grep', toolKind: 'search' }).lane, 'group');
+    check('an ACP shell stays a card', classifyTool({ title: 'bash', toolKind: 'execute' }).lane, 'card');
+    check('an ACP delete is a file change', classifyTool({ title: 'delete', toolKind: 'delete' }).lane, 'fileChange');
     check('ls is grouped', isSimpleLs('ls src'), true);
     check('ls with a pipe is not grouped', isSimpleLs('ls | wc'), false);
+
+    // ACP reports the file counts on the finished call; without this an edit
+    // had no +/− and its summary could not say "Edited style.css +2 −2".
+    check(
+      'file stats from a filediff',
+      fileStats({
+        title: 'edit',
+        toolKind: 'edit',
+        rawOutput: { metadata: { filediff: { additions: 2, deletions: 2 } } },
+      }),
+      { added: 2, removed: 2 },
+    );
+    // The path is not in an empty ACP input: it is on the diff, or the title.
+    check(
+      'a file change names itself from its diff',
+      displayLabel({
+        title: 'edit',
+        toolKind: 'edit',
+        content: [{ type: 'diff', path: 'D:\\Sevenfold\\auto\\src\\web\\style.css', oldText: '', newText: '' }],
+      }),
+      'Edited style.css',
+    );
+
+    // ACP wraps output in `{ output, metadata }`; the JSON envelope must never
+    // be what a phone reads in place of the command's actual output.
+    check('ACP output text', toolOutputText({ output: 'ok\n', metadata: { output: 'ok\n', exit: 0 } }), 'ok\n\n[exit 0]');
+    check('metadata-only output', toolOutputText({ metadata: { output: 'ok', exit: 0, truncated: false } }), 'ok\n[exit 0]');
+    check('a bare envelope prints nothing', toolOutputText({ metadata: { diagnostics: {}, diff: '@@' } }), '');
+    check('Cursor stdout + stderr still read', toolOutputText({ stdout: 'a', stderr: 'b', exitCode: 1 }), 'a\nb\n[exit 1]');
 
     const folded = foldTools([
       { title: 'read_file_v2', status: 'completed' },

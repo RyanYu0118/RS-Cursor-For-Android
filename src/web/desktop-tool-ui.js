@@ -76,6 +76,20 @@ const CARD = {
   record_screen: { label: 'Screen recording', short: 'Record', toolKind: 'other' },
 };
 
+/**
+ * ACP tools arrive with a `kind` but no Cursor title ("read", "edit",
+ * "bash"). Mapping the kind to the same lanes Cursor's own titles use means an
+ * opencode session groups its reads and turns its edits into file changes,
+ * instead of one grey OTHER card per call.
+ */
+const BY_KIND = {
+  edit: { lane: 'fileChange', toolKind: 'edit', label: 'Edit file', short: 'Edited' },
+  delete: { lane: 'fileChange', toolKind: 'delete', label: 'Delete file', short: 'Deleted' },
+  read: { lane: 'group', toolKind: 'read', label: 'Read file', short: 'Read' },
+  search: { lane: 'group', toolKind: 'search', label: 'Search', short: 'Search' },
+  fetch: { lane: 'group', toolKind: 'fetch', label: 'Fetch', short: 'Fetch' },
+};
+
 const PIPES = /[|;&]|&&|\|\|/;
 
 /** A bare `ls` is grouped in the IDE the way a directory listing is. */
@@ -122,6 +136,7 @@ export function classifyTool(rec = {}) {
   if (FILE_CHANGE[key]) return { lane: 'fileChange', ...FILE_CHANGE[key] };
   if (GROUP[key]) return { lane: 'group', ...GROUP[key] };
   if (CARD[key]) return { lane: 'card', ...CARD[key] };
+  if (BY_KIND[rec.toolKind]) return { ...BY_KIND[rec.toolKind] };
   if (rec.toolKind === 'plan' || rec.rawInput?.plan) {
     return {
       lane: 'card',
@@ -141,16 +156,24 @@ export function classifyTool(rec = {}) {
   };
 }
 
+/**
+ * Where a tool's file is. Cursor names it in the input; ACP edits often carry
+ * an empty input and put the path on the diff, or only in the title once the
+ * call completes ("src\\web\\style.css").
+ */
 export function toolPath(rec) {
   const input = rec?.rawInput || {};
-  return String(
+  const named =
     input.relativeWorkspacePath ||
-      input.targetFile ||
-      input.path ||
-      input.file_path ||
-      input.effectiveUri ||
-      '',
-  ).trim();
+    input.targetFile ||
+    input.path ||
+    input.file_path ||
+    input.effectiveUri;
+  if (named) return String(named).trim();
+  const diff = (rec?.content || []).find((b) => b?.type === 'diff');
+  if (diff?.path) return String(diff.path).trim();
+  const title = String(rec?.title || '').trim();
+  return /[\\/]/.test(title) || /\.\w{1,6}$/.test(title) ? title : '';
 }
 
 export function toolBase(path) {
@@ -161,10 +184,66 @@ export function toolBase(path) {
 
 export function fileStats(rec) {
   const input = rec?.rawInput || {};
-  const added = input.added ?? input.editLinesAdded;
-  const removed = input.removed ?? input.editLinesRemoved;
+  let added = input.added ?? input.editLinesAdded;
+  let removed = input.removed ?? input.editLinesRemoved;
+  // ACP agents report the counts on the finished call, in `metadata.filediff`.
+  if (added == null && removed == null) {
+    const fd = rec?.rawOutput?.metadata?.filediff;
+    if (fd && (fd.additions != null || fd.deletions != null)) {
+      added = fd.additions;
+      removed = fd.deletions;
+    }
+  }
   if (added == null && removed == null) return null;
   return { added: Number(added) || 0, removed: Number(removed) || 0 };
+}
+
+/** The +/− a batch of file changes adds up to, or null when none reported. */
+function batchStats(batch) {
+  let added = 0;
+  let removed = 0;
+  let saw = false;
+  for (const item of batch) {
+    const stats = fileStats(recOf(item));
+    if (!stats) continue;
+    added += stats.added;
+    removed += stats.removed;
+    saw = true;
+  }
+  return saw ? { added, removed } : null;
+}
+
+/**
+ * What a tool printed, as one lot of text — never the JSON envelope around it.
+ *
+ * ACP wraps a result in `{ output, metadata }` (and repeats the text inside
+ * `metadata.output`); Cursor uses `{ text }` or separate `stdout`/`stderr`.
+ * Printing the envelope itself buried the one useful line under braces, so an
+ * object with nothing readable in it yields nothing at all.
+ */
+export function toolOutputText(out) {
+  if (!out) return '';
+  if (typeof out !== 'string' && typeof out !== 'object') return String(out);
+  if (typeof out === 'string') return out;
+
+  const meta = out.metadata && typeof out.metadata === 'object' ? out.metadata : {};
+  let text = '';
+  if (typeof out.text === 'string') text += out.text;
+  if (typeof out.stdout === 'string') text += (text ? '\n' : '') + out.stdout;
+  if (typeof out.stderr === 'string') text += (text ? '\n' : '') + out.stderr;
+  if (!text && typeof out.output === 'string') text += out.output;
+  if (!text && typeof meta.output === 'string') text += meta.output;
+  if (!text && typeof out.error === 'string') text += out.error;
+  if (!text && typeof meta.error === 'string') text += meta.error;
+  if (!text && typeof out.message === 'string') text += out.message;
+
+  const exit = out.exitCode ?? meta.exit;
+  const ms = out.durationMs ?? meta.durationMs;
+  const notes = [];
+  if (exit !== undefined && exit !== null) notes.push(`exit ${exit}`);
+  if (ms) notes.push(`${(ms / 1000).toFixed(1)}s`);
+  if (!text) return '';
+  return notes.length ? `${text}\n[${notes.join(', ')}]` : text;
 }
 
 /** Is this Cursor's Created Plan card, not a generic tool bar? */
@@ -350,6 +429,7 @@ function fileChangeSummary(batch) {
     failure,
     lane: 'fileChange',
     count: batch.length,
+    stats: batchStats(batch),
   };
 }
 

@@ -11,7 +11,7 @@ sources:
   - id: core
     resource: /src/core/desktop-tool-ui.mjs
     title: Node re-export for Telegram
-generated: { by: agent, at: 2026-08-16T06:35:00Z }
+generated: { by: agent, at: 2026-09-19T00:00:00Z }
 ---
 
 # Tool lanes
@@ -33,6 +33,27 @@ the [web](web.md) and [Telegram](telegram.md) share one copy
 
 `create_plan` stays a card. `ask_question` is hidden from the OTHER lane —
 the Question card is the real UI. See [approvals](approvals.md).
+
+Cursor names its tools (`edit_file_v2`, `ripgrep_raw_search`). An ACP agent
+such as opencode sends its own names (`edit`, `read`, `bash`) with a
+`toolKind` instead, so the kind maps to the same lanes: `edit` / `delete`
+become file changes, `read` / `search` / `fetch` fold into the activity
+line, and `execute` and everything else stay cards. Without that an
+opencode session was one OTHER card per call.
+
+## What a row shows
+
+A file change is a collapsed line **"Edited <name> +N −M"** — the counts
+come from the tool input (Cursor) or the finished call's
+`metadata.filediff` additions/deletions (ACP). Tapping it expands to the
+diff. The agent's own "Edit applied successfully." text is dropped: the
+diff is the point.
+
+Tool cards never print their structured input or the JSON envelope around
+their output. ACP wraps a result as `{ output, metadata }` (and repeats the
+text in `metadata.output`); Cursor uses `{ text }` or `stdout`/`stderr`.
+`toolOutputText` reads the human text out of either and prints nothing when
+there is none, because the braces used to bury the one line worth reading.
 
 ## Hidden MCP placeholders
 

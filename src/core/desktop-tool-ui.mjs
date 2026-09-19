@@ -16,6 +16,7 @@ export {
   isSimpleLs,
   planFields,
   toolBase,
+  toolOutputText,
   toolPath,
   turnCopy,
 } from '../web/desktop-tool-ui.js';

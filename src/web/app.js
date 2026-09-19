@@ -31,6 +31,7 @@ import {
   groupTally,
   isCreatedPlan,
   planFields,
+  toolOutputText,
   turnCopy,
 } from './desktop-tool-ui.js';
 import {
@@ -1439,6 +1440,13 @@ function paintItemStatus(row, status, failed) {
   if (stateEl) stateEl.textContent = statusWord(status, failed);
 }
 
+/** A file change shows its diff and nothing else; other lanes keep every block. */
+function visibleBlocks(ui, blocks) {
+  const all = blocks || [];
+  if (ui?.lane !== 'fileChange') return all;
+  return all.filter((b) => b?.type === 'diff');
+}
+
 function bundleSummary(bundle) {
   const items = bundle.items;
   const running = items.some((it) => {
@@ -1447,7 +1455,17 @@ function bundleSummary(bundle) {
   });
   if (bundle.lane === 'fileChange') {
     const one = items.length === 1 ? displayLabel(items[0].rec) : '';
-    return { kind: 'edit', ...editCopy(items.length, one) };
+    let added = 0;
+    let removed = 0;
+    let saw = false;
+    for (const it of items) {
+      const s = fileStats(it.rec);
+      if (!s) continue;
+      added += s.added;
+      removed += s.removed;
+      saw = true;
+    }
+    return { kind: 'edit', ...editCopy(items.length, one), stats: saw ? { added, removed } : null };
   }
   const { files, searches } = groupTally(items);
   return { kind: 'read', ...activityCopy({ files, searches, running }) };
@@ -1455,8 +1473,14 @@ function bundleSummary(bundle) {
 
 function paintBundle(bundle) {
   const { card } = bundle;
-  const { label, parts } = bundleSummary(bundle);
+  const { label, parts, stats } = bundleSummary(bundle);
   paintParts(card.querySelector('summary .label'), parts || [{ t: label }]);
+  const statEl = card.querySelector('summary .stat');
+  if (statEl) {
+    statEl.innerHTML = stats
+      ? `<span class="plus">+${stats.added}</span> <span class="minus">−${stats.removed}</span>`
+      : '';
+  }
   let status = 'completed';
   let failed = false;
   for (const it of bundle.items) {
@@ -1492,6 +1516,7 @@ function startBundle(lane) {
       <span class="row">
         <span class="kind"></span>
         <span class="label"></span>
+        <span class="stat"></span>
         <span class="state">running…</span>
       </span>
     </summary>
@@ -1527,7 +1552,9 @@ function addBundleItem(rec, ui) {
       `<span class="plus">+${stats.added}</span> <span class="minus">−${stats.removed}</span>`;
   }
   const body = row.querySelector('.item-body');
-  renderContent(body, rec.content, null);
+  // A file change is its diff; the agent's "Edit applied successfully." text
+  // would just be a line of noise above it.
+  renderContent(body, visibleBlocks(ui, rec.content), null);
   row.dataset.contentCount = String((rec.content || []).length);
   paintItemStatus(row, rec.status, rec.status === 'failed');
   card.querySelector('.bundle-list').appendChild(row);
@@ -1570,12 +1597,9 @@ function renderToolCall(rec) {
   card.querySelector('.label').textContent = toolLabel(rec);
 
   const body = card.querySelector('.body');
-  if (rec.rawInput && Object.keys(rec.rawInput).length) {
-    const pre = document.createElement('pre');
-    pre.innerHTML = `<code>${esc(JSON.stringify(rec.rawInput, null, 2))}</code>`;
-    body.appendChild(div('cap', 'input'));
-    body.appendChild(pre);
-  }
+  // The structured input is not shown: its braces buried the one useful line,
+  // and what matters is already in the label (command, path, query). Content
+  // blocks — diffs, images, text the agent chose to show — still come through.
   renderContent(body, rec.content, card);
   // Opening a card by hand means you want it open: it stays that way when the
   // command finishes, instead of folding itself up under your thumb.
@@ -1619,6 +1643,8 @@ function renderToolUpdate(rec) {
     if (rec.title) item.rec = { ...item.rec, title: rec.title };
     if (rec.status) item.rec = { ...item.rec, status: rec.status };
     if (rec.rawInput) item.rec = { ...item.rec, rawInput: { ...item.rec.rawInput, ...rec.rawInput } };
+    if (rec.rawOutput) item.rec = { ...item.rec, rawOutput: rec.rawOutput };
+    if (rec.content) item.rec = { ...item.rec, content: rec.content };
     if (rec.title) item.row.querySelector('.name').textContent = displayLabel(item.rec);
     const stats = fileStats(item.rec);
     if (stats) {
@@ -1630,7 +1656,8 @@ function renderToolUpdate(rec) {
     const blocks = rec.content || [];
     const seen = Number(item.row.dataset.contentCount || 0);
     if (blocks.length > seen) {
-      renderContent(item.row.querySelector('.item-body'), blocks.slice(seen), null);
+      const fresh = blocks.slice(seen).filter((b) => item.ui?.lane !== 'fileChange' || b?.type === 'diff');
+      renderContent(item.row.querySelector('.item-body'), fresh, null);
       item.row.dataset.contentCount = String(blocks.length);
     }
     paintBundle(group);
@@ -1673,25 +1700,6 @@ function renderToolUpdate(rec) {
   showOutput(card, out, failed);
 }
 
-/** What a tool printed, as one lot of text. */
-function outputText(out) {
-  if (!out) return '';
-  if (typeof out !== 'object') return String(out);
-
-  let text = '';
-  // `text` is a command's two streams already in the order a terminal showed
-  // them; stdout and stderr apart is how the agent's own tools report.
-  if (out.text) text += out.text;
-  if (out.stdout) text += (text ? '\n' : '') + out.stdout;
-  if (out.stderr) text += (text ? '\n' : '') + out.stderr;
-  if (!text) text = JSON.stringify(out, null, 2);
-
-  const notes = [];
-  if (out.exitCode !== undefined && out.exitCode !== null) notes.push(`exit ${out.exitCode}`);
-  if (out.durationMs) notes.push(`${(out.durationMs / 1000).toFixed(1)}s`);
-  return notes.length ? `${text}\n[${notes.join(', ')}]` : text;
-}
-
 /** How many lines of a command's output a folded card shows. */
 const PEEK_LINES = 6;
 
@@ -1708,7 +1716,7 @@ const PEEK_LINES = 6;
  * worked. The whole log is still a tap away.
  */
 function showOutput(card, out, failed) {
-  const text = outputText(out);
+  const text = toolOutputText(out);
   if (!text) return;
   const body = card.querySelector('.body');
 

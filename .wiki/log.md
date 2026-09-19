@@ -1,6 +1,8 @@
 # Directory Update Log
 
 ## 2026-09-19
+* **Update**: Tool cards no longer print their structured input or the JSON envelope around their output. ACP results (`{ output, metadata }`) and Cursor's `{ text }` / `stdout` / `stderr` are read by `toolOutputText`, which yields the human text or nothing — the braces were burying the one readable line.
+* **Update**: Edits now render as a collapsed **"Edited style.css +2 −2"** file-change line that expands to the diff, for ACP agents (opencode) as well as Cursor. ACP tools with a `kind` but no Cursor title map to the same lanes (edit/delete → file change, read/search/fetch → activity line, execute → card), and the counts come from the finished call's `metadata.filediff`.
 * **Update**: The web session rail now groups by repo — one accordion per folder holding its chats and sessions. The date headings and the Chats/Projects rows are gone; a row shows only the session title and leads with the driving agent's mark (Cursor's cube or opencode's square) where the status dot used to be, tinted by state. Which repos are open is remembered per folder, and attaching reveals the chat's repo. A **+** on a repo header starts a session in that folder, shown on hover and faint on touch.
 * **Feature**: New sessions can start in a folder Cursor has never opened. The New session sheet's **Browse…** reads the machine's drives and directories (`src/core/fs-browse.mjs`, the `fs.list` op, hidden folders and `node_modules` left out) and **Use this folder** fills the path.
 * **Update**: The chosen model is remembered per agent in the browser and carried on `session.create`, so a new session opens on it instead of Auto-select; the host applies it before the first prompt and falls back if the agent no longer offers it.
