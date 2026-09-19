@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-09T19:50:00Z }
+generated: { by: agent, at: 2026-09-19T00:00:00Z }
 ---
 
 # Web app
@@ -158,23 +158,34 @@ without shrinking the layout one, so the sheet tracks `--vv-top` /
 `--vv-height` from `visualViewport` and caps the project list to that
 frame — otherwise a short filter result sat under the keys. The viewport
 meta also asks for `interactive-widget=resizes-content` where supported.
+Beside the typed folder path, **Browse…** opens a folder browser: the host
+lists the machine's drives (and Home) and the directories under whichever
+one you tap, a folder is entered by tapping it and chosen with **Use this
+folder**, and the chosen path fills the field before you press Create. That
+is the way to start somewhere Cursor has never opened — see
+[projects](projects.md).
 
 ## What it draws
 
 - While a long transcript replays with nothing cached, the chat pane shows
   the Auto A mark (same glyph as the rail) and "Loading conversation…", not
   a blank. A cache hit paints first and skips that overlay.
-- The session rail as two accordion rows — **Chats** (date-grouped Auto
-  sessions and Cursor's recent chats) and **Projects** (folders Cursor
-  knows, plus per-folder desktop chats). Opening one closes the other;
-  tapping an open row collapses it. Which row was open (or neither) is
-  remembered in the browser. Rebuilding the list (sessions update, opening
-  the drawer) must not treat the teardown `toggle` as a collapse — that used
-  to write "neither" and always reopen shut. A left swipe's click-guard
-  expires after the gesture so the next open can switch chats on the first
-  tap. A session not driven by Cursor carries a small **opencode** tag beside
-  its name, so an Auto-only agent session is not mistaken for a Cursor chat
-  in the same folder.
+- The session rail as one accordion per **repo** — a folder and every chat
+  and session inside it, newest activity first. There is no Chats/Projects
+  split and no date headings any more: a conversation always lives
+  somewhere, so grouping by where beats grouping by when. A row shows only
+  the session title; the repo is its accordion parent. Each row leads with
+  the driving agent's mark where the status dot used to be — Cursor's cube
+  or opencode's square, tinted by colour so the mark still carries the
+  session's state (idle, busy, error, or a resting Cursor chat Auto has not
+  opened). Which repos were open is remembered per folder in the browser;
+  attaching a session opens its repo. Rebuilding the list (sessions update,
+  opening the drawer) must not treat the teardown `toggle` as a collapse —
+  that used to write "neither" and always reopen shut. A **+** on a repo
+  header starts a session in that folder; it shows on hover, and stays
+  faintly visible on a touch screen where hover never comes. A left swipe's
+  click-guard expires after the gesture so the next open can switch chats on
+  the first tap.
 - The [queue](queue.md) above the chat box, with reword / send now / delete.
 - Tool calls the way Cursor groups them — see [tool lanes](tool-lanes.md).
 - Diffs, thinking (folded when the block ends, timed from the record so a
@@ -323,6 +334,13 @@ spend. An id whose encoded defaults include `fast=true` uses that published
 Fast rate. A future model with no known published rate gets no badge rather
 than a guessed price. The search box is sticky, so it stays at the top while
 the model rows scroll under it.
+
+The model you pick is remembered **per agent** in the browser, so a new
+session opens on it instead of Auto-select — choosing a gateway model such
+as an opencode `vercel/…` one once means it is there next time. The id
+travels with `session.create`, and the host applies it before the new
+session's first prompt, falling back to Auto-select if the agent no longer
+offers it. Per agent because model ids mean nothing across catalogs.
 
 Like the New session sheet, the model sheet tracks the visual viewport
 (`--vv-top` / `--vv-height`) rather than the layout viewport. On iOS the soft

@@ -324,74 +324,94 @@ html[data-standalone] .rail-head {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Chats and Projects are two accordion rows. The list itself scrolls —
-   nested overflow on <details> never got a height bound, so the rail
-   could not scroll. */
-.rail-section {
+/* One accordion per repo. The repo is the parent, its chats and sessions are
+   the rows inside, so the rail reads as folders rather than dates. The list
+   itself scrolls — nested overflow on <details> never got a height bound, so
+   the rail could not scroll. */
+.repo {
   flex: 0 0 auto;
   border-radius: 8px;
 }
 
-.rail-section > summary {
+.repo > summary {
   list-style: none;
   cursor: pointer;
-  padding: 10px 10px;
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
   border-radius: 8px;
+  min-width: 0;
   user-select: none;
 }
 
-.rail-section > summary::-webkit-details-marker { display: none; }
-.rail-section > summary::before { content: '▸ '; opacity: 0.7; }
-.rail-section[open] > summary::before { content: '▾ '; }
-.rail-section[open] > summary { color: var(--text); }
-.rail-section > summary:hover { background: var(--bg-3); }
+.repo > summary::-webkit-details-marker { display: none; }
 
-.rail-section-body {
+.repo > summary::before {
+  content: '▸';
+  flex: none;
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.repo[open] > summary::before { content: '▾'; }
+
+.repo-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-open {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.repo-count {
+  flex: none;
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.repo-count:empty { display: none; }
+
+/* The way to start something here. Shown on hover where there is one, and
+   left faintly visible on a touch screen where hover never comes. */
+.repo-add {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 17px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+@media (hover: none) {
+  .repo-add { opacity: 0.55; }
+}
+
+.repo-body {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding-bottom: 4px;
 }
-
-/* Projects head their sessions, the way the desktop groups them. */
-.project {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  padding: 12px 10px 4px;
-  min-width: 0;
-}
-
-.project-name {
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.project.open .project-name { color: var(--text); }
-
-.project-note {
-  flex: 1;
-  font-size: 11px;
-  color: var(--faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Always visible: there is no hover on a phone, and this is the way in. */
-.project .close { opacity: 0.45; font-size: 16px; }
-.project { cursor: pointer; border-radius: 8px; }
 
 /* Chats from the desktop app, offered for continuing here. */
 .desktop-chats { margin: 0 0 4px 8px; }
@@ -443,18 +463,6 @@ html[data-standalone] .rail-head {
   text-overflow: ellipsis;
 }
 
-/* Date headings, the way Cursor's own history is grouped. */
-.rail-group {
-  padding: 14px 10px 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.rail-group:first-child { padding-top: 4px; }
-
 .rail-empty {
   padding: 12px 10px;
   font-size: 12.5px;
@@ -499,27 +507,25 @@ html[data-standalone] .rail-head {
   text-overflow: ellipsis;
 }
 
-/* Which agent drives a session that is not a Cursor chat (opencode). */
-.session .agent-tag {
+/* The agent's mark, where the status dot used to be. Cursor's cube and
+   opencode's square are tinted by colour, so the mark also carries state. */
+.agent-mark {
   flex: none;
-  font-size: 10px;
-  line-height: 1.4;
-  letter-spacing: 0.03em;
-  text-transform: lowercase;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--muted);
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  padding: 0 6px;
 }
 
-.session .sub {
-  flex-basis: 100%;
-  font-size: 11.5px;
-  color: var(--faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.agent-mark svg { width: 100%; height: 100%; display: block; }
+
+.agent-mark.idle { color: var(--muted); }
+.agent-mark.resting { color: var(--faint); opacity: 0.7; }
+.agent-mark.busy { color: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
+.agent-mark.error { color: var(--red); }
+.agent-mark.starting { color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 
 
 .session .close {
@@ -535,8 +541,9 @@ html[data-standalone] .rail-head {
 /* Hover must not apply on a phone: the first tap would be hover, the second
    the click, so × needed pressing twice to archive. */
 @media (hover: hover) {
-  .project:hover { background: var(--bg-3); }
-  .project:hover .close { opacity: 0.9; }
+  .repo > summary:hover { background: var(--bg-3); }
+  .repo > summary:hover .repo-add { opacity: 0.8; }
+  .repo-add:hover { opacity: 1; background: var(--bg-2); color: var(--text); }
   .session:hover { background: var(--bg-3); }
   .session:hover .close { opacity: 1; }
   .session .close:hover { color: var(--red); background: var(--bg-2); }
@@ -3325,6 +3332,88 @@ button.model-choice:disabled {
   color: var(--green);
 }
 
+/* Browsing the machine for a folder: drives and directories, one tap each. */
+#newbie-browser {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.dir-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 8px;
+}
+
+.dir-head .icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 15px;
+}
+
+.dir-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.dir-choose {
+  flex: none;
+  font-size: 12px;
+  padding: 5px 9px;
+}
+
+.dir-list {
+  max-height: 42vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.dir-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dir-row:hover { background: var(--bg-3); }
+
+.dir-row .dir-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--faint);
+  display: inline-flex;
+}
+
+.dir-row .dir-icon svg { width: 100%; height: 100%; }
+
+.dir-row .name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Agent choice for a new session — a two-option segmented control. */
 #newbie-agents {
   display: flex;
@@ -3333,6 +3422,10 @@ button.model-choice:disabled {
 
 #newbie-agents .agent-choice {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 8px 6px;
   border: 1px solid var(--line-2);
   border-radius: 9px;

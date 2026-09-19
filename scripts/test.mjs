@@ -3276,7 +3276,7 @@ if (existsSync(SRC)) {
   const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
   const css = readFileSync(join(ROOT, 'src/web/style.css'), 'utf8');
   let failed = false;
-  const row = js.slice(js.indexOf('function sessionRow'), js.indexOf('function dateBucket'));
+  const row = js.slice(js.indexOf('function sessionRow'), js.indexOf('function conversations'));
   if (!row.includes('insideControl') || !js.includes('pointerdown')) {
     fail('the session × must stop the row from seeing the tap');
     failed = true;
@@ -3301,17 +3301,23 @@ if (existsSync(SRC)) {
   if (!failed) ok('v2 web: session × archives on first tap, swipe closes rail');
 }
 
-// Rail accordion memory + chat taps must survive a redraw and a left swipe.
+// The rail is repos, each an accordion holding its chats and sessions. Open
+// state is remembered per folder, and a redraw must not treat teardown toggles
+// as a collapse. The old date headings and Chats/Projects split are gone.
 {
   const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
   let failed = false;
-  const accordion = js.slice(js.indexOf('function railAccordion'), js.indexOf('function renderRail'));
-  if (!accordion.includes('isConnected')) {
-    fail('rebuilding the rail must not treat teardown toggles as "close both"');
+  const section = js.slice(js.indexOf('function repoSection'), js.indexOf('function renderRail'));
+  if (!section.includes('isConnected')) {
+    fail('rebuilding the rail must not treat teardown toggles as a collapse');
     failed = true;
   }
-  if (!js.includes('RAIL_SECTION_KEY') || !js.includes('rememberRailSection')) {
-    fail('which accordion row is open must be remembered');
+  if (!js.includes('RAIL_REPOS_KEY') || !js.includes('rememberRailRepos')) {
+    fail('which repo is open must be remembered');
+    failed = true;
+  }
+  if (js.includes('dateBucket') || js.includes('railAccordion')) {
+    fail('the rail must group by repo, not by date or category');
     failed = true;
   }
   const swipe = js.slice(js.indexOf('function bindRailSwipe'), js.indexOf("$('rail-toggle')"));
@@ -3319,7 +3325,29 @@ if (existsSync(SRC)) {
     fail('a swipe click-guard must expire so the next open can switch chats');
     failed = true;
   }
-  if (!failed) ok('v2 web: rail accordion remembers open row; swipe does not block next chat tap');
+  if (!failed) ok('v2 web: rail groups by repo and remembers which are open; swipe does not block next chat tap');
+}
+
+// A repo header's + starts a session there, and only appears on hover (kept
+// faint on a touch screen, where there is no hover at all).
+{
+  const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
+  const css = readFileSync(join(ROOT, 'src/web/style.css'), 'utf8');
+  let failed = false;
+  const section = js.slice(js.indexOf('function repoSection'), js.indexOf('function renderRail'));
+  if (!section.includes('repo-add') || !section.includes('insideControl(add')) {
+    fail('a repo header needs a + that starts a session without toggling it');
+    failed = true;
+  }
+  if (!section.includes('createSession(repo.folder)')) {
+    fail('the repo + must open a session on that folder');
+    failed = true;
+  }
+  if (!css.includes('.repo-add') || !/\.repo-add\s*\{[^}]*opacity:\s*0/.test(css)) {
+    fail('the repo + must be hidden until hover');
+    failed = true;
+  }
+  if (!failed) ok('v2 web: repo + starts a session and shows on hover');
 }
 
 // Filtering projects on a phone must keep the list above the soft keyboard.
@@ -3360,7 +3388,7 @@ if (existsSync(SRC)) {
     fail('the web must ask for and draw the installed agents');
     failed = true;
   }
-  if (!/sendOp\(\{ op: 'session\.create', folder: path, \.\.\.\(agent \? \{ agent \} : \{\}\) \}\)/.test(js)) {
+  if (!js.includes("op: 'session.create'") || !js.includes('...(who ? { agent: who } : {})')) {
     fail('createSession must pass the chosen agent to the host');
     failed = true;
   }
@@ -3372,17 +3400,69 @@ if (existsSync(SRC)) {
     fail('the agent choice needs styling');
     failed = true;
   }
-  // The rail must say which agent a session drives, or opencode sessions look
-  // like any other chat and cannot be told apart from a Cursor one.
-  if (!js.includes('agent-tag') || !js.includes("item.agent !== 'cursor'")) {
-    fail('non-cursor sessions must be tagged in the rail');
+  // The rail must show which agent drives a row, or opencode sessions look
+  // like any other chat. Each agent gets its own mark where the dot used to be.
+  if (!js.includes('function agentMark') || !js.includes('OPENCODE_MARK') || !js.includes('CURSOR_MARK')) {
+    fail('the rail must draw an agent mark for each session');
     failed = true;
   }
-  if (!css.includes('.agent-tag')) {
-    fail('the agent tag needs styling');
+  if (!js.includes("item.agent === 'opencode'")) {
+    fail('cursor and opencode must get different marks');
     failed = true;
   }
-  if (!failed) ok('v2 web: New session offers the installed agents, and the rail tags them');
+  if (!css.includes('.agent-mark')) {
+    fail('the agent mark needs styling');
+    failed = true;
+  }
+  if (!failed) ok('v2 web: New session offers the installed agents, and the rail marks them');
+}
+
+// Starting a session somewhere new means browsing the machine's drives and
+// folders, not only Cursor's project list.
+{
+  const html = readFileSync(join(ROOT, 'src/web/index.html'), 'utf8');
+  const css = readFileSync(join(ROOT, 'src/web/style.css'), 'utf8');
+  const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
+  let failed = false;
+  if (!html.includes('id="newbie-browser"') || !html.includes('id="dir-list"') || !html.includes('id="newbie-browse"')) {
+    fail('the New session sheet needs a folder browser');
+    failed = true;
+  }
+  if (!js.includes('function renderDirBrowser') || !js.includes("op: 'fs.list'")) {
+    fail('the web must ask the host for drives and directories');
+    failed = true;
+  }
+  if (!css.includes('.dir-row')) {
+    fail('the folder browser needs styling');
+    failed = true;
+  }
+  if (!failed) ok('v2 web: New session can browse drives and folders');
+}
+
+// Model choice is remembered per agent, so a new session opens on the model
+// you last picked rather than Auto-select.
+{
+  const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
+  const server = readFileSync(join(ROOT, 'src/server/index.mjs'), 'utf8');
+  const sessions = readFileSync(join(ROOT, 'src/core/sessions.mjs'), 'utf8');
+  let failed = false;
+  if (!js.includes('function preferredModel') || !js.includes('function rememberModel')) {
+    fail('the web must remember the chosen model');
+    failed = true;
+  }
+  if (!js.includes('...(model ? { model } : {})')) {
+    fail('a new session must carry the remembered model');
+    failed = true;
+  }
+  if (!/startInIde\(\{[\s\S]{0,200}?model: msg\.model/.test(server)) {
+    fail('the host must accept a model on session.create');
+    failed = true;
+  }
+  if (!/startInIde\(\{[^}]*model[^}]*\}/.test(sessions) || !sessions.includes('#preferredOrAutoSelect')) {
+    fail('startInIde must apply a preferred model');
+    failed = true;
+  }
+  if (!failed) ok('v2 web: model choice is remembered per agent and applied to new sessions');
 }
 
 // Long chats get a Photos-style scrubber: handle while scrolling, labeled

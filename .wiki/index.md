@@ -18,11 +18,11 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [Approvals](concepts/approvals.md) - Permissions, automatic mode transitions, questions, plans, and deliberate Keep / Undo / Redo
 * [Queue](concepts/queue.md) - Messages waiting behind a turn, in Auto or in Cursor
 * [Telegram](concepts/telegram.md) - Bot projection with model price bands
-* [Web](concepts/web.md) - PWA lifecycle, transcript cache, responsive model sheet with price bands, and Home Screen behaviour
+* [Web](concepts/web.md) - PWA lifecycle, transcript cache, repo-grouped rail with agent marks, remembered model per agent, responsive model sheet, and Home Screen behaviour
 * [Usage](concepts/usage.md) - Context dial, relative model price bands, and Cursor Models / Other Models account quotas
 * [Browser](concepts/browser.md) - Headed Chrome, client-themed screencast, not recorded
 * [Terminals](concepts/terminals.md) - node-pty shells for the user and the agent
-* [Projects](concepts/projects.md) - Folders as Cursor itself sees them
+* [Projects](concepts/projects.md) - Folders as Cursor sees them, plus a drives/folders browser for new ones
 * [Skills](concepts/skills.md) - Agent instructions, repo workflow, this wiki
 
 # Entities

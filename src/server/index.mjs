@@ -20,6 +20,7 @@ import { BrowserHost } from '../core/browser.mjs';
 import { HostIdentity } from '../core/host-identity.mjs';
 import { TelegramBridge } from '../core/telegram.mjs';
 import { listProjects, workspaceIdFor, foldersByWorkspaceId } from '../core/projects.mjs';
+import { listDirectories } from '../core/fs-browse.mjs';
 import { desktopChats, recentDesktopChats } from '../core/desktop-chats.mjs';
 import {
   assertSwitches,
@@ -320,7 +321,12 @@ const OPS = {
     // that cannot see its own working directory.
     const folder = msg.folder ? normalizeFolder(msg.folder) : undefined;
     if (folder && !existsSync(folder)) throw new Error(`No such folder: ${folder}`);
-    const meta = await sessions.startInIde({ folder, title: msg.title, agent: msg.agent });
+    const meta = await sessions.startInIde({
+      folder,
+      title: msg.title,
+      agent: msg.agent,
+      model: msg.model,
+    });
     return OPS.attach(ws, state, { sessionId: meta.id });
   },
 
@@ -336,6 +342,11 @@ const OPS = {
 
   'projects.list'(ws) {
     send(ws, { type: 'projects', projects: projectList() });
+  },
+
+  /** Folders on this machine, for starting a session somewhere new. */
+  async 'fs.list'(ws, _state, msg) {
+    send(ws, { type: 'dirs', ...(await listDirectories(msg.path)) });
   },
 
   /** Cursor's recent chats, for the rail. */

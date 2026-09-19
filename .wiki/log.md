@@ -1,7 +1,10 @@
 # Directory Update Log
 
 ## 2026-09-19
-* **Update**: Sessions driven by an agent other than Cursor carry an **opencode** tag in the web rail, so an Auto-only session is told apart from a Cursor chat in the same folder.
+* **Update**: The web session rail now groups by repo — one accordion per folder holding its chats and sessions. The date headings and the Chats/Projects rows are gone; a row shows only the session title and leads with the driving agent's mark (Cursor's cube or opencode's square) where the status dot used to be, tinted by state. Which repos are open is remembered per folder, and attaching reveals the chat's repo. A **+** on a repo header starts a session in that folder, shown on hover and faint on touch.
+* **Feature**: New sessions can start in a folder Cursor has never opened. The New session sheet's **Browse…** reads the machine's drives and directories (`src/core/fs-browse.mjs`, the `fs.list` op, hidden folders and `node_modules` left out) and **Use this folder** fills the path.
+* **Update**: The chosen model is remembered per agent in the browser and carried on `session.create`, so a new session opens on it instead of Auto-select; the host applies it before the first prompt and falls back if the agent no longer offers it.
+* **Note**: The earlier **opencode** tag in the rail is retired — the per-agent mark in the first bullet above replaces it.
 * **Feature**: Auto can remote-control **opencode** as well as Cursor. `src/acp/resolve.mjs` is now an agent registry (`cursor`, `opencode`); `opencode` is located on `PATH` or via `OPENCODE_BIN`, and `AcpClient` spawns whichever agent a session records.
 * **Feature**: Sessions started outside Auto are adopted. `syncFromAgent` now asks **both** agents for `session/list` (boot and "Refresh sessions") and registers unseen ones agent-tagged, deduped, and only when the folder still exists; their history is captured from the first `session/load` replay so the phone can read it.
 * **Fix**: Resume suppression now lasts until the first prompt. opencode sends part of its replay as notifications after `loadSession` resolves, so clearing the flag at the reply appended history as new records on every restart.

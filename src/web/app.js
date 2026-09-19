@@ -118,6 +118,9 @@ const state = {
   agents: [],
   /** agent the New session sheet will start, when there is a choice */
   newbieAgent: null,
+  /** folder the New session browser is looking at, and its parent */
+  dirPath: null,
+  dirParent: null,
   /** Cursor's own recent chats, whichever project they belong to */
   chats: [],
   lastSeq: 0,
@@ -2273,13 +2276,43 @@ const sameFolder = (a, b) =>
   String(b || '').replace(/[\\/]+$/, '').toLowerCase();
 
 /**
+ * The agent marks in the rail, drawn where the status dot used to be. Cursor's
+ * cube and opencode's square are inlined as monochrome paths tinted with the
+ * current colour, so they belong to the theme instead of fighting it.
+ */
+const CURSOR_MARK = `
+  <svg viewBox="0 0 500 545" fill="currentColor" aria-hidden="true" focusable="false">
+    <path d="m466.383 137.073-206.469-119.2034c-6.63-3.8287-14.811-3.8287-21.441 0l-206.4586 119.2034c-5.5734 3.218-9.0144 9.169-9.0144 15.615v240.375c0 6.436 3.441 12.397 9.0144 15.615l206.4686 119.203c6.63 3.829 14.811 3.829 21.441 0l206.468-119.203c5.574-3.218 9.015-9.17 9.015-15.615v-240.375c0-6.436-3.441-12.397-9.015-15.615zm-12.969 25.25-199.316 345.223c-1.347 2.326-4.904 1.376-4.904-1.319v-226.048c0-4.517-2.414-8.695-6.33-10.963l-195.7577-113.019c-2.3263-1.347-1.3764-4.905 1.3182-4.905h398.6305c5.661 0 9.199 6.136 6.368 11.041h-.009z"/>
+  </svg>`;
+
+const OPENCODE_MARK = `
+  <svg viewBox="0 0 16 20" fill="none" aria-hidden="true" focusable="false">
+    <path d="M12 16H4V8H12V16Z" fill="currentColor" opacity="0.45"/>
+    <path d="M12 4H4V16H12V4ZM16 20H0V0H16V20Z" fill="currentColor" fill-rule="evenodd"/>
+  </svg>`;
+
+/**
+ * The mark of whichever agent drives a row, where the status dot used to sit.
+ * It keeps the dot's job too: the colour says how the session is doing, so a
+ * busy opencode session still reads as busy and not merely as branded.
+ */
+function agentMark(item) {
+  const agent = item.agent === 'opencode' ? 'opencode' : 'cursor';
+  const status = item.session ? item.status || 'idle' : 'resting';
+  const mark = div(`agent-mark agent-${agent} ${status}`);
+  mark.innerHTML = agent === 'opencode' ? OPENCODE_MARK : CURSOR_MARK;
+  mark.title = `${agent} · ${item.session ? status : 'not open here'}`;
+  return mark;
+}
+
+/**
  * One row in the rail — either a session Auto is running, or a chat sitting
  * in Cursor that you have not opened here yet. They look alike on purpose:
- * tapping either one puts you in that conversation.
+ * tapping either one puts you in that conversation. The repo is not repeated
+ * here: rows live inside the repo's accordion, so the title is enough.
  */
 function sessionRow(item) {
   const row = div('session' + (item.id && item.id === state.sessionId ? ' active' : ''));
-  const dot = div(`dot ${item.session ? item.status || 'idle' : 'resting'}`);
   const meta = div('meta');
 
   const name = document.createElement('span');
@@ -2287,25 +2320,7 @@ function sessionRow(item) {
   name.textContent = item.title || 'session';
   meta.append(name);
 
-  // A session that is not a Cursor chat says which agent it is. A badge beats
-  // a subtitle here: the same folder can hold both, and "opencode" in the tag
-  // is the one thing that tells two same-titled rows apart.
-  if (item.session && item.agent && item.agent !== 'cursor') {
-    const tag = document.createElement('span');
-    tag.className = `agent-tag agent-${item.agent}`;
-    tag.textContent = item.agent;
-    tag.title = `${item.agent} session — runs outside Cursor`;
-    meta.append(tag);
-  }
-
-  // Anything with a thread id is the IDE's conversation, whether or not Auto
-  // has opened it yet.
-  const sub = document.createElement('span');
-  sub.className = 'sub';
-  sub.textContent = [item.project, item.chatId ? 'in Cursor' : ''].filter(Boolean).join(' · ');
-  if (sub.textContent) meta.append(sub);
-
-  row.append(dot, meta);
+  row.append(agentMark(item), meta);
 
   // Only Auto's own list can be tidied; a chat belongs to the IDE.
   if (item.session) {
@@ -2330,19 +2345,6 @@ function sessionRow(item) {
   return row;
 }
 
-/** The headings Cursor's own history uses. */
-function dateBucket(ms) {
-  const now = new Date();
-  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const day = 86_400_000;
-  if (!ms) return 'Older';
-  if (ms >= midnight) return 'Today';
-  if (ms >= midnight - day) return 'Yesterday';
-  if (ms >= midnight - 7 * day) return 'Previous 7 days';
-  if (ms >= midnight - 30 * day) return 'Previous 30 days';
-  return new Date(ms).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-}
-
 /**
  * Everything you might want to carry on with, newest first: Auto's sessions
  * and Cursor's chats in one list, since from here they are the same kind of
@@ -2357,8 +2359,8 @@ function conversations() {
     status: s.status,
     folder: s.folder,
     project: (s.folder || '').split(/[\\/]/).filter(Boolean).pop() || '',
-    // Which agent drives it. Cursor is the norm and stays unbadged; anything
-    // else (opencode) is worth a tag, because those sessions are Auto-only.
+    // Which agent drives it — the row is marked with that agent's logo, so an
+    // Auto-only opencode session is told apart from a Cursor chat.
     agent: s.agent || 'cursor',
     at: Date.parse(s.updatedAt || s.createdAt || '') || 0,
   }));
@@ -2380,118 +2382,173 @@ function conversations() {
   return rows.sort((a, b) => b.at - a.at);
 }
 
-/** Which accordion row the rail shows: chats, projects, or neither. */
-const RAIL_SECTION_KEY = 'auto.railSection';
+/**
+ * Whether a repo's conversations are shown. The rail remembers which
+ * accordions you opened, keyed by folder; one with no memory yet opens when it
+ * holds the chat you are in, and stays shut otherwise. There is no
+ * Chats/Projects split any more: one list of repos, each holding its own.
+ */
+const RAIL_REPOS_KEY = 'auto.railRepos';
 
-function railSection() {
+function railOpenRepos() {
   try {
-    const v = localStorage.getItem(RAIL_SECTION_KEY);
-    if (v === 'projects' || v === 'none') return v;
-    return 'chats';
+    const raw = localStorage.getItem(RAIL_REPOS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed) : null;
   } catch {
-    return 'chats';
+    return null;
   }
 }
 
-function rememberRailSection(which) {
+function rememberRailRepos(set) {
   try {
-    localStorage.setItem(
-      RAIL_SECTION_KEY,
-      which === 'projects' || which === 'none' ? which : 'chats',
-    );
+    localStorage.setItem(RAIL_REPOS_KEY, JSON.stringify([...set]));
   } catch {
     /* private mode */
   }
 }
 
-/**
- * One of the two category rows. Opening one closes the other; tapping an
- * open row collapses it (both may be closed).
- */
-function railAccordion(id, label, open) {
-  const details = document.createElement('details');
-  details.className = 'rail-section';
-  details.dataset.section = id;
-  details.open = open;
+const folderKey = (path) => String(path || '').replace(/[\\/]+$/, '').toLowerCase();
+const folderName = (path) => String(path || '').split(/[\\/]/).filter(Boolean).pop() || '';
 
-  const summary = document.createElement('summary');
-  summary.textContent = label;
-  const body = div('rail-section-body');
-  details.append(summary, body);
-
-  details.addEventListener('toggle', () => {
-    // Clearing the rail fires toggle on every open <details> as it leaves the
-    // tree. Those are not user collapses — believing them wrote "none" into
-    // storage, so the next paint always came back with both rows shut.
-    if (!details.isConnected) return;
-    if (details.open) {
-      rememberRailSection(id);
-      for (const other of els.rail.querySelectorAll('.rail-section')) {
-        if (other !== details && other.open) other.open = false;
-      }
-      return;
-    }
-    const anyOpen = [...els.rail.querySelectorAll('.rail-section')].some((d) => d.open);
-    if (!anyOpen) rememberRailSection('none');
-  });
-
-  return { details, body };
+/** Keep the repo holding a session open, so attaching never hides it away. */
+function openRepoFor(folder) {
+  if (!folder) return;
+  const set = railOpenRepos() || new Set();
+  set.add(folderKey(folder));
+  rememberRailRepos(set);
 }
 
 /**
- * The rail is two accordion rows — Chats and Projects — so switching category
- * is one tap, not a scroll to a buried details at the bottom. Chats still
- * reads like Cursor's history (newest first, date headings); Projects is the
- * folders Cursor knows, for starting somewhere new or older desktop chats.
+ * Everything you might carry on with, grouped by the folder it lives in. Chats
+ * and sessions are one list; a repo with no conversations still appears,
+ * because that is where its + starts something new.
+ */
+function railRepos() {
+  const byKey = new Map();
+  const add = (folder, name, inCursor = false, desktopChats = 0) => {
+    const key = folderKey(folder);
+    if (!key) return null;
+    let repo = byKey.get(key);
+    if (!repo) {
+      repo = {
+        folder,
+        name: name || folderName(folder) || folder,
+        inCursor,
+        desktopChats,
+        at: 0,
+        items: [],
+      };
+      byKey.set(key, repo);
+    } else {
+      if (inCursor) repo.inCursor = true;
+      if (desktopChats) repo.desktopChats = Math.max(repo.desktopChats, desktopChats);
+    }
+    return repo;
+  };
+
+  for (const p of state.projects) add(p.path, p.name, p.open, p.desktopChats || 0);
+  for (const s of state.sessions) add(s.folder, folderName(s.folder));
+
+  for (const item of conversations()) {
+    const repo = add(item.folder, item.project);
+    if (!repo) continue;
+    repo.items.push(item);
+    repo.at = Math.max(repo.at, item.at || 0);
+  }
+
+  // Folders with conversations lead, newest first; the rest keep a stable
+  // order, with whatever Cursor has open brought to the top of that group.
+  return [...byKey.values()].sort((a, b) => {
+    const aHas = a.items.length > 0;
+    const bHas = b.items.length > 0;
+    if (aHas !== bHas) return aHas ? -1 : 1;
+    if (aHas && b.at !== a.at) return b.at - a.at;
+    if (a.inCursor !== b.inCursor) return a.inCursor ? -1 : 1;
+    return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+  });
+}
+
+/** One repo: its name and + in the summary, its conversations inside. */
+function repoSection(repo, stored, activeKey) {
+  const key = folderKey(repo.folder);
+  const details = document.createElement('details');
+  details.className = 'repo';
+  details.dataset.folder = repo.folder;
+  details.open = stored ? stored.has(key) : Boolean(activeKey && key === activeKey);
+
+  const summary = document.createElement('summary');
+  summary.className = 'repo-head';
+
+  const name = document.createElement('span');
+  name.className = 'repo-name';
+  name.textContent = repo.name;
+  name.title = repo.folder;
+  summary.append(name);
+
+  if (repo.inCursor) {
+    const open = document.createElement('span');
+    open.className = 'repo-open';
+    open.textContent = 'open';
+    open.title = 'Open in Cursor';
+    summary.append(open);
+  }
+
+  const count = document.createElement('span');
+  count.className = 'repo-count';
+  count.textContent = repo.items.length ? String(repo.items.length) : '';
+  summary.append(count);
+
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'repo-add';
+  add.textContent = '+';
+  add.title = `New session in ${repo.name || 'this folder'}`;
+  add.setAttribute('aria-label', add.title);
+  // insideControl stops the summary from toggling, and handles the hover-then-
+  // tap a phone gives a control that lives inside a clickable row.
+  insideControl(add, () => createSession(repo.folder));
+  summary.append(add);
+
+  const body = div('repo-body');
+  if (!repo.items.length) {
+    body.append(said('rail-empty', 'No chats yet.'));
+  } else {
+    for (const item of repo.items) body.append(sessionRow(item));
+  }
+  const desktop = desktopChatsBlock(repo);
+  if (desktop) body.append(desktop);
+
+  details.append(summary, body);
+  details.addEventListener('toggle', () => {
+    // Clearing the rail fires toggle as these leave the tree; not a collapse.
+    if (!details.isConnected) return;
+    const set = railOpenRepos() || new Set();
+    if (details.open) set.add(key);
+    else set.delete(key);
+    rememberRailRepos(set);
+  });
+  return details;
+}
+
+/**
+ * The rail is the folders you work in, newest activity first, each one an
+ * accordion holding the chats and sessions inside it. Repos replace the old
+ * Chats/Projects rows and their date headings: a conversation always lives
+ * somewhere, so grouping by where beats grouping by when.
  */
 function renderRail() {
   els.rail.innerHTML = '';
-  const open = railSection();
-  const items = conversations();
-
-  const chats = railAccordion('chats', `Chats (${items.length})`, open === 'chats');
-  let heading = null;
-  for (const item of items) {
-    const bucket = dateBucket(item.at);
-    if (bucket !== heading) {
-      heading = bucket;
-      const head = div('rail-group');
-      head.textContent = bucket;
-      chats.body.appendChild(head);
-    }
-    chats.body.appendChild(sessionRow(item));
+  const repos = railRepos();
+  if (!repos.length) {
+    els.rail.append(said('rail-empty', 'No projects yet — start a new session.'));
+    return;
   }
-  if (!items.length) {
-    const empty = div('rail-empty');
-    empty.textContent = 'No conversations yet.';
-    chats.body.appendChild(empty);
-  }
-
-  const projects = state.projects.length
-    ? state.projects
-    : [...new Set(state.sessions.map((s) => s.folder).filter(Boolean))].map((path) => ({
-        path,
-        name: (path || '').split(/[\\/]/).pop(),
-        open: false,
-      }));
-  const projectsPanel = railAccordion(
-    'projects',
-    `Projects (${projects.length})`,
-    open === 'projects',
-  );
-  if (!projects.length) {
-    const empty = div('rail-empty');
-    empty.textContent = 'No projects yet — start a new session.';
-    projectsPanel.body.appendChild(empty);
-  } else {
-    for (const project of projects) {
-      projectsPanel.body.appendChild(projectHeader(project, 0));
-      const desktop = desktopChatsBlock(project);
-      if (desktop) projectsPanel.body.appendChild(desktop);
-    }
-  }
-
-  els.rail.append(chats.details, projectsPanel.details);
+  const stored = railOpenRepos();
+  const mine = state.sessions.find((s) => s.id === state.sessionId);
+  const activeKey = folderKey(mine?.folder);
+  for (const repo of repos) els.rail.append(repoSection(repo, stored, activeKey));
 }
 
 /**
@@ -2499,13 +2556,13 @@ function renderRail() {
  * when you ask for them; opening one gives you a session pointing at the
  * IDE's own thread, which both ends then share.
  */
-function desktopChatsBlock(project) {
-  if (!project.desktopChats || !project.path) return null;
+function desktopChatsBlock(repo) {
+  if (!repo.desktopChats || !repo.folder) return null;
 
   const box = document.createElement('details');
   box.className = 'desktop-chats';
   const summary = document.createElement('summary');
-  summary.textContent = `${project.desktopChats} desktop ${project.desktopChats === 1 ? 'chat' : 'chats'}`;
+  summary.textContent = `${repo.desktopChats} desktop ${repo.desktopChats === 1 ? 'chat' : 'chats'}`;
   box.append(summary);
 
   const body = div('desktop-chat-list');
@@ -2514,10 +2571,10 @@ function desktopChatsBlock(project) {
 
   box.ontoggle = () => {
     if (!box.open) return;
-    state.chatTarget = project.path;
-    sendOp({ op: 'desktop.chats', folder: project.path });
+    state.chatTarget = repo.folder;
+    sendOp({ op: 'desktop.chats', folder: repo.folder });
   };
-  box.dataset.folder = project.path;
+  box.dataset.folder = repo.folder;
   return box;
 }
 
@@ -2529,12 +2586,19 @@ function renderDesktopChats(folder, chats) {
   const body = box.querySelector('.desktop-chat-list');
   body.innerHTML = '';
 
-  if (!chats.length) {
-    body.textContent = 'No chats found for this folder.';
+  // Recent chats are already rows in this repo; this list is for the older
+  // ones that did not fit, so do not draw the same conversation twice.
+  const shown = new Set(conversations().map((r) => r.chatId).filter(Boolean));
+  const rest = chats.filter((c) => !shown.has(c.id));
+
+  if (!rest.length) {
+    body.textContent = chats.length
+      ? 'No more chats for this folder.'
+      : 'No chats found for this folder.';
     return;
   }
 
-  for (const c of chats) {
+  for (const c of rest) {
     const row = div('desktop-chat');
     const name = document.createElement('span');
     name.className = 'name';
@@ -2555,44 +2619,6 @@ function renderDesktopChats(folder, chats) {
     });
     body.append(row);
   }
-}
-
-function projectHeader(project, count) {
-  const head = div('project' + (project.open ? ' open' : ''));
-
-  const name = document.createElement('span');
-  name.className = 'project-name';
-  name.textContent = project.name || project.path || 'Other';
-  name.title = project.path || '';
-
-  const note = document.createElement('span');
-  note.className = 'project-note';
-  const bits = [];
-  if (project.open) bits.push('open in Cursor');
-  if (count) bits.push(`${count} here`);
-  else if (project.desktopChats) bits.push(`${project.desktopChats} chats`);
-  note.textContent = bits.join(' · ');
-
-  const add = document.createElement('button');
-  add.className = 'close';
-  add.textContent = '+';
-  add.title = `New session in ${project.name || 'this folder'}`;
-  add.onclick = (e) => {
-    e.stopPropagation();
-    if (project.path) createSession(project.path);
-  };
-
-  // Tapping the project is the phone-sized target: go to its newest session,
-  // or start one if it has none.
-  actsAsButton(head, () => {
-    if (!project.path) return;
-    const mine = state.sessions.filter((s) => sameFolder(s.folder, project.path));
-    if (mine.length) attach(mine[0].id);
-    else createSession(project.path);
-  });
-
-  head.append(name, note, add);
-  return head;
 }
 
 /**
@@ -3146,6 +3172,9 @@ function attach(sessionId) {
   }
   saveDraft(state.sessionId);
   setPlanSheet(false);
+  // Reveal the repo this chat lives in, so it is never hidden by a shut
+  // accordion when you tap a row in a differently-grouped list.
+  openRepoFor(state.sessions.find((s) => s.id === sessionId)?.folder);
   state.sessionId = sessionId;
   rememberSession(sessionId);
   state.pendingEchoes = [];
@@ -3280,7 +3309,12 @@ function connect() {
       state.sessions = msg.sessions;
       renderRail();
       const mine = msg.sessions.find((s) => s.id === state.sessionId);
-      if (mine) applyMeta(mine);
+      if (mine) {
+        applyMeta(mine);
+        // A change this tab asked for is resolved server-side (Auto off picks
+        // a model), so remember what it settled on once it comes back.
+        if (state.modelUpdating && mine.model) rememberModel(mine.agent || 'cursor', mine.model);
+      }
       return;
     }
 
@@ -3313,6 +3347,8 @@ function connect() {
       if (msg.chats) state.chats = msg.chats;
       state.replaying = true;
       applyMeta(msg.meta);
+      // The chat being opened must be reachable, even in a repo left shut.
+      openRepoFor(msg.meta?.folder);
       if (msg.meta?.kind === 'desktop') {
         sendOp({ op: 'session.modelControls', sessionId: msg.sessionId });
       } else {
@@ -3399,6 +3435,11 @@ function connect() {
       state.projects = msg.projects || [];
       renderRail();
       renderNewbie();
+      return;
+    }
+
+    if (msg.type === 'dirs') {
+      renderDirBrowser(msg);
       return;
     }
 
@@ -3540,6 +3581,9 @@ function connect() {
       if (!els.modelSheet.hidden && state.modelUpdating) {
         setModelUpdating(false);
         els.modelStatus.textContent = msg.message;
+      }
+      if (!$('newbie').hidden && !$('newbie-browser').hidden) {
+        $('newbie-note').textContent = msg.message;
       }
       render({ kind: 'error', text: msg.message });
     }
@@ -3896,6 +3940,7 @@ function setNewbie(open) {
   $('newbie-filter').value = '';
   $('newbie-path').value = '';
   $('newbie-note').textContent = '';
+  dirBrowserOpen(false);
   renderNewbie();
   // Start each sheet on the configured default agent, not last visit's choice.
   state.newbieAgent = null;
@@ -3989,7 +4034,8 @@ function renderAgentPicker() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'agent-choice' + (agent.name === state.newbieAgent ? ' selected' : '');
-    btn.textContent = agent.name;
+    btn.append(agentMark({ agent: agent.name, session: true, status: 'idle' }));
+    btn.append(document.createTextNode(agent.name));
     btn.title =
       agent.name === 'opencode'
         ? 'Runs opencode over ACP — approvals and model are opencode\'s own'
@@ -4006,6 +4052,97 @@ function renderAgentPicker() {
       : 'A Cursor chat when the folder is open, otherwise Auto hosts the agent.';
 }
 
+/** The folder SVG a directory-browser row carries. */
+const FOLDER_ICON = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+  </svg>`;
+
+/**
+ * Browsing the machine for a folder the project list does not know. The host
+ * lists drives and directories; a folder is entered by tapping it and chosen
+ * with one button, because a phone has no file dialog worth using.
+ */
+function dirBrowserOpen(open) {
+  const panel = $('newbie-browser');
+  if (!panel) return;
+  panel.hidden = !open;
+  if (open) return;
+  state.dirPath = null;
+  state.dirParent = null;
+  $('dir-list').innerHTML = '';
+}
+
+function browseTo(path) {
+  dirBrowserOpen(true);
+  $('newbie-note').textContent = 'Loading…';
+  sendOp({ op: 'fs.list', ...(path ? { path } : {}) });
+}
+
+function renderDirBrowser(msg) {
+  state.dirPath = msg.path || null;
+  state.dirParent = msg.parent || null;
+  const list = $('dir-list');
+  if (!list) return;
+  list.innerHTML = '';
+  $('newbie-note').textContent = '';
+
+  const where = msg.path || 'This computer';
+  $('dir-path').textContent = where;
+  $('dir-path').title = where;
+  $('newbie-path').value = msg.path || '';
+  $('dir-up').disabled = !msg.path;
+  $('dir-choose').hidden = !msg.path;
+
+  const entries = msg.entries || [];
+  for (const entry of entries) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'dir-row';
+    const icon = div('dir-icon');
+    icon.innerHTML = FOLDER_ICON;
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = entry.name;
+    name.title = entry.path;
+    row.append(icon, name);
+    row.onclick = () => browseTo(entry.path);
+    list.append(row);
+  }
+  if (!entries.length) list.append(said('queue-note', 'No folders here.'));
+}
+
+/**
+ * The model you last chose, remembered per agent. A new session opens on it
+ * instead of Auto-select — picking "Deepseek" once should not mean picking it
+ * again every time. Kept per agent because model ids mean nothing across
+ * catalogs: an opencode slug is not a Cursor one.
+ */
+const modelKey = (agent) => `auto.model.${agent || 'cursor'}`;
+
+function preferredModel(agent) {
+  try {
+    return localStorage.getItem(modelKey(agent)) || null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberModel(agent, modelId) {
+  if (!modelId) return;
+  try {
+    localStorage.setItem(modelKey(agent), modelId);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Which agent drives the session in view, for remembering its model. */
+function sessionAgent(sessionId = state.sessionId) {
+  return state.sessions.find((s) => s.id === sessionId)?.agent || 'cursor';
+}
+
 function createSession(folder, agent = null) {
   const path = String(folder || '').trim();
   if (!path) return;
@@ -4013,7 +4150,17 @@ function createSession(folder, agent = null) {
   // Focus now (user gesture) and again after attach lands the empty chat.
   state.focusComposer = true;
   focusComposer();
-  sendOp({ op: 'session.create', folder: path, ...(agent ? { agent } : {}) });
+  // The host defaults the agent when we do not name one; naming the default
+  // here lets the remembered model travel with it.
+  const who =
+    agent || state.newbieAgent || state.agents.find((a) => a.default)?.name || null;
+  const model = preferredModel(who || 'cursor');
+  sendOp({
+    op: 'session.create',
+    folder: path,
+    ...(who ? { agent: who } : {}),
+    ...(model ? { model } : {}),
+  });
 }
 
 /** Same-repo empty chat from the topbar — no project picker. */
@@ -4038,6 +4185,16 @@ $('newbie-create').onclick = () => createSession($('newbie-path').value, state.n
 $('newbie-path').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') createSession($('newbie-path').value, state.newbieAgent);
 });
+$('newbie-browse').onclick = () =>
+  browseTo($('newbie-path').value.trim() || state.dirPath || null);
+$('dir-up').onclick = () => {
+  if (state.dirParent) browseTo(state.dirParent);
+};
+$('dir-choose').onclick = () => {
+  if (!state.dirPath) return;
+  $('newbie-path').value = state.dirPath;
+  dirBrowserOpen(false);
+};
 
 $('restart').onclick = () => {
   if (!confirm('Restart Auto? It waits for the current turn, then reconnects.')) return;
@@ -4408,13 +4565,17 @@ els.model.onchange = () => {
   els.modelAuto.checked = false;
   setModelUpdating(true);
   updateModelPresentation();
+  rememberModel(sessionAgent(), els.model.value);
   sendOp({ op: 'session.model', sessionId: state.sessionId, modelId: els.model.value });
 };
 els.modelAuto.onchange = () => {
   const automatic = els.modelAuto.checked;
   setModelPage('settings');
   setModelUpdating(true);
-  if (automatic) setModelSheet(false);
+  if (automatic) {
+    rememberModel(sessionAgent(), 'default[]');
+    setModelSheet(false);
+  }
   sendOp({
     op: 'session.auto',
     sessionId: state.sessionId,

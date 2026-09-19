@@ -343,7 +343,17 @@
       <div id="newbie-list"></div>
       <div class="sheet-row">
         <input id="newbie-path" type="text" placeholder="Or a folder path…" aria-label="Folder path" />
+        <button id="newbie-browse" type="button" title="Browse folders on this machine">Browse…</button>
         <button id="newbie-create">Create</button>
+      </div>
+      <!-- Drives and folders, for a project the list has never seen. -->
+      <div id="newbie-browser" hidden>
+        <div class="dir-head">
+          <button id="dir-up" class="icon" type="button" title="Parent folder" aria-label="Parent folder">↑</button>
+          <span id="dir-path" class="dir-path"></span>
+          <button id="dir-choose" class="dir-choose" type="button" title="Use this folder">Use this folder</button>
+        </div>
+        <div id="dir-list" class="dir-list"></div>
       </div>
       <div class="sheet-note" id="newbie-note"></div>
     </section>

@@ -444,10 +444,12 @@ export class SessionManager extends EventEmitter {
    * opencode has no desktop window to drive, so its sessions are Auto-only
    * from the first keystroke.
    */
-  async startInIde({ folder, title, policy, mode, agent } = {}) {
+  async startInIde({ folder, title, policy, mode, agent, model } = {}) {
     const dir = folder || this.defaultFolder;
     const who = isAgentName(agent) ? agent : this.defaultAgent;
-    if (who !== 'cursor') return this.#startAgentOnly({ folder: dir, title, policy, mode, agent: who });
+    if (who !== 'cursor') {
+      return this.#startAgentOnly({ folder: dir, title, policy, mode, agent: who, model });
+    }
 
     let opened = await this.cursor.newChat({ folder: dir }).catch((err) => ({
       status: 'error',
@@ -460,7 +462,7 @@ export class SessionManager extends EventEmitter {
         title,
         fresh: true,
       });
-      await this.#defaultToAutoSelect(meta.id);
+      await this.#preferredOrAutoSelect(meta.id, model);
       return meta;
     }
 
@@ -485,7 +487,7 @@ export class SessionManager extends EventEmitter {
             title,
             fresh: true,
           });
-          await this.#defaultToAutoSelect(meta.id);
+          await this.#preferredOrAutoSelect(meta.id, model);
           return meta;
         }
       }
@@ -494,8 +496,10 @@ export class SessionManager extends EventEmitter {
     const meta = this.create({ folder: dir, title, policy, mode });
     this.setActive(meta.id);
     await this.transcripts.get(meta.id);
-    // Prefer Auto-select once the agent process starts (see ensureLive).
-    this.#update(meta.id, { model: 'default[]', modelName: this.modelName('default[]') });
+    // A remembered model, else Auto-select, is applied once the process starts
+    // (see ensureLive) — a fresh Cursor chat would otherwise inherit the last.
+    const first = model && model !== 'default[]' ? model : 'default[]';
+    this.#update(meta.id, { model: first, modelName: this.modelName(first) });
     this.#record(meta.id, KIND.notice, { text: this.#whyNotInIde(dir, opened, ready) });
     this.emit('log', `started Auto-only session "${meta.title}" (${opened.status})`);
     return meta;
@@ -509,10 +513,15 @@ export class SessionManager extends EventEmitter {
    * model and mode pickers are ready by the time the sheet is drawn, and the
    * transcript says plainly which agent this conversation drives.
    */
-  async #startAgentOnly({ folder, title, policy, mode, agent }) {
+  async #startAgentOnly({ folder, title, policy, mode, agent, model }) {
     const meta = this.create({ folder, title, policy, mode, agent });
     this.setActive(meta.id);
     await this.transcripts.get(meta.id);
+    // Remembering the model means a new opencode session opens on the one you
+    // last chose. Set before ensureLive, which applies it before the first prompt.
+    if (model && model !== 'default[]') {
+      this.#update(meta.id, { model, modelName: this.modelName(model, agent) });
+    }
     this.#record(meta.id, KIND.notice, {
       text: `This session runs the ${agent} agent over ACP — it is not a Cursor chat, so approvals, model, and mode are this agent's own.`,
     });
@@ -1421,6 +1430,22 @@ export class SessionManager extends EventEmitter {
     }
     this.#update(id, { model: 'default[]', modelName: this.modelName('default[]') });
     return true;
+  }
+
+  /**
+   * A new chat opens on the model you last chose, when the client remembered
+   * one; otherwise it falls back to Auto-select. A remembered model that the
+   * agent no longer offers is refused with a notice rather than left silent,
+   * and the chat still gets a working default.
+   */
+  async #preferredOrAutoSelect(id, model) {
+    if (!model || model === 'default[]') return this.#defaultToAutoSelect(id);
+    try {
+      if (await this.setModel(id, model)) return true;
+    } catch (err) {
+      this.emit('log', `[${this.meta.get(id)?.title}] preferred model ${model} refused: ${err.message}`);
+    }
+    return this.#defaultToAutoSelect(id);
   }
 
   #cursorsNameFor(wanted) {
