@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-19
+* **Update**: Sessions driven by an agent other than Cursor carry an **opencode** tag in the web rail, so an Auto-only session is told apart from a Cursor chat in the same folder.
 * **Feature**: Auto can remote-control **opencode** as well as Cursor. `src/acp/resolve.mjs` is now an agent registry (`cursor`, `opencode`); `opencode` is located on `PATH` or via `OPENCODE_BIN`, and `AcpClient` spawns whichever agent a session records.
 * **Feature**: Sessions started outside Auto are adopted. `syncFromAgent` now asks **both** agents for `session/list` (boot and "Refresh sessions") and registers unseen ones agent-tagged, deduped, and only when the folder still exists; their history is captured from the first `session/load` replay so the phone can read it.
 * **Fix**: Resume suppression now lasts until the first prompt. opencode sends part of its replay as notifications after `loadSession` resolves, so clearing the flag at the reply appended history as new records on every restart.

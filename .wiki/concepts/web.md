@@ -172,7 +172,9 @@ meta also asks for `interactive-widget=resizes-content` where supported.
   the drawer) must not treat the teardown `toggle` as a collapse — that used
   to write "neither" and always reopen shut. A left swipe's click-guard
   expires after the gesture so the next open can switch chats on the first
-  tap.
+  tap. A session not driven by Cursor carries a small **opencode** tag beside
+  its name, so an Auto-only agent session is not mistaken for a Cursor chat
+  in the same folder.
 - The [queue](queue.md) above the chat box, with reword / send now / delete.
 - Tool calls the way Cursor groups them — see [tool lanes](tool-lanes.md).
 - Diffs, thinking (folded when the block ends, timed from the record so a
