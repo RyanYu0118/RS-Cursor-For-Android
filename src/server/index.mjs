@@ -60,9 +60,11 @@ const sessions = new SessionManager({
   stateDir: STATE_DIR,
   defaultFolder: DEFAULT_FOLDER,
   defaultPolicy: process.env.AUTO_POLICY || POLICY.auto,
+  defaultAgent: process.env.AUTO_AGENT || 'cursor',
 }).init();
 
 console.log(`[auto] approvals default to "${sessions.defaultPolicy}"`);
+console.log(`[auto] new sessions drive the "${sessions.defaultAgent}" agent`);
 console.log(`[auto] host is "${hostIdentity.label()}"`);
 
 sessions.on('log', (m) => console.log(`[sessions] ${m}`));
@@ -158,7 +160,7 @@ sessions.on('sessions', (list) => broadcast({ type: 'sessions', sessions: list }
 sessions.on('queue', ({ sessionId, ...queue }) =>
   broadcast({ type: 'queue', sessionId, ...queue }, sessionId),
 );
-sessions.on('catalog', (catalog) => broadcast({ type: 'catalog', catalog }));
+sessions.on('catalog', (payload) => broadcast({ type: 'catalog', ...payload }));
 
 // Terminal output reaches clients as transcript records; these only announce
 // the widget's existence so the UI knows to open or close a pane.
@@ -230,7 +232,7 @@ const OPS = {
       pending: sessions.permissions.list(id),
       terminals: sessions.terminals.list(id),
       terminalsAvailable: sessions.terminals.available,
-      catalog: sessions.catalog,
+      catalog: sessions.catalogFor(sessions.get(id)?.agent),
       projects: projectList(),
       chats: recentChats(),
     });
@@ -238,7 +240,7 @@ const OPS = {
     // The model list only exists once an agent has started. Warm it in the
     // background on a cold host so the picker fills shortly after you look at
     // it, rather than staying empty until the first prompt.
-    if (!sessions.catalog.models.length) {
+    if (!sessions.catalogFor(sessions.get(id)?.agent).models.length) {
       sessions.ensureLive(id).catch((err) => console.error(`[catalog] ${err.message}`));
     }
   },
@@ -318,8 +320,13 @@ const OPS = {
     // that cannot see its own working directory.
     const folder = msg.folder ? normalizeFolder(msg.folder) : undefined;
     if (folder && !existsSync(folder)) throw new Error(`No such folder: ${folder}`);
-    const meta = await sessions.startInIde({ folder, title: msg.title });
+    const meta = await sessions.startInIde({ folder, title: msg.title, agent: msg.agent });
     return OPS.attach(ws, state, { sessionId: meta.id });
+  },
+
+  /** Which agents are installed, so a client only offers usable choices. */
+  'agents.list'(ws) {
+    send(ws, { type: 'agents', agents: sessions.agents() });
   },
 
   async 'sessions.sync'(ws) {
@@ -785,7 +792,7 @@ async function route(req, res) {
     if (!existsSync(folder)) return json(res, { error: `No such folder: ${folder}` }, 400);
 
     let meta = sessions.list().find((s) => sameFolder(s.folder, folder));
-    if (!meta) meta = await sessions.startInIde({ folder, title: body.title });
+    if (!meta) meta = await sessions.startInIde({ folder, title: body.title, agent: body.agent });
     sessions.setActive(meta.id);
     return json(res, { session: sessions.get(meta.id), activeId: sessions.activeId });
   }
@@ -853,6 +860,7 @@ wss.on('connection', async (ws, req) => {
     sessions: sessions.list(),
     activeId: sessions.activeId,
     policies: Object.values(POLICY),
+    agents: sessions.agents(),
     chats: recentChats(),
     host: hostIdentity.snapshot(),
     webBuild: webBuildId(assetTag),

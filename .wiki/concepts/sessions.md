@@ -8,7 +8,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Session manager
-generated: { by: agent, at: 2026-08-16T06:35:00Z }
+generated: { by: agent, at: 2026-09-19T00:00:00Z }
 ---
 
 # Sessions
@@ -23,13 +23,19 @@ ours — messages go into Cursor and come back from its database.
 
 ## Kinds
 
-| `kind` | Where the conversation lives |
-| --- | --- |
-| `desktop` | A thread in the Cursor app. Model, mode, and approvals are Cursor's. |
-| (ACP) | A `cursor-agent acp` child. Auto sets mode/model and brokers permissions. |
+| `kind` | `agent` | Where the conversation lives |
+| --- | --- | --- |
+| `desktop` | `cursor` | A thread in the Cursor app. Model, mode, and approvals are Cursor's. |
+| (ACP) | `cursor` | A `cursor-agent acp` child. Auto sets mode/model and brokers permissions. |
+| (ACP) | `opencode` | An `opencode acp` child. Auto-only — there is no window to drive. |
 
-New work starts in the IDE when it can (`startInIde`). Failure falls back to
-ACP and writes a [notice](transcripts.md) saying why.
+Every session records its `agent`; it does not change for the life of the
+conversation. `AUTO_AGENT` sets the default for new sessions and the web New
+session sheet / Telegram `/new` override it. New Cursor work starts in the IDE
+when it can (`startInIde`), falling back to ACP with a
+[notice](transcripts.md) saying why; opencode sessions skip the IDE entirely.
+The model and mode catalogs are per agent (`catalogFor`), so one agent's list
+never refills the other's picker.
 
 ## Status
 

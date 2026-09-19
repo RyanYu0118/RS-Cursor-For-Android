@@ -1,9 +1,19 @@
 # Directory Update Log
 
+## 2026-09-19
+* **Feature**: Auto can remote-control **opencode** as well as Cursor. `src/acp/resolve.mjs` is now an agent registry (`cursor`, `opencode`); `opencode` is located on `PATH` or via `OPENCODE_BIN`, and `AcpClient` spawns whichever agent a session records.
+* **Update**: Sessions carry an `agent` field. `AUTO_AGENT` sets the new-session default; the web New session sheet and Telegram `/new [agent] [folder]` (plus `/agents`) choose per session, and a session cannot change agents.
+* **Update**: opencode sessions are Auto-only — they never open a Cursor chat. They stream thinking, prose, tool calls, and usage over ACP, and approvals/queue/transcripts work unchanged.
+* **Update**: Cursor returns `models`/`modes`; opencode returns `configOptions`. `src/acp/config-options.mjs` flattens both to one picker shape and switches via `session/set_config_option` for opencode; catalogs are per agent so one never refills the other's picker.
+* **Test**: `npm test` now covers the agent registry, config-option normalisation, and that an opencode session is Auto-only and agent-tagged. Verified live against opencode 1.18.31: prompt, tool call, model and mode switch.
+
 ## 2026-09-09
 * **Fix**: Installed iOS topbar/rail now floor `safe-area-inset-top` at 59px (and the same rule is inlined in the shell) — when that env is `0` the title was sitting under the translucent status bar and looking frosted.
 
 ## 2026-08-24
+* **Fix**: iOS Home Screen status bar is opaque (`black`) instead of `black-translucent` — the chat title and project path were sitting under the system bar's frosted blur, which read as the header gradually going soft (often blue-tinted).
+* **Fix**: The model sheet veil no longer uses `backdrop-filter` — blur bled upward onto the topbar (and picked up a blue cast from the chat); a flat scrim dims the chat instead.
+* **Fix**: The model sheet now starts below the topbar instead of covering it with a fading blur veil — offsetting the veil alone was not enough on WebKit; the header stays sharp while only the chat softens.
 * **Fix**: The model sheet now tracks the visual viewport like New session does, so a short filtered result list stays above the iOS keyboard instead of bottom-anchoring under it.
 * **Update**: Browser frames and explicit screenshots emulate the attached web client's `prefers-color-scheme` (dark by default until one attaches), so captures match what that client is showing.
 * **Update**: The model list keeps its search box pinned while rows scroll, and drops the under-search `$ / $$ / $$$` legend; exact rates remain on the badge tooltip and accessible label.

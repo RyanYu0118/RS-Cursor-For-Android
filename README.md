@@ -10,6 +10,12 @@ You get the agent’s full output, not a summary: streamed prose, thinking, ever
 
 **Unofficial.** Auto is not affiliated with Anysphere or Cursor. It talks to Cursor through the agent CLI, the IDE’s debug port, and local state Cursor already keeps on disk. Cursor updates can break that. Use at your own risk and check Cursor’s terms for your account.
 
+## opencode sessions
+
+Auto can also drive [opencode](https://opencode.ai) over the same ACP protocol. Install its CLI (`npm i -g opencode-ai`, or point `OPENCODE_BIN` at the executable) and it appears as an agent in the web's **New session** sheet and Telegram's `/agents`. Set `AUTO_AGENT=opencode` to make it the default.
+
+An opencode session is **Auto-only** — opencode has no window for Auto to type into, so it runs as a background `opencode acp` process. Prompts, streaming, tools, approvals, the queue, and the transcript all work as they do for Cursor, and the model and mode pickers are read from opencode itself. A session keeps the agent it was started with.
+
 ## Security
 
 Auto has **no login of its own**. Access control is [Tailscale](https://tailscale.com): a private mesh VPN so only your devices can open `http://100.x.y.z:4331/`. Do not port-forward 4331. Do not enable Tailscale Funnel on that port.

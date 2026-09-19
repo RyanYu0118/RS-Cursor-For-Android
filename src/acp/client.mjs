@@ -1,15 +1,16 @@
 /**
- * ACP client for the Cursor Agent CLI.
+ * ACP client for an agent CLI.
  *
- * Owns one `cursor-agent acp` subprocess and exposes the agent-side methods,
- * while serving the client-side methods (permissions, filesystem, terminals)
- * out to injected handlers. Everything above this layer deals in session ids
- * and update events, never in JSON-RPC.
+ * Owns one `<agent> acp` subprocess and exposes the agent-side methods, while
+ * serving the client-side methods (permissions, filesystem, terminals) out to
+ * injected handlers. Everything above this layer deals in session ids and
+ * update events, never in JSON-RPC, so Cursor's agent and opencode are
+ * interchangeable here.
  */
 import { EventEmitter } from 'node:events';
 import { spawn } from 'node:child_process';
 import { JsonRpcPeer, RpcError, RPC_ERRORS } from './jsonrpc.mjs';
-import { resolveCursorAgent } from './resolve.mjs';
+import { resolveAgent } from './resolve.mjs';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -25,12 +26,14 @@ export class AcpClient extends EventEmitter {
    * @param {object} [opts.handlers] client-side method implementations
    * @param {string} [opts.cwd] working directory for the agent process
    * @param {object} [opts.env] extra environment variables
+   * @param {'cursor'|'opencode'} [opts.agent] which CLI to spawn
    */
-  constructor({ handlers = {}, cwd = process.cwd(), env = {} } = {}) {
+  constructor({ handlers = {}, cwd = process.cwd(), env = {}, agent = 'cursor' } = {}) {
     super();
     this.handlers = handlers;
     this.cwd = cwd;
     this.env = env;
+    this.agent = agent;
     this.child = null;
     this.peer = null;
     this.initialized = null;
@@ -45,8 +48,8 @@ export class AcpClient extends EventEmitter {
   async start() {
     if (this.initialized) return this.initialized;
 
-    const bin = resolveCursorAgent();
-    this.emit('log', `spawning cursor-agent acp via ${bin.via}`);
+    const bin = resolveAgent(this.agent);
+    this.emit('log', `spawning ${bin.name} acp via ${bin.via}`);
 
     this.child = spawn(bin.command, [...bin.args, 'acp'], {
       cwd: this.cwd,
@@ -171,6 +174,21 @@ export class AcpClient extends EventEmitter {
   /** Model ids carry their options, e.g. `claude-opus-5[thinking=true,...]`. */
   setModel({ sessionId, modelId }) {
     return this.#requirePeer().request('session/set_model', { sessionId, modelId });
+  }
+
+  /**
+   * Set a declarative config option (ACP's `session/set_config_option`).
+   *
+   * opencode exposes models and modes this way rather than through Cursor's
+   * `session/set_model` / `session/set_mode`. Returns the updated
+   * `{ configOptions }` so the caller can refresh its pickers.
+   */
+  setConfigOption({ sessionId, configId, value }) {
+    return this.#requirePeer().request(
+      'session/set_config_option',
+      { sessionId, configId, value },
+      { timeoutMs: 30_000 },
+    );
   }
 
   /** Escape hatch for protocol methods this wrapper does not model yet. */

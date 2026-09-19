@@ -73,6 +73,22 @@ export function mapUpdate(update) {
     case 'current_mode_update':
       return { kind: KIND.sessionInfo, payload: { modeId: update.currentModeId } };
 
+    // opencode declares its pickers as config options and announces the new
+    // current values after a change. Record only those values: the full list is
+    // hundreds of models and belongs in the catalog, not in the transcript.
+    case 'config_option_update': {
+      const opts = Array.isArray(update.configOptions) ? update.configOptions : [];
+      const model = opts.find((c) => c.category === 'model' || c.id === 'model');
+      const mode = opts.find((c) => c.category === 'mode' || c.id === 'mode');
+      return {
+        kind: KIND.sessionInfo,
+        payload: {
+          ...(model?.currentValue ? { modelId: model.currentValue } : {}),
+          ...(mode?.currentValue ? { modeId: mode.currentValue } : {}),
+        },
+      };
+    }
+
     default:
       return { kind: `acp:${t || 'unknown'}`, payload: { raw: update } };
   }

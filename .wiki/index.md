@@ -4,7 +4,7 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 
 # Concepts
 
-* [Sessions](concepts/sessions.md) - One conversation, desktop or ACP, with its own transcript
+* [Sessions](concepts/sessions.md) - One conversation, desktop or ACP, tagged with its agent, with its own transcript
 * [Transcripts](concepts/transcripts.md) - Append-only JSONL; clients cache the tail, host stays authoritative
 * [Host](concepts/host.md) - One process on 4331: HTTP, WebSocket, restart, machine name
 * [Supervise](concepts/supervise.md) - Watchdog; runs setup checks; prints the Tailscale URL
@@ -14,7 +14,7 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [Desktop bridge](concepts/desktop-bridge.md) - Named-pipe send, gate, outbox
 * [Desktop threads](concepts/desktop-threads.md) - Reading replies from `state.vscdb`
 * [Tool lanes](concepts/tool-lanes.md) - Activity / file-change / card / hide for tool bubbles
-* [ACP](concepts/acp.md) - Fallback `cursor-agent acp` sessions
+* [ACP](concepts/acp.md) - `cursor-agent acp` or `opencode acp` sessions, one picker shape for both
 * [Approvals](concepts/approvals.md) - Permissions, automatic mode transitions, questions, plans, and deliberate Keep / Undo / Redo
 * [Queue](concepts/queue.md) - Messages waiting behind a turn, in Auto or in Cursor
 * [Telegram](concepts/telegram.md) - Bot projection with model price bands

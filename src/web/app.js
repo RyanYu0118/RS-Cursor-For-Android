@@ -114,6 +114,10 @@ const state = {
   sessionId: null,
   sessions: [],
   projects: [],
+  /** agents the host can drive: {name, available, default, reason} */
+  agents: [],
+  /** agent the New session sheet will start, when there is a choice */
+  newbieAgent: null,
   /** Cursor's own recent chats, whichever project they belong to */
   chats: [],
   lastSeq: 0,
@@ -2805,10 +2809,7 @@ function setModelSheet(open) {
     return;
   }
   clearTimeout(state.modelSheetTimer);
-  // The veil is for what the sheet covers; the topbar is chrome, not chat.
-  if (els.topbar) {
-    els.modelSheet.style.setProperty('--topbar-h', `${Math.round(els.topbar.offsetHeight)}px`);
-  }
+  syncTopbarHeight();
   els.modelSheet.hidden = false;
   setModelPage('settings');
   sizeModelRail({ animate: false });
@@ -3237,9 +3238,16 @@ function connect() {
     if (msg.type === 'hello') {
       if (msg.webBuild) noteWebBuild(msg.webBuild);
       state.sessions = msg.sessions;
+      if (msg.agents) state.agents = msg.agents;
       if (msg.chats) state.chats = msg.chats;
       if (msg.host) applyHost(msg.host);
       renderRail();
+      return;
+    }
+
+    if (msg.type === 'agents') {
+      state.agents = msg.agents || [];
+      renderAgentPicker();
       return;
     }
 
@@ -3393,9 +3401,12 @@ function connect() {
     }
 
     if (msg.type === 'catalog') {
+      // Catalogs are per agent. A catalog for an agent this tab is not showing
+      // must not refill the picker with another agent's models.
+      const mine = state.sessions.find((s) => s.id === state.sessionId);
+      if (msg.agent && (mine?.agent || 'cursor') !== msg.agent) return;
       renderModels(msg.catalog?.models);
       renderModes(msg.catalog?.modes);
-      const mine = state.sessions.find((s) => s.id === state.sessionId);
       if (mine?.model) selectModel(mine.model, mine.modelName);
       return;
     }
@@ -3740,6 +3751,24 @@ bindScrubber();
 
 // --------------------------------------------------------- new session
 
+/** The model sheet sits below this — chrome, not chat, stays out of its scrim. */
+function syncTopbarHeight() {
+  if (!els.topbar) return;
+  const top = els.topbar.getBoundingClientRect().top;
+  let bottom = els.topbar.getBoundingClientRect().bottom;
+  const banner = $('update-banner');
+  if (banner && !banner.hidden) {
+    bottom = Math.max(bottom, banner.getBoundingClientRect().bottom);
+  }
+  const tabs = $('view-tabs');
+  if (tabs && !tabs.hidden) {
+    bottom = Math.max(bottom, tabs.getBoundingClientRect().bottom);
+  }
+  const h = Math.round(bottom - top);
+  if (!h) return;
+  document.documentElement.style.setProperty('--topbar-h', `${h}px`);
+}
+
 /**
  * Soft keyboards shrink the visual viewport without shrinking the layout one.
  * Publish that frame as --vv-top / --vv-height so the New session sheet (and
@@ -3755,6 +3784,7 @@ function syncVisualViewport() {
   }
   root.style.setProperty('--vv-top', `${Math.round(vv.offsetTop)}px`);
   root.style.setProperty('--vv-height', `${Math.round(vv.height)}px`);
+  syncTopbarHeight();
   fitStandaloneShell();
 }
 
@@ -3853,8 +3883,12 @@ function setNewbie(open) {
   $('newbie-path').value = '';
   $('newbie-note').textContent = '';
   renderNewbie();
+  // Start each sheet on the configured default agent, not last visit's choice.
+  state.newbieAgent = null;
+  renderAgentPicker();
   // The rail's copy may be stale; the host re-reads Cursor's records on ask.
   sendOp({ op: 'projects.list' });
+  sendOp({ op: 'agents.list' });
   $('newbie-filter').focus();
 }
 
@@ -3898,7 +3932,7 @@ function renderNewbie() {
       tag.textContent = 'open in Cursor';
       row.append(tag);
     }
-    row.onclick = () => createSession(p.path);
+    row.onclick = () => createSession(p.path, state.newbieAgent);
     list.append(row);
   }
 
@@ -3912,21 +3946,68 @@ function renderNewbie() {
   }
 }
 
-function createSession(folder) {
+/**
+ * Which agent a new session drives.
+ *
+ * Cursor is a chat in its own window; opencode is an Auto-only ACP process.
+ * The choice only appears when more than one agent is actually installed —
+ * a picker with one option is noise.
+ */
+function renderAgentPicker() {
+  const block = $('newbie-agent-block');
+  const row = $('newbie-agents');
+  const note = $('newbie-agent-note');
+  if (!block || !row) return;
+  const usable = (state.agents || []).filter((a) => a.available);
+  if (usable.length < 2) {
+    block.hidden = true;
+    row.innerHTML = '';
+    note.textContent = '';
+    state.newbieAgent = null;
+    return;
+  }
+  if (!usable.some((a) => a.name === state.newbieAgent)) {
+    state.newbieAgent = (usable.find((a) => a.default) || usable[0]).name;
+  }
+  block.hidden = false;
+  row.innerHTML = '';
+  for (const agent of usable) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'agent-choice' + (agent.name === state.newbieAgent ? ' selected' : '');
+    btn.textContent = agent.name;
+    btn.title =
+      agent.name === 'opencode'
+        ? 'Runs opencode over ACP — approvals and model are opencode\'s own'
+        : 'Runs a Cursor chat when a window already has this folder';
+    btn.onclick = () => {
+      state.newbieAgent = agent.name;
+      renderAgentPicker();
+    };
+    row.append(btn);
+  }
+  note.textContent =
+    state.newbieAgent === 'opencode'
+      ? 'Auto-only session: opencode runs in the background, not in Cursor.'
+      : 'A Cursor chat when the folder is open, otherwise Auto hosts the agent.';
+}
+
+function createSession(folder, agent = null) {
   const path = String(folder || '').trim();
   if (!path) return;
   setNewbie(false);
   // Focus now (user gesture) and again after attach lands the empty chat.
   state.focusComposer = true;
   focusComposer();
-  sendOp({ op: 'session.create', folder: path });
+  sendOp({ op: 'session.create', folder: path, ...(agent ? { agent } : {}) });
 }
 
 /** Same-repo empty chat from the topbar — no project picker. */
 $('new-chat').onclick = () => {
   const folder = currentFolder();
   if (!folder) return;
-  createSession(folder);
+  const mine = state.sessions.find((s) => s.id === state.sessionId);
+  createSession(folder, mine?.agent || null);
 };
 
 $('new-session').onclick = () => {
@@ -3939,9 +4020,9 @@ $('newbie').onclick = (e) => {
   if (e.target === $('newbie')) setNewbie(false);
 };
 $('newbie-filter').addEventListener('input', renderNewbie);
-$('newbie-create').onclick = () => createSession($('newbie-path').value);
+$('newbie-create').onclick = () => createSession($('newbie-path').value, state.newbieAgent);
 $('newbie-path').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') createSession($('newbie-path').value);
+  if (e.key === 'Enter') createSession($('newbie-path').value, state.newbieAgent);
 });
 
 $('restart').onclick = () => {
@@ -4496,7 +4577,10 @@ paintMode();
 syncSend();
 paintNewChat();
 initWorkspace();
-onViewsChange((snap) => rememberViews(state.sessionId, snap));
+onViewsChange((snap) => {
+  rememberViews(state.sessionId, snap);
+  syncTopbarHeight();
+});
 initTerminals(sendOp);
 initBrowser(sendOp);
 bindOverlayScrollbars();

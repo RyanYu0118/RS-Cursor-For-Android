@@ -61,12 +61,31 @@ export function realTitle(name) {
 
 function withDb(fn) {
   if (!existsSync(IDE_DB)) return null;
-  const db = new DatabaseSync(IDE_DB, { readOnly: true });
-  try {
-    return fn(db);
-  } finally {
-    db.close();
+  // Cursor (and the host itself) write to this database while we read it. A
+  // read-only open or query can fail with "database is locked" when a writer
+  // holds the journal — and on Windows that is not always something SQLite's
+  // busy timeout waits out. A few short retries of the whole read turn a
+  // transient clash into a slightly slower read instead of an error on the
+  // phone. The callback is read-only by construction.
+  let lastErr = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    let db = null;
+    try {
+      db = new DatabaseSync(IDE_DB, { readOnly: true, timeout: 1500 });
+      return fn(db);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 3 || !/locked|busy/i.test(String(err?.message || ''))) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    } finally {
+      try {
+        db?.close();
+      } catch {
+        /* already closed */
+      }
+    }
   }
+  throw lastErr;
 }
 
 const textOf = (row) =>

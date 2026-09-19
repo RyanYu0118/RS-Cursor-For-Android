@@ -6,7 +6,12 @@
 <meta name="theme-color" content="#0b0d12" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<!--
+  Opaque `black` status bar. The translucent value draws the page under the
+  system bar, so the title and path sit under a frosted (often blue-tinted)
+  blur — that read as the header being gradually blurred.
+-->
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="Auto" />
 <meta name="auto-build" content="" />
 <title>Auto</title>
@@ -341,6 +346,11 @@
         <button id="newbie-create">Create</button>
       </div>
       <div class="sheet-note" id="newbie-note"></div>
+    </section>
+    <section class="sheet-block" id="newbie-agent-block" hidden>
+      <h2>Agent</h2>
+      <div class="sheet-row" id="newbie-agents"></div>
+      <div class="sheet-note" id="newbie-agent-note"></div>
     </section>
   </div>
 </div>

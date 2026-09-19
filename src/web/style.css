@@ -2591,6 +2591,10 @@ button.icon.active {
   border-bottom: 1px solid var(--line);
 }
 
+/* `hidden` on a block whose id carries no rule of its own still needs saying:
+   the UA rule loses to any later display declaration. */
+.sheet-block[hidden] { display: none; }
+
 .sheet-block:last-child { border-bottom: 0; }
 
 .sheet-block h2 {
@@ -2661,10 +2665,11 @@ button.icon.active {
  */
 #model-sheet {
   position: fixed;
-  top: var(--vv-top, 0px);
+  /* Sit below the main chrome — topbar, optional banner, view tabs. */
+  top: calc(var(--vv-top, 0px) + var(--topbar-h, 0px));
   left: 0;
   right: 0;
-  height: var(--vv-height, 100dvh);
+  height: calc(var(--vv-height, 100dvh) - var(--topbar-h, 0px));
   z-index: 40;
   display: flex;
   align-items: center;
@@ -2678,12 +2683,12 @@ button.icon.active {
 /*
  * The veil is its own layer so it can be asked to move.
  *
- * The chat behind the sheet softens as the sheet arrives and sharpens as it
+ * The chat behind the sheet dims as the sheet arrives and brightens as it
  * leaves, and while a finger is dragging the sheet down the veil is set from
- * the finger — the chat is already sharp again by the time the sheet would
- * have gone. The sheet itself cannot own a backdrop filter: WebKit can fold
- * its transformed panel into that layer, and a full-screen filter also blurs
- * the topbar. This layer alone owns the blur and stays behind the panel.
+ * the finger — the chat is already clear again by the time the sheet would
+ * have gone. No backdrop-filter here: even with the sheet starting below the
+ * topbar, blur bleeds upward and reads as the header going soft (and picks up
+ * a blue cast from the chat). A flat scrim is enough.
  */
 #model-sheet::before {
   content: '';
@@ -2691,11 +2696,7 @@ button.icon.active {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: color-mix(in srgb, var(--bg) 30%, transparent);
-  backdrop-filter: blur(8px) saturate(1.1);
-  -webkit-backdrop-filter: blur(8px) saturate(1.1);
-  /* The topbar is chrome, not chat — the veil is for what the sheet covers. */
-  top: var(--topbar-h, 0px);
+  background: color-mix(in srgb, var(--bg) 42%, transparent);
   opacity: var(--veil, 0);
   transition: opacity 0.28s ease;
 }
@@ -3206,7 +3207,7 @@ button.model-choice:disabled {
 @media (max-width: 720px) {
   #model-sheet {
     align-items: flex-end;
-    padding: max(10px, env(safe-area-inset-top)) 0 0;
+    padding: 0;
   }
 
   .model-panel {
@@ -3300,6 +3301,31 @@ button.model-choice:disabled {
   flex: none;
   font-size: 11px;
   color: var(--green);
+}
+
+/* Agent choice for a new session — a two-option segmented control. */
+#newbie-agents {
+  display: flex;
+  gap: 6px;
+}
+
+#newbie-agents .agent-choice {
+  flex: 1;
+  padding: 8px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+#newbie-agents .agent-choice.selected {
+  background: var(--bg-3);
+  border-color: var(--line);
+  color: var(--text);
+  font-weight: 550;
 }
 
 /* Segmented control: system / light / dark. */

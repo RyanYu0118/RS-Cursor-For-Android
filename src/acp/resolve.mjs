@@ -1,13 +1,14 @@
 /**
- * Locate the Cursor Agent CLI.
+ * Locate the agent CLI Auto drives over ACP.
  *
- * The `cursor-agent` / `agent` entry points on Windows are PowerShell shims
- * that re-exec a bundled node. We resolve past them to the real
- * `node.exe index.js` so nothing sits between us and the agent's stdio on the
- * protocol path.
+ * Two agents speak the same protocol: Cursor's `cursor-agent acp` and
+ * `opencode acp`. Each resolver returns the exact command to spawn — the
+ * Cursor entry points on Windows are PowerShell shims that re-exec a bundled
+ * node, so we resolve past them to the real `node.exe index.js` and nothing
+ * sits between us and the agent's stdio on the protocol path.
  */
-import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
 
 const VERSION_DIR_RE = /^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:-\d{2}-\d{2}-\d{2})?-[a-f0-9]+$/;
 
@@ -62,4 +63,87 @@ export function resolveCursorAgent() {
       `  irm 'https://cursor.com/install?win32=true' | iex\n` +
       `then run: cursor-agent login`,
   );
+}
+
+/**
+ * The two agents Auto knows how to drive over ACP.
+ *
+ * `cursor` is the historical default; `opencode` is an alternative agent for
+ * sessions that do not live in the Cursor window. A session records which one
+ * it uses, so a restart resumes the same conversation with the same CLI.
+ */
+export const AGENTS = ['cursor', 'opencode'];
+
+/** Agent names acceptable to `resolveAgent` / a session's `agent` field. */
+export function isAgentName(name) {
+  return AGENTS.includes(String(name || ''));
+}
+
+/** Windows only: an `.cmd` / `.bat` entry point needs a shell to execute. */
+function shellFor(command) {
+  return process.platform === 'win32' && /\.(cmd|bat)$/i.test(command);
+}
+
+/**
+ * Locate the opencode CLI.
+ *
+ * chocolatey installs `opencode.exe` (a bun shim — a real binary, so spawned
+ * directly). npm installs an `opencode.cmd` shim on Windows. Either is found
+ * by walking `PATH`, and `OPENCODE_BIN` overrides it for a non-standard
+ * install.
+ */
+export function resolveOpencode() {
+  const override = process.env.OPENCODE_BIN;
+  if (override) {
+    if (existsSync(override)) {
+      return { command: override, args: [], shell: shellFor(override), via: 'OPENCODE_BIN' };
+    }
+    throw new Error(`OPENCODE_BIN points at nothing: ${override}`);
+  }
+
+  const names = process.platform === 'win32' ? ['opencode.exe', 'opencode.cmd', 'opencode'] : ['opencode'];
+  for (const dir of String(process.env.PATH || '').split(delimiter)) {
+    // PATH entries are sometimes quoted; a quoted directory is not a path.
+    const clean = dir.replace(/^"(.*)"$/, '$1').trim();
+    if (!clean) continue;
+    for (const name of names) {
+      const candidate = join(clean, name);
+      try {
+        if (existsSync(candidate) && statSync(candidate).isFile()) {
+          return { command: candidate, args: [], shell: shellFor(candidate), via: 'PATH' };
+        }
+      } catch {
+        /* an unreadable PATH entry is not an error */
+      }
+    }
+  }
+
+  throw new Error(
+    `opencode CLI not found on PATH. Install it with:\n` +
+      `  npm i -g opencode-ai\n` +
+      `or point OPENCODE_BIN at the executable.`,
+  );
+}
+
+/**
+ * Resolve the CLI for an agent by name.
+ *
+ * @param {'cursor'|'opencode'|string} [name]
+ * @returns {{ name: string, command: string, args: string[], shell: boolean, via: string }}
+ * @throws if the agent is unknown or its CLI is not installed.
+ */
+export function resolveAgent(name = 'cursor') {
+  if (name === 'opencode') return { name: 'opencode', ...resolveOpencode() };
+  if (name === 'cursor' || !name) return { name: 'cursor', ...resolveCursorAgent() };
+  throw new Error(`Unknown agent "${name}" (expected one of: ${AGENTS.join(', ')})`);
+}
+
+/** Whether an agent's CLI can be found right now; never throws. */
+export function agentAvailable(name) {
+  try {
+    resolveAgent(name);
+    return true;
+  } catch {
+    return false;
+  }
 }

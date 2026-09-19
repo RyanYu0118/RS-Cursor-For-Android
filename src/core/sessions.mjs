@@ -22,6 +22,8 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { AcpClient } from '../acp/client.mjs';
+import { AGENTS, isAgentName, resolveAgent } from '../acp/resolve.mjs';
+import { normalizeConfigOptions, configIdFor } from '../acp/config-options.mjs';
 import { TranscriptStore, KIND, replayWindow } from './transcript.mjs';
 import { mapUpdate } from './map-updates.mjs';
 import { PermissionBroker, POLICY } from './permissions.mjs';
@@ -226,8 +228,9 @@ export class SessionManager extends EventEmitter {
    * @param {object} opts
    * @param {string} opts.stateDir   directory for sessions.json and transcripts
    * @param {string} opts.defaultFolder folder for new sessions
+   * @param {'cursor'|'opencode'} [opts.defaultAgent] agent new sessions use
    */
-  constructor({ stateDir, defaultFolder, defaultPolicy = POLICY.auto }) {
+  constructor({ stateDir, defaultFolder, defaultPolicy = POLICY.auto, defaultAgent = 'cursor' }) {
     super();
     this.stateDir = stateDir;
     this.statePath = join(stateDir, 'sessions.json');
@@ -235,6 +238,8 @@ export class SessionManager extends EventEmitter {
     this.defaultPolicy = Object.values(POLICY).includes(defaultPolicy)
       ? defaultPolicy
       : POLICY.auto;
+    /** Which agent a new session drives. A session records its own choice. */
+    this.defaultAgent = isAgentName(defaultAgent) ? defaultAgent : 'cursor';
     this.transcripts = new TranscriptStore(join(stateDir, 'transcripts'));
     this.permissions = new PermissionBroker();
     this.terminals = new TerminalRegistry();
@@ -252,8 +257,10 @@ export class SessionManager extends EventEmitter {
     /**
      * Modes and models are account-wide, but only arrive when a session goes
      * live. Cache them so a picker can be drawn before anything has started.
+     * Kept per agent: Cursor's model list and opencode's are different worlds,
+     * and one must not refill the other's picker.
      */
-    this.catalog = { models: [], modes: [] };
+    this.catalogs = Object.fromEntries(AGENTS.map((a) => [a, { models: [], modes: [] }]));
     mkdirSync(stateDir, { recursive: true });
 
     this.permissions.on('requested', (req) => {
@@ -311,12 +318,22 @@ export class SessionManager extends EventEmitter {
           // rather than only to new sessions.
           this.meta.set(s.id, {
             ...s,
+            // Sessions from before agents existed were all Cursor's.
+            agent: isAgentName(s.agent) ? s.agent : 'cursor',
             status: s.status === STATUS.archived ? STATUS.archived : STATUS.idle,
             policy: s.policyLocked ? s.policy : this.defaultPolicy,
           });
         }
         this.activeId = raw.activeId || null;
-        if (raw.catalog) this.catalog = raw.catalog;
+        // Older registries kept one catalog; it was always Cursor's.
+        if (raw.catalogs) {
+          for (const agent of AGENTS) {
+            const saved = raw.catalogs[agent];
+            if (saved) this.catalogs[agent] = { models: saved.models || [], modes: saved.modes || [] };
+          }
+        } else if (raw.catalog) {
+          this.catalogs.cursor = raw.catalog;
+        }
       } catch (err) {
         this.emit('log', `could not read ${this.statePath}: ${err.message}`);
       }
@@ -332,7 +349,7 @@ export class SessionManager extends EventEmitter {
     const payload = {
       activeId: this.activeId,
       sessions: [...this.meta.values()],
-      catalog: this.catalog,
+      catalogs: this.catalogs,
       updatedAt: new Date().toISOString(),
     };
     // Write-then-rename so a crash mid-write cannot leave a truncated registry.
@@ -352,13 +369,52 @@ export class SessionManager extends EventEmitter {
     return this.meta.get(id) || null;
   }
 
-  create({ folder, title, policy = this.defaultPolicy, mode = 'agent' } = {}) {
+  /** The picker lists for one agent, empty until that agent has gone live. */
+  catalogFor(agent = this.defaultAgent) {
+    return this.catalogs[isAgentName(agent) ? agent : 'cursor'];
+  }
+
+  /**
+   * Which agents Auto can drive right now, for a picker or `/agents`.
+   *
+   * Availability is probed, not configured: an agent whose CLI is missing
+   * cannot be chosen, and saying so is better than starting a session that
+   * fails on its first prompt.
+   */
+  agents() {
+    return AGENTS.map((name) => {
+      try {
+        resolveAgent(name);
+        return { name, available: true, default: name === this.defaultAgent };
+      } catch (err) {
+        return {
+          name,
+          available: false,
+          default: name === this.defaultAgent,
+          reason: String(err.message || err).split('\n')[0],
+        };
+      }
+    });
+  }
+
+  /**
+   * The catalog for whatever session is active — what a global picker shows.
+   * Kept as a getter so every existing caller that reads `sessions.catalog`
+   * gets the right agent's list without knowing agents exist.
+   */
+  get catalog() {
+    const active = this.activeId ? this.meta.get(this.activeId) : null;
+    return this.catalogFor(active?.agent);
+  }
+
+  create({ folder, title, policy = this.defaultPolicy, mode = 'agent', agent = this.defaultAgent } = {}) {
     const dir = folder || this.defaultFolder;
     const id = randomUUID();
     const meta = {
       id,
       title: title || basename(dir.replace(/[\\/]+$/, '')) || 'session',
       folder: dir,
+      agent: isAgentName(agent) ? agent : 'cursor',
       mode,
       policy,
       model: null,
@@ -383,9 +439,16 @@ export class SessionManager extends EventEmitter {
    * it without a quit that closes every window — Auto refuses that unless
    * `AUTO_ALLOW_CURSOR_RESTART=1`. Only if none of that works does this fall
    * back to an Auto-only agent, and it says so.
+   *
+   * An explicitly requested `agent` other than cursor never touches Cursor:
+   * opencode has no desktop window to drive, so its sessions are Auto-only
+   * from the first keystroke.
    */
-  async startInIde({ folder, title, policy, mode } = {}) {
+  async startInIde({ folder, title, policy, mode, agent } = {}) {
     const dir = folder || this.defaultFolder;
+    const who = isAgentName(agent) ? agent : this.defaultAgent;
+    if (who !== 'cursor') return this.#startAgentOnly({ folder: dir, title, policy, mode, agent: who });
+
     let opened = await this.cursor.newChat({ folder: dir }).catch((err) => ({
       status: 'error',
       reason: err.message,
@@ -435,6 +498,28 @@ export class SessionManager extends EventEmitter {
     this.#update(meta.id, { model: 'default[]', modelName: this.modelName('default[]') });
     this.#record(meta.id, KIND.notice, { text: this.#whyNotInIde(dir, opened, ready) });
     this.emit('log', `started Auto-only session "${meta.title}" (${opened.status})`);
+    return meta;
+  }
+
+  /**
+   * An Auto-only session for an agent that has no desktop chat.
+   *
+   * opencode sessions live as an `opencode acp` child and nothing else; there
+   * is no window to prefer. The agent is started in the background so its
+   * model and mode pickers are ready by the time the sheet is drawn, and the
+   * transcript says plainly which agent this conversation drives.
+   */
+  async #startAgentOnly({ folder, title, policy, mode, agent }) {
+    const meta = this.create({ folder, title, policy, mode, agent });
+    this.setActive(meta.id);
+    await this.transcripts.get(meta.id);
+    this.#record(meta.id, KIND.notice, {
+      text: `This session runs the ${agent} agent over ACP — it is not a Cursor chat, so approvals, model, and mode are this agent's own.`,
+    });
+    this.emit('log', `started ${agent} session "${meta.title}"`);
+    this.ensureLive(meta.id).catch((err) =>
+      this.emit('log', `[${meta.title}] could not start ${agent}: ${err.message}`),
+    );
     return meta;
   }
 
@@ -592,6 +677,7 @@ export class SessionManager extends EventEmitter {
     this.#update(id, { status: STATUS.starting });
 
     const client = new AcpClient({
+      agent: meta.agent || 'cursor',
       cwd: meta.folder,
       handlers: {
         requestPermission: (params) =>
@@ -660,24 +746,42 @@ export class SessionManager extends EventEmitter {
 
     runtime.acpSessionId = session.sessionId;
     runtime.capabilities = info;
-    runtime.modes = session.modes || null;
-    runtime.models = session.models || null;
+    // Cursor answers with `models` / `modes`; opencode with declarative
+    // `configOptions`. Flatten both to the one shape the pickers speak.
+    const normalized = normalizeConfigOptions(session.configOptions);
+    runtime.configOptions = Array.isArray(session.configOptions) ? session.configOptions : null;
+    runtime.modelConfigId = normalized.modelConfigId;
+    runtime.modeConfigId = normalized.modeConfigId;
+    const models = session.models || normalized.models;
+    const modes = session.modes || normalized.modes;
+    runtime.modes = modes || null;
+    runtime.models = models || null;
 
-    if (session.models?.availableModels?.length) {
-      this.catalog = {
-        models: session.models.availableModels,
-        modes: session.modes?.availableModes || this.catalog.modes,
+    const agent = client.agent;
+    if (models?.availableModels?.length) {
+      this.catalogs[agent] = {
+        models: models.availableModels,
+        modes: modes?.availableModes || this.catalogs[agent]?.modes || [],
       };
-      this.emit('catalog', this.catalog);
+      this.emit('catalog', { agent, catalog: this.catalogs[agent] });
     }
 
     // Model ids carry their options (`default[]`, `claude-opus-5[thinking=true]`),
     // so keep the id for switching and the name for showing.
-    let modelId = session.models?.currentModelId || null;
+    let modelId = models?.currentModelId || null;
     // A new chat from Auto prefers Auto-select; apply it before the first prompt.
     if (!resumed && meta.model && meta.model !== modelId) {
       try {
-        await client.setModel({ sessionId: session.sessionId, modelId: meta.model });
+        if (agent !== 'cursor' && runtime.modelConfigId) {
+          const res = await client.setConfigOption({
+            sessionId: session.sessionId,
+            configId: runtime.modelConfigId,
+            value: meta.model,
+          });
+          this.#applyConfigOptions(id, res?.configOptions);
+        } else {
+          await client.setModel({ sessionId: session.sessionId, modelId: meta.model });
+        }
         modelId = meta.model;
       } catch (err) {
         this.emit('log', `[${meta.title}] preferred model ${meta.model} refused: ${err.message}`);
@@ -689,23 +793,69 @@ export class SessionManager extends EventEmitter {
       status: STATUS.idle,
       model: modelId,
       modelName: this.modelName(modelId),
-      mode: session.modes?.currentModeId || meta.mode,
+      mode: modes?.currentModeId || meta.mode,
     });
 
     this.#record(id, KIND.sessionStart, {
       folder: meta.folder,
+      agent,
       protocolVersion: info?.protocolVersion,
-      modes: runtime.modes,
-      models: runtime.models,
+      // Counts, not the lists: opencode offers hundreds of models, and the
+      // catalog is persisted separately. A transcript record is replayed to
+      // every client, so it carries no more than it must.
+      modelCount: models?.availableModels?.length || 0,
+      modeCount: modes?.availableModes?.length || 0,
+      modelId: models?.currentModelId || null,
+      modeId: modes?.currentModeId || null,
     });
 
     return runtime;
+  }
+
+  /**
+   * Fold a fresh `configOptions` payload back into the runtime and the agent's
+   * catalog. opencode sends this on every model or mode change (and in the
+   * reply to setting one), and it is the only place the new current value is
+   * stated, so the pickers are redrawn from here.
+   */
+  #applyConfigOptions(id, configOptions) {
+    if (!Array.isArray(configOptions)) return;
+    const runtime = this.live.get(id);
+    if (!runtime) return;
+    runtime.configOptions = configOptions;
+    const normalized = normalizeConfigOptions(configOptions);
+    runtime.modelConfigId = normalized.modelConfigId || runtime.modelConfigId;
+    runtime.modeConfigId = normalized.modeConfigId || runtime.modeConfigId;
+    if (normalized.models) runtime.models = normalized.models;
+    if (normalized.modes) runtime.modes = normalized.modes;
+
+    const agent = runtime.client?.agent || this.meta.get(id)?.agent || 'cursor';
+    const known = this.catalogs[agent] || { models: [], modes: [] };
+    if (normalized.models?.availableModels?.length) known.models = normalized.models.availableModels;
+    if (normalized.modes?.availableModes?.length) known.modes = normalized.modes.availableModes;
+    this.catalogs[agent] = known;
+
+    const patch = {};
+    if (normalized.models?.currentModelId) {
+      patch.model = normalized.models.currentModelId;
+      patch.modelName = this.modelName(normalized.models.currentModelId);
+    }
+    if (normalized.modes?.currentModeId) patch.mode = normalized.modes.currentModeId;
+    if (Object.keys(patch).length) this.#update(id, patch);
+    this.emit('catalog', { agent, catalog: known });
   }
 
   #onUpdate(id, update) {
     // History being replayed back to us on resume: already on disk, and
     // clients replay from the transcript rather than from the agent.
     if (this.live.get(id)?.replaying) return;
+
+    // opencode reports a model or mode change as a fresh config-option list.
+    // Folding it in here keeps runtime, catalog, and session metadata in step;
+    // the mapped record below carries only the new values.
+    if (update?.sessionUpdate === 'config_option_update') {
+      this.#applyConfigOptions(id, update.configOptions);
+    }
 
     const mapped = mapUpdate(update);
     if (!mapped) return;
@@ -730,10 +880,21 @@ export class SessionManager extends EventEmitter {
 
     this.#record(id, mapped.kind, mapped.payload);
 
-    if (mapped.kind === KIND.sessionInfo && mapped.payload.title) {
+    if (mapped.kind === KIND.sessionInfo) {
       const meta = this.meta.get(id);
       // Adopt the agent's generated title only while the session is unnamed.
-      if (meta && !meta.titleLocked) this.#update(id, { title: mapped.payload.title });
+      if (mapped.payload.title && meta && !meta.titleLocked) {
+        this.#update(id, { title: mapped.payload.title });
+      }
+      // A mode or model the agent changed on its own (opencode announces both
+      // this way) must be reflected without a picker having been pressed.
+      if (mapped.payload.modeId) this.#update(id, { mode: mapped.payload.modeId });
+      if (mapped.payload.modelId) {
+        this.#update(id, {
+          model: mapped.payload.modelId,
+          modelName: this.modelName(mapped.payload.modelId),
+        });
+      }
     }
   }
 
@@ -1137,8 +1298,21 @@ export class SessionManager extends EventEmitter {
   async setMode(id, modeId) {
     if (this.meta.get(id)?.kind === 'desktop') return this.#chooseInCursor(id, 'mode', modeId);
     const runtime = await this.ensureLive(id);
-    await runtime.client.setMode({ sessionId: runtime.acpSessionId, modeId });
-    this.#update(id, { mode: modeId });
+    // opencode takes modes as a config option; Cursor has a method of its own.
+    if (runtime.client.agent !== 'cursor') {
+      const res = await runtime.client.setConfigOption({
+        sessionId: runtime.acpSessionId,
+        configId: configIdFor(runtime, 'mode'),
+        value: modeId,
+      });
+      this.#applyConfigOptions(id, res?.configOptions);
+      // Some agents reply without the list; the value asked for is still the
+      // right thing to show until an update says otherwise.
+      if (!res?.configOptions) this.#update(id, { mode: modeId });
+    } else {
+      await runtime.client.setMode({ sessionId: runtime.acpSessionId, modeId });
+      this.#update(id, { mode: modeId });
+    }
     return true;
   }
 
@@ -1220,11 +1394,11 @@ export class SessionManager extends EventEmitter {
   }
 
   #cursorsNameFor(wanted) {
-    return cursorNameFor(wanted, this.catalog?.models);
+    return cursorNameFor(wanted, this.catalogFor('cursor').models);
   }
 
   #modelIdFor(wanted, cursorLabel) {
-    return modelIdFor(wanted, cursorLabel, this.catalog?.models);
+    return modelIdFor(wanted, cursorLabel, this.catalogFor('cursor').models);
   }
 
   /** Say why a picker would not take a choice, in words worth reading. */
@@ -2238,8 +2412,20 @@ export class SessionManager extends EventEmitter {
   async setModel(id, modelId) {
     if (this.meta.get(id)?.kind === 'desktop') return this.#chooseInCursor(id, 'model', modelId);
     const runtime = await this.ensureLive(id);
-    await runtime.client.setModel({ sessionId: runtime.acpSessionId, modelId });
-    this.#update(id, { model: modelId, modelName: this.modelName(modelId) });
+    if (runtime.client.agent !== 'cursor') {
+      const res = await runtime.client.setConfigOption({
+        sessionId: runtime.acpSessionId,
+        configId: configIdFor(runtime, 'model'),
+        value: modelId,
+      });
+      this.#applyConfigOptions(id, res?.configOptions);
+      if (!res?.configOptions) {
+        this.#update(id, { model: modelId, modelName: this.modelName(modelId) });
+      }
+    } else {
+      await runtime.client.setModel({ sessionId: runtime.acpSessionId, modelId });
+      this.#update(id, { model: modelId, modelName: this.modelName(modelId) });
+    }
     return true;
   }
 
@@ -2255,7 +2441,7 @@ export class SessionManager extends EventEmitter {
     const meta = this.meta.get(id);
     if (!meta) return false;
     if (meta.kind !== 'desktop') {
-      const named = (this.catalog?.models || []).find((m) => m.modelId !== 'default[]');
+      const named = (this.catalogFor(meta.agent).models || []).find((m) => m.modelId !== 'default[]');
       if (!named) return false;
       return this.setModel(id, named.modelId);
     }
@@ -2281,10 +2467,20 @@ export class SessionManager extends EventEmitter {
    * calls its automatic pick "Auto", which reads as this app's name — say what
    * it actually does instead.
    */
-  modelName(modelId) {
+  modelName(modelId, agent = null) {
     if (!modelId) return null;
     if (modelId === 'default[]') return 'Auto-select';
-    return this.catalog?.models?.find((m) => m.modelId === modelId)?.name || modelId;
+    // Model ids are namespaced by provider (`vercel/...`, `opencode/...`), so a
+    // search across agents is safe and keeps callers from having to know which
+    // catalog a session belongs to.
+    const lists = agent
+      ? [this.catalogFor(agent).models]
+      : Object.values(this.catalogs).map((c) => c.models);
+    for (const models of lists) {
+      const hit = models?.find((m) => m.modelId === modelId);
+      if (hit) return hit.name || modelId;
+    }
+    return modelId;
   }
 
   setPolicy(id, policy) {

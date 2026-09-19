@@ -2777,8 +2777,8 @@ if (existsSync(SRC)) {
     failed = true;
   }
   if (
-    !/top:\s*var\(--vv-top/.test(modelSheetCss) ||
-    !/height:\s*var\(--vv-height/.test(modelSheetCss) ||
+    !/top:\s*calc\(var\(--vv-top/.test(modelSheetCss) ||
+    !/height:\s*calc\(var\(--vv-height/.test(modelSheetCss) ||
     !css.includes('max-height: min(calc(var(--vv-height, 100dvh) * 0.62), 480px)') ||
     !css.includes('max-height: min(720px, calc(var(--vv-height, 100dvh) - 32px))') ||
     !css.includes('calc(var(--vv-height, 100dvh) * 0.88)')
@@ -2793,8 +2793,12 @@ if (existsSync(SRC)) {
     fail('the model sheet veil must be an inert layer behind the panel');
     failed = true;
   }
+  if (/backdrop-filter\s*:/.test(modelVeilCss)) {
+    fail('the model sheet veil must dim the chat, not backdrop-filter it — blur bleeds onto the topbar');
+    failed = true;
+  }
   if (!/\.model-panel\s*\{[^}]*position:\s*relative[^}]*z-index:\s*1/.test(css)) {
-    fail('the model panel must stay explicitly above its blur veil');
+    fail('the model panel must stay explicitly above its veil');
     failed = true;
   }
   if (!/data-panel='out'\] \.model-panel\s*\{[^}]*translateY\(100%\)/.test(css)) {
@@ -2802,7 +2806,7 @@ if (existsSync(SRC)) {
     failed = true;
   }
   if (!js.includes('setPointerCapture') || !js.includes("sheet.dataset.veil = 'drag'")) {
-    fail('the model sheet must follow a finger down and deblur the chat as it goes');
+    fail('the model sheet must follow a finger down and lighten the chat as it goes');
     failed = true;
   }
   if (!js.includes('state.modelSheetTimer')) {
@@ -2872,9 +2876,14 @@ if (existsSync(SRC)) {
     fail('composer attachments must be large enough to read — 112px, not a 56px chip');
     failed = true;
   }
-  // The veil is for what the sheet covers; the topbar is chrome, not chat.
-  if (!/top:\s*var\(--topbar-h/.test(css) || !js.includes("setProperty('--topbar-h'")) {
-    fail('the model sheet’s veil must start below the topbar');
+  // The sheet and its veil sit below the main chrome — header stays sharp.
+  if (
+    !/top:\s*calc\(var\(--vv-top[^)]+\)\s*\+\s*var\(--topbar-h/.test(css) ||
+    !/height:\s*calc\(var\(--vv-height[^)]+\)\s*-\s*var\(--topbar-h/.test(css) ||
+    !js.includes("setProperty('--topbar-h'") ||
+    !js.includes("'view-tabs'")
+  ) {
+    fail('the model sheet must sit below the main chrome, not dim over it');
     failed = true;
   }
   /*
@@ -3107,6 +3116,13 @@ if (existsSync(SRC)) {
     fail('installed Auto must open standalone, not as a Safari tab');
     failed = true;
   }
+  if (
+    !html.includes('apple-mobile-web-app-status-bar-style" content="black"') ||
+    html.includes('black-translucent')
+  ) {
+    fail('iOS status bar must be opaque black — translucent blurs the chat title and path');
+    failed = true;
+  }
   if (!html.includes('id="install-block"') || !js.includes('beforeinstallprompt') || !js.includes('display-mode: standalone')) {
     fail('Settings must explain Add to Home Screen, and offer the install prompt when the browser has one');
     failed = true;
@@ -3327,6 +3343,36 @@ if (existsSync(SRC)) {
     failed = true;
   }
   if (!failed) ok('v2 web: New session list stays above the keyboard');
+}
+
+// Choosing which agent a new session drives must be possible from the sheet,
+// and one agent's catalog must never refill another's picker.
+{
+  const html = readFileSync(join(ROOT, 'src/web/index.html'), 'utf8');
+  const css = readFileSync(join(ROOT, 'src/web/style.css'), 'utf8');
+  const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
+  let failed = false;
+  if (!html.includes('id="newbie-agents"') || !html.includes('id="newbie-agent-block"')) {
+    fail('the New session sheet needs an agent choice');
+    failed = true;
+  }
+  if (!js.includes('function renderAgentPicker') || !js.includes("op: 'agents.list'")) {
+    fail('the web must ask for and draw the installed agents');
+    failed = true;
+  }
+  if (!/sendOp\(\{ op: 'session\.create', folder: path, \.\.\.\(agent \? \{ agent \} : \{\}\) \}\)/.test(js)) {
+    fail('createSession must pass the chosen agent to the host');
+    failed = true;
+  }
+  if (!js.includes('(mine?.agent || \'cursor\') !== msg.agent')) {
+    fail('a catalog event from another agent must not refill this picker');
+    failed = true;
+  }
+  if (!css.includes('#newbie-agents')) {
+    fail('the agent choice needs styling');
+    failed = true;
+  }
+  if (!failed) ok('v2 web: New session offers the installed agents');
 }
 
 // Long chats get a Photos-style scrubber: handle while scrolling, labeled
@@ -5417,6 +5463,8 @@ if (existsSync(SRC)) {
       on() {},
       get: () => ({ id: 's1', title: 't', folder: ROOT, mode: 'agent', policy: 'ask' }),
       list: () => [{ id: 's1', title: 't', folder: ROOT, active: true }],
+      catalogFor: () => fakeSessions.catalog || { models: [], modes: [] },
+      agents: () => [{ name: 'cursor', available: true, default: true }],
       prompt: () => new Promise(() => {}), // a turn that never ends
       permissions: {
         resolve(requestId, optionId) {
@@ -5629,6 +5677,79 @@ if (existsSync(SRC)) {
   }
 }
 
+// 1g2. Telegram can list agents and start an opencode session by name.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'auto-tg-agents-'));
+  try {
+    const { TelegramBridge } = await import('../src/core/telegram.mjs');
+    let failed = false;
+    let started = null;
+
+    const fakeSessions = {
+      activeId: 's1',
+      on() {},
+      get: () => ({ id: 's1', title: 't', folder: ROOT, mode: 'agent', policy: 'ask' }),
+      list: () => [{ id: 's1', title: 't', folder: ROOT, active: true }],
+      catalogFor: () => ({ models: [], modes: [] }),
+      agents: () => [
+        { name: 'cursor', available: true, default: false },
+        { name: 'opencode', available: true, default: true },
+      ],
+      startInIde: async (args) => {
+        started = args;
+        return { id: 's2', title: 'oc', folder: args.folder || ROOT, agent: args.agent || 'cursor' };
+      },
+      setActive() {},
+    };
+
+    const bridge = new TelegramBridge({
+      sessions: fakeSessions,
+      stateDir: dir,
+      auth: { token: 'test', chatId: 1 },
+    });
+    const sent = [];
+    bridge.send = async (text) => {
+      sent.push(String(text));
+      return { message_id: sent.length };
+    };
+    bridge.edit = async () => ({});
+
+    await bridge.handleUpdate({ update_id: 1, message: { chat: { id: 1 }, text: '/agents' } });
+    if (!sent.some((t) => t.includes('opencode') && t.includes('cursor'))) {
+      fail(`/agents should list both agents, got ${JSON.stringify(sent)}`);
+      failed = true;
+    }
+
+    sent.length = 0;
+    await bridge.handleUpdate({
+      update_id: 2,
+      message: { chat: { id: 1 }, text: `/new opencode ${ROOT}` },
+    });
+    if (started?.agent !== 'opencode' || started?.folder !== ROOT) {
+      fail(`/new opencode should pass the agent and folder, got ${JSON.stringify(started)}`);
+      failed = true;
+    }
+    if (!sent.some((t) => t.includes('opencode'))) {
+      fail('starting an opencode session should say which agent it uses');
+      failed = true;
+    }
+
+    // A bare folder must not be mistaken for an agent name.
+    started = null;
+    await bridge.handleUpdate({ update_id: 3, message: { chat: { id: 1 }, text: `/new ${ROOT}` } });
+    if (started?.agent !== undefined || started?.folder !== ROOT) {
+      fail(`/new with a plain folder should use the default agent, got ${JSON.stringify(started)}`);
+      failed = true;
+    }
+
+    if (!failed) ok('v2 telegram: /agents and /new <agent> choose the agent');
+  } catch (e) {
+    fail(`v2 telegram agents: ${e.message}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 // 1h. Telegram mirrors web/Cursor prompts, skips its own echo, and retries a
 // turn whose first send failed.
 {
@@ -5708,6 +5829,152 @@ try {
   else ok(`agent CLI: ${found.command.split(/[\\/]/).slice(-3).join('/')}`);
 } catch (e) {
   fail(`resolve cursor-agent: ${e.message}`);
+}
+
+// 2a. Agents: cursor is required; opencode is optional but must resolve to a
+// real command when its CLI is installed. Its config options flatten to the
+// one picker shape web and Telegram already speak.
+try {
+  const { AGENTS, resolveAgent, resolveOpencode } = await import('../src/acp/resolve.mjs');
+  const { normalizeConfigOptions, configIdFor } = await import('../src/acp/config-options.mjs');
+  let bad = false;
+  if (!AGENTS.includes('cursor') || !AGENTS.includes('opencode')) {
+    fail('agent registry should list cursor and opencode');
+    bad = true;
+  }
+  const cursor = resolveAgent('cursor');
+  if (!cursor?.command || cursor.name !== 'cursor') {
+    fail(`resolveAgent('cursor') returned ${JSON.stringify(cursor)}`);
+    bad = true;
+  }
+  let opencode = null;
+  try {
+    opencode = resolveOpencode();
+  } catch {
+    // Not every machine has opencode; that is not a failure.
+  }
+  if (opencode && !opencode.command) {
+    fail('resolveOpencode returned no command');
+    bad = true;
+  }
+
+  const norm = normalizeConfigOptions([
+    {
+      id: 'model',
+      name: 'Model',
+      category: 'model',
+      type: 'select',
+      currentValue: 'a/b',
+      options: [
+        { value: 'a/b', name: 'B' },
+        { value: 'c/d', name: 'D' },
+      ],
+    },
+    {
+      id: 'mode',
+      name: 'Session Mode',
+      category: 'mode',
+      type: 'select',
+      currentValue: 'build',
+      options: [
+        { value: 'build', name: 'build' },
+        { value: 'plan', name: 'plan' },
+      ],
+    },
+  ]);
+  if (norm.models?.currentModelId !== 'a/b' || norm.models.availableModels[1]?.modelId !== 'c/d') {
+    fail(`model config option did not flatten: ${JSON.stringify(norm.models)}`);
+    bad = true;
+  }
+  if (norm.modes?.currentModeId !== 'build' || norm.modes.availableModes[0]?.id !== 'build') {
+    fail(`mode config option did not flatten: ${JSON.stringify(norm.modes)}`);
+    bad = true;
+  }
+  if (norm.modelConfigId !== 'model' || norm.modeConfigId !== 'mode') {
+    fail('config option ids were not remembered');
+    bad = true;
+  }
+  if (configIdFor({ modelConfigId: 'm' }, 'model') !== 'm') {
+    fail('configIdFor should use the remembered id');
+    bad = true;
+  }
+  if (normalizeConfigOptions([]).models !== null) {
+    fail('no config options should normalise to no model list');
+    bad = true;
+  }
+  if (!bad) {
+    ok(
+      `v2 core: agent registry + config options${opencode ? ' (opencode installed)' : ' (opencode absent)'}`,
+    );
+  }
+} catch (e) {
+  fail(`agent registry: ${e.message}`);
+}
+
+// 2a2. An opencode session is Auto-only: it never opens a Cursor chat, and it
+// records which agent it drives. The default agent flows into create().
+{
+  const dir = mkdtempSync(join(tmpdir(), 'auto-agents-'));
+  try {
+    const { SessionManager } = await import('../src/core/sessions.mjs');
+    const { KIND } = await import('../src/core/transcript.mjs');
+    let bad = false;
+
+    const sessions = new SessionManager({
+      stateDir: dir,
+      defaultFolder: ROOT,
+      defaultAgent: 'opencode',
+    }).init();
+    // Do not spawn a real agent process; this test is about bookkeeping.
+    sessions.ensureLive = async () => ({});
+    let cursorTouched = false;
+    sessions.cursor = {
+      newChat: async () => {
+        cursorTouched = true;
+        return { status: 'created', threadId: 'should-not-happen' };
+      },
+    };
+
+    const meta = await sessions.startInIde({ folder: ROOT, title: 'Opencode only' });
+    if (meta.agent !== 'opencode') {
+      fail(`an opencode request should store agent=opencode, got ${meta.agent}`);
+      bad = true;
+    }
+    if (meta.kind === 'desktop' || cursorTouched) {
+      fail('an opencode session must not open a Cursor chat');
+      bad = true;
+    }
+    const notice = (await sessions.history(meta.id)).find((r) => r.kind === KIND.notice);
+    if (!notice?.text?.includes('opencode')) {
+      fail(`opencode session should say which agent it runs, got ${notice?.text}`);
+      bad = true;
+    }
+    const plain = sessions.create({ folder: ROOT });
+    if (plain.agent !== 'opencode') {
+      fail(`create() should inherit defaultAgent, got ${plain.agent}`);
+      bad = true;
+    }
+    const agents = sessions.agents();
+    if (!agents.some((a) => a.name === 'cursor') || !agents.some((a) => a.name === 'opencode')) {
+      fail(`agents() should list both agents, got ${JSON.stringify(agents)}`);
+      bad = true;
+    }
+    if (!agents.find((a) => a.name === 'opencode')?.default) {
+      fail('agents() should mark the configured default');
+      bad = true;
+    }
+    // Catalogs are per agent — one must never refill the other's picker.
+    sessions.catalogs.opencode.models.push({ modelId: 'x/y', name: 'Y' });
+    if (sessions.catalogFor('opencode').models.length !== 1 || sessions.catalogFor('cursor').models.length !== 0) {
+      fail('per-agent catalogs must stay isolated');
+      bad = true;
+    }
+    if (!bad) ok('v2 core: opencode sessions are Auto-only and agent-tagged');
+  } catch (e) {
+    fail(`agent-only session: ${e.message}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // 2b. Auto's own skills: every .claude/skills/<name>/SKILL.md must have valid

@@ -7,7 +7,8 @@
 
 Auto is an always-on remote control for Cursor's agent: one host
 (`src/server/index.mjs`) serving a web app and a Telegram bot, driving
-`cursor-agent` sessions over ACP. Any session working in this repo — one of
+`cursor-agent` sessions over ACP. It can also drive `opencode acp` sessions
+the same way — see [Agents](#agents). Any session working in this repo — one of
 Auto's own sessions or a manual one — follows the rules below.
 
 These rules apply when this clone is the Auto host you are running. If you
@@ -183,6 +184,26 @@ goes into the transcript and the agent. The queue is memory only, and stopping
   never recorded; a video stream is not worth replaying.
 - **The web and Telegram are projections.** Neither owns state. Anything one
   can do, the other should be able to do.
+
+## Agents
+
+Auto drives an agent over ACP. Two are known, named in `src/acp/resolve.mjs`:
+
+- `cursor` — `cursor-agent acp`. New sessions prefer a chat in the IDE and fall
+  back to ACP.
+- `opencode` — `opencode acp`, found on `PATH` or via `OPENCODE_BIN`.
+  Auto-only: opencode has no window to type into, so its sessions are an ACP
+  child from the first keystroke.
+
+Every session records its `agent` and keeps it; `AUTO_AGENT` is only the
+default for new ones. The web New session sheet, Telegram `/new [agent]
+[folder]`, and `/agents` choose per session. Model and mode lists are kept
+**per agent** — Cursor returns `models`/`modes` and takes `session/set_model` /
+`session/set_mode`; opencode returns `configOptions` and takes
+`session/set_config_option`. `src/acp/config-options.mjs` flattens both to one
+picker shape; never let one agent's catalog refill the other's picker. Describe
+behaviour, not models: name the CLI as setup documentation, but say "the agent"
+for what it does.
 
 ## Mandatory workflow for changes to this repo
 

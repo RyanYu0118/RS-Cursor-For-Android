@@ -1,8 +1,8 @@
 ---
 type: Concept
 title: ACP
-description: Fallback sessions over cursor-agent acp — JSON-RPC on stdio, resumable, Auto-owned permissions.
-tags: [acp, cursor-agent]
+description: ACP sessions over cursor-agent or opencode — JSON-RPC on stdio, resumable, Auto-owned permissions.
+tags: [acp, cursor-agent, opencode]
 status: stable
 sources:
   - id: client
@@ -13,33 +13,64 @@ sources:
     title: JSON-RPC peer
   - id: resolve
     resource: /src/acp/resolve.mjs
-    title: CLI resolver
+    title: Agent registry
+  - id: config
+    resource: /src/acp/config-options.mjs
+    title: Config-option normalisation
   - id: findings
     resource: /spike/FINDINGS.md
     title: ACP probe notes
   - id: map
     resource: /src/core/map-updates.mjs
     title: session/update → transcript
-generated: { by: agent, at: 2026-08-16T06:35:00Z }
+generated: { by: agent, at: 2026-09-19T00:00:00Z }
 ---
 
 # ACP
 
-When a desktop chat cannot be started, Auto spawns `cursor-agent acp`. One
-child process per live session. Transport is newline-delimited JSON-RPC 2.0
-on stdin/stdout (no `Content-Length` framing).
+An Auto ACP session spawns one agent child process. Transport is
+newline-delimited JSON-RPC 2.0 on stdin/stdout (no `Content-Length` framing).
+Everything above the client deals in session ids and update events, so the two
+agents are interchangeable there.
+
+## Agents
+
+`src/acp/resolve.mjs` is the registry. Two names are known:
+
+| Agent | CLI | Launch |
+| --- | --- | --- |
+| `cursor` | `cursor-agent acp` | Resolved past the Windows shims to the bundled `node.exe index.js` under `%LOCALAPPDATA%\cursor-agent\versions\`. |
+| `opencode` | `opencode acp` | Found on `PATH` (`opencode.exe` / `opencode.cmd` / `opencode`), or `OPENCODE_BIN`. |
+
+A session stores `agent`; `AUTO_AGENT` sets the default for new ones. Cursor
+sessions try the IDE first and fall back to ACP; opencode sessions are always
+Auto-only because there is no desktop window to drive. Idle ACP sessions cost
+nothing but their history: the process is spawned lazily and resumed via
+`session/load` (both agents advertise `loadSession`).
 
 On Windows the `cursor-agent` / `agent` entry points are PowerShell shims.
-Auto resolves past them to the bundled `node.exe index.js` under
-`%LOCALAPPDATA%\cursor-agent\versions\` so nothing sits between us and
-stdio. That `versions\` directory is hidden — list it with `-Force`.
+Auto resolves past them so nothing sits between us and stdio. That
+`versions\` directory is hidden — list it with `-Force`.
 
 ## Handshake
 
 `initialize` advertises `loadSession`, image prompts, MCP over http/sse,
-and `session/list`. `session/new` returns the session id plus the account's
-modes, models, and `configOptions` — pickers are built from the protocol,
-nothing is hardcoded. `session/load` resumes after a restart.
+and `session/list`. `session/new` returns the session id plus picker choices.
+`session/load` resumes after a restart.
+
+## Pickers — two shapes, one view
+
+Cursor's agent answers `session/new` with `models` and `modes`; opencode
+answers with declarative `configOptions` (a `model` select and a `mode`
+select). `config-options.mjs` flattens either into the one `{ models, modes }`
+shape the web and Telegram pickers speak, and remembers the config id to set.
+
+Setting a choice is also two paths: Cursor takes `session/set_model` /
+`session/set_mode`; opencode takes `session/set_config_option` and replies with
+a fresh `configOptions`. opencode also emits `config_option_update` updates,
+which are folded back into the runtime and catalog, and recorded as a small
+`session_info` (never the hundreds of options). Catalogs are **per agent** —
+one agent's list must never refill the other's picker.
 
 ## Updates
 
@@ -49,8 +80,10 @@ A prompt turn ends with `{ stopReason: "end_turn" }`.
 
 Observed kinds include `agent_message_chunk`, `agent_thought_chunk`,
 `tool_call` / `tool_call_update`, `session_info_update`,
-`available_commands_update`. Thinking is suppressed entirely in print mode
-on the CLI; Auto still records `agent_thought` when it arrives.
+`available_commands_update`. opencode additionally sends `usage_update` and
+`config_option_update`. Thinking is suppressed entirely in print mode on the
+Cursor CLI; Auto still records `agent_thought` when it arrives. opencode
+streams thinking as `agent_thought_chunk`.
 
 ## Shells — plan vs reality
 

@@ -87,8 +87,11 @@ Safari tab with a screenshot for an icon. Settings explains the path
 when Chrome offers one). Already running as the installed app hides that
 block.
 
-Installed on iOS, `black-translucent` draws under the status bar.
-Standalone marks `data-standalone` before first paint. JS sizes `#app` to
+Installed on iOS, the status bar is opaque (`black`) so the chat title and
+path are never drawn under the system bar's frosted blur —
+`black-translucent` did that and read as the header gradually going soft
+(often with a blue cast). Safe-area padding still keeps content clear of
+the notch. Standalone marks `data-standalone` before first paint. JS sizes `#app` to
 the visual viewport and forces 8px under the composer — never
 `env(safe-area-inset-bottom)`, which is ~80px on a Home Screen app even
 with the keyboard up. The topbar and rail head floor
@@ -346,14 +349,14 @@ description stacks.
 should be able to leave by the same edge, and the grabber is only there
 because it says so. The drag is direction-locked — a mostly-vertical pull on
 the sheet's own surface, not on a control and not on a list that can still
-scroll up — and while it is under a finger the chat behind sharpens in step:
+scroll up — and while it is under a finger the chat behind lightens in step:
 the veil is its own pseudo-element (`#model-sheet::before`) so it can be set
 from the drag, because an element's own `backdrop-filter` cannot be eased
-from a finger. It is also the **only** layer with a backdrop filter: the
-full-screen sheet root stays unfiltered, and the panel is explicitly stacked
-above the veil, or WebKit can blur the topbar and fold the transformed panel
-into the same soft layer. The veil starts below the topbar — the topbar is
-chrome, not chat, and blurring it read as the app losing focus. Letting go
+from a finger. It is also a **flat scrim only** — no `backdrop-filter`, which
+bleeds upward and made the topbar look softly blurred (often with a blue cast
+from the chat). The sheet is positioned below the topbar — the topbar is
+chrome, not chat, and treating it like chat read as the app losing focus.
+Letting go
 past a third of the panel, or with a flick, dismisses it; anything less springs back.
 Open and close are the same motion played both ways — the panel rises on
 open and falls on close, and close waits for the fall before taking the

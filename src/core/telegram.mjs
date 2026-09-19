@@ -450,9 +450,10 @@ export class TelegramBridge extends EventEmitter {
             'Send any message to prompt the active session.',
             '',
             '/sessions — list and switch',
-            '/new [folder] — start a session',
+            '/new [agent] [folder] — start a session',
+            '/agents — which agents are installed',
             '/stop — interrupt the current turn',
-            '/mode agent|plan|debug|multitask|ask',
+            '/mode — pick a mode',
             '/projects — projects on this machine',
             '/chats — continue a chat from the desktop app',
             '/model — pick a model',
@@ -546,9 +547,31 @@ export class TelegramBridge extends EventEmitter {
       }
 
       case '/new': {
-        const meta = await this.sessions.startInIde(arg ? { folder: arg } : {});
+        // A leading agent name chooses the agent; the rest is the folder:
+        // `/new opencode D:\repo` starts an opencode session there.
+        const parts = String(arg || '').trim().split(/\s+/);
+        const first = (parts[0] || '').toLowerCase();
+        const named = this.sessions.agents().find((a) => a.name === first && a.available);
+        const agent = named ? named.name : undefined;
+        const folder = named ? parts.slice(1).join(' ').trim() : String(arg || '').trim();
+        const meta = await this.sessions.startInIde({ ...(folder ? { folder } : {}), agent });
         this.sessions.setActive(meta.id);
-        return this.send(`Started <b>${esc(meta.title)}</b>\n<code>${esc(meta.folder)}</code>`);
+        return this.send(
+          `Started <b>${esc(meta.title)}</b>\n<code>${esc(meta.folder)}</code>` +
+            `\nagent: <b>${esc(meta.agent || 'cursor')}</b>`,
+        );
+      }
+
+      case '/agents': {
+        const list = this.sessions.agents();
+        const lines = list.map(
+          (a) =>
+            `${a.default ? '● ' : ''}<b>${esc(a.name)}</b>` +
+            (a.available ? ' — ready' : ` — unavailable${a.reason ? `: ${esc(a.reason)}` : ''}`),
+        );
+        return this.send(
+          `Agents:\n${lines.join('\n')}\n\nStart one with /new ${list[0]?.name || 'opencode'} [folder].`,
+        );
       }
 
       case '/stop': {
@@ -567,10 +590,14 @@ export class TelegramBridge extends EventEmitter {
         // A Cursor chat has Cursor's own modes, which are more than three and
         // not ours to name. Ask the window what it offers.
         if (active.kind === 'desktop') return this.#pickInCursor(active, 'mode', arg);
+        // Auto-only agents name their own modes — opencode has build and plan,
+        // not Cursor's five — so the list comes from what the session offers.
+        const offered = this.sessions.catalogFor(active.agent).modes?.availableModes || [];
+        const valid = offered.length ? offered.map((m) => m.id || m.name) : SESSION_MODES;
         const wanted = arg.toLowerCase();
-        if (!SESSION_MODES.includes(wanted)) {
+        if (!valid.includes(wanted)) {
           return this.send(
-            `Mode is <b>${esc(active.mode)}</b>. Use /mode ${SESSION_MODES.join('|')}.`,
+            `Mode is <b>${esc(active.mode)}</b>. Use /mode ${valid.join('|')}.`,
           );
         }
         await this.sessions.setMode(active.id, wanted);
@@ -580,7 +607,7 @@ export class TelegramBridge extends EventEmitter {
       case '/model': {
         if (!active) return this.send('No active session.');
         if (active.kind === 'desktop') return this.#pickInCursor(active, 'model', arg);
-        const models = this.sessions.catalog?.models || [];
+        const models = this.sessions.catalogFor(active.agent).models || [];
         if (!models.length) {
           // Starting the agent takes a moment; do not hold up the poll loop.
           this.sessions.ensureLive(active.id).catch(() => {});
