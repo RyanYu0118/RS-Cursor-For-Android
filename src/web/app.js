@@ -2757,6 +2757,19 @@ function renderDesktopChats(folder, chats) {
 }
 
 /**
+ * What to call a model on screen.
+ *
+ * Agents namespace a model by provider — "Vercel AI Gateway/DeepSeek V4.1
+ * Flash" — and that prefix is the same on every row while the part that tells
+ * them apart is the last segment. Show the name alone; the id keeps the rest.
+ * Older catalogs cached in a tab may still carry the prefix, so clean here too.
+ */
+function modelDisplayName(name) {
+  const text = String(name || '').replace(/\[.*$/, '').trim();
+  return text.split(/[\\/]/).pop().trim() || text;
+}
+
+/**
  * What the model <select> should say for a catalog row.
  *
  * The agent names models as slugs (`kimi-k3`) while Cursor's menu uses words
@@ -2764,8 +2777,8 @@ function renderDesktopChats(folder, chats) {
  */
 function modelOptionLabel(m) {
   if (m.modelId === 'default[]') return 'Auto-select (Cursor picks)';
-  const name = String(m.name || m.modelId || '').replace(/\[.*$/, '');
-  if (/\s/.test(name) || !name.includes('-')) return m.name || m.modelId;
+  const name = modelDisplayName(m.name || m.modelId || '');
+  if (/\s/.test(name) || !name.includes('-')) return name;
   return name
     .split('-')
     .map((part) => (part && /[a-z]/.test(part[0]) ? part[0].toUpperCase() + part.slice(1) : part))
@@ -2817,7 +2830,7 @@ function selectModel(modelId, modelName) {
     updateModelPresentation();
     return;
   }
-  const name = String(modelName || modelId || '').trim();
+  const name = modelDisplayName(modelName || modelId || '');
   if (!name) return;
   const byName = options.find((o) => o.textContent === name);
   if (byName) {
@@ -2850,7 +2863,7 @@ function updateModelPresentation() {
     return;
   }
 
-  const model = state.modelControls?.model || selectedModelLabel();
+  const model = modelDisplayName(state.modelControls?.model || selectedModelLabel());
   els.modelChoiceLabel.textContent = model;
   els.modelChoice.disabled = Boolean(state.modelUpdating);
 

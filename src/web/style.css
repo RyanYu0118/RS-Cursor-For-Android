@@ -1628,6 +1628,7 @@ html[data-standalone] #composer {
  */
 .composer-box {
   --mode-color: var(--mode-agent);
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1636,7 +1637,7 @@ html[data-standalone] #composer {
   border-radius: 18px;
   /* One inset for the whole field, so text, chips and circles share an edge. */
   padding: 8px;
-  transition: border-color 0.12s ease;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
 }
 
 .composer-box[data-mode='plan'] { --mode-color: var(--mode-plan); }
@@ -1646,11 +1647,30 @@ html[data-standalone] #composer {
 
 .composer-box:focus-within { border-color: var(--mode-color); }
 
-/* A file dragged over the field: the whole box leans forward, so the drop
-   reads as landing in the message rather than on the page. */
+/* A file dragged over the field: the whole box turns into the target — a
+   tinted, dashed ring with a label across it, so it is unmistakable where the
+   image will land. The overlay never takes the pointer, so the drag keeps
+   reaching the box underneath. */
 .composer-box.dropping {
-  border-color: var(--focus);
-  background: var(--bg-3);
+  border-color: color-mix(in srgb, var(--focus) 60%, transparent);
+  background: color-mix(in srgb, var(--focus) 10%, var(--bg-2));
+}
+
+.composer-box.dropping::after {
+  content: 'Drop image to attach';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--focus);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--bg-2) 82%, transparent);
+  color: var(--focus);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .composer-main {

@@ -47,6 +47,24 @@ export function echoKey(text) {
 }
 
 /**
+ * What to call a model on screen.
+ *
+ * Agents namespace a model by provider — "Vercel AI Gateway/DeepSeek V4.1
+ * Flash" — and that prefix is the same on every row while the part that tells
+ * them apart is the last segment. Show the name alone; the id keeps the rest.
+ */
+export function displayModelName(name) {
+  const text = String(name || '').trim();
+  if (!text) return text;
+  return text.split(/[\\/]/).pop().trim() || text;
+}
+
+/** A catalog with every model name reduced to what the pickers should show. */
+export function displayModels(models) {
+  return (models || []).map((m) => ({ ...m, name: displayModelName(m.name || m.modelId) }));
+}
+
+/**
  * The model id the web picker needs after a desktop switch.
  *
  * Cursor's menu only speaks names ("Opus 5 High"); the <select> is keyed by
@@ -329,10 +347,11 @@ export class SessionManager extends EventEmitter {
         if (raw.catalogs) {
           for (const agent of AGENTS) {
             const saved = raw.catalogs[agent];
-            if (saved) this.catalogs[agent] = { models: saved.models || [], modes: saved.modes || [] };
+            if (saved) this.catalogs[agent] = { models: displayModels(saved.models), modes: saved.modes || [] };
           }
         } else if (raw.catalog) {
-          this.catalogs.cursor = raw.catalog;
+          const models = Array.isArray(raw.catalog) ? raw.catalog : raw.catalog.models || [];
+          this.catalogs.cursor = { models: displayModels(models), modes: raw.catalog.modes || [] };
         }
       } catch (err) {
         this.emit('log', `could not read ${this.statePath}: ${err.message}`);
@@ -788,7 +807,7 @@ export class SessionManager extends EventEmitter {
     const agent = client.agent;
     if (models?.availableModels?.length) {
       this.catalogs[agent] = {
-        models: models.availableModels,
+        models: displayModels(models.availableModels),
         modes: modes?.availableModes || this.catalogs[agent]?.modes || [],
       };
       this.emit('catalog', { agent, catalog: this.catalogs[agent] });
@@ -859,7 +878,7 @@ export class SessionManager extends EventEmitter {
 
     const agent = runtime.client?.agent || this.meta.get(id)?.agent || 'cursor';
     const known = this.catalogs[agent] || { models: [], modes: [] };
-    if (normalized.models?.availableModels?.length) known.models = normalized.models.availableModels;
+    if (normalized.models?.availableModels?.length) known.models = displayModels(normalized.models.availableModels);
     if (normalized.modes?.availableModes?.length) known.modes = normalized.modes.availableModes;
     this.catalogs[agent] = known;
 
@@ -2571,7 +2590,7 @@ export class SessionManager extends EventEmitter {
       : Object.values(this.catalogs).map((c) => c.models);
     for (const models of lists) {
       const hit = models?.find((m) => m.modelId === modelId);
-      if (hit) return hit.name || modelId;
+      if (hit) return displayModelName(hit.name || modelId);
     }
     return modelId;
   }
