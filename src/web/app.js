@@ -160,6 +160,8 @@ const state = {
   turnClock: null,
   /** how much tool detail to draw: quiet | normal | verbose (host-owned) */
   verbosity: 'normal',
+  /** true while the pane is at the live edge; a scroll away turns it off */
+  atBottom: true,
   /** "Working…" while a turn runs; becomes "Worked for 7m 3s" when it ends */
   statusEl: null,
   /** true while history is being painted, so finished turns do not flash Working */
@@ -4220,6 +4222,41 @@ els.box.addEventListener('paste', (e) => {
   e.preventDefault();
   files.forEach(addImage);
 });
+
+// An image dragged onto the composer lands the same way a pasted one does.
+// Without turning the drag away the browser navigates to the file and the
+// whole app disappears, so every drop that carries files is claimed.
+const dropBox = document.querySelector('.composer-box');
+const dragHasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+let dragDepth = 0;
+const dropImages = (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  dropBox.classList.remove('dropping');
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'));
+  files.forEach(addImage);
+};
+dropBox.addEventListener('dragenter', (e) => {
+  if (!dragHasFiles(e)) return;
+  e.preventDefault();
+  dragDepth += 1;
+  dropBox.classList.add('dropping');
+});
+dropBox.addEventListener('dragover', (e) => {
+  if (!dragHasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+});
+dropBox.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) dropBox.classList.remove('dropping');
+});
+dropBox.addEventListener('drop', dropImages);
+// A file aimed slightly wide of the field would still be opened by the
+// browser; swallow those too so the page stays put.
+window.addEventListener('dragover', (e) => { if (dragHasFiles(e)) e.preventDefault(); });
+window.addEventListener('drop', (e) => { if (dragHasFiles(e)) e.preventDefault(); });
+
 $('attach').onclick = () => els.file.click();
 els.file.onchange = () => {
   [...els.file.files].forEach(addImage);

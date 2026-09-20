@@ -1646,6 +1646,13 @@ html[data-standalone] #composer {
 
 .composer-box:focus-within { border-color: var(--mode-color); }
 
+/* A file dragged over the field: the whole box leans forward, so the drop
+   reads as landing in the message rather than on the page. */
+.composer-box.dropping {
+  border-color: var(--focus);
+  background: var(--bg-3);
+}
+
 .composer-main {
   display: flex;
   align-items: flex-start;
