@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-19
+* **Feature**: Typing **`/`** in the web chat box opens a **slash-command list** above it (Verbosity, Mode, Approvals, Model, New session, Stop, Settings, Refresh sessions, Restart Auto). A command with choices opens a second page of options with the current one ticked; arrow keys / tap move, Enter / tap pick, and Escape steps back a page at a time — options, then the list, then the input. See [Web](concepts/web.md).
 * **Feature**: A host-owned **verbosity** setting (`state/settings.json`, `src/core/settings.mjs`) with three levels, shared by web and Telegram. Set it from Settings → **Chat detail** (`host.verbosity`) or Telegram `/verbosity` (bare lists the three as buttons); it persists and is broadcast so every client agrees. Quiet tallies a turn into one line, normal is the previous view, verbose restores tool inputs, raw output envelopes, and the tools Cursor hides. See [Display settings](concepts/settings.md).
 * **Update**: The live turn line now counts elapsed time — "Working… 12s", ticking once a second — and the quiet turn summary adds what the turn did to the finished "Worked for…" line. Telegram shows the same elapsed time on its edited turn message.
 * **Update**: Tool cards no longer print their structured input or the JSON envelope around their output. ACP results (`{ output, metadata }`) and Cursor's `{ text }` / `stdout` / `stderr` are read by `toolOutputText`, which yields the human text or nothing — the braces were burying the one readable line.

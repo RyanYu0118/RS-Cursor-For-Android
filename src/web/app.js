@@ -3910,6 +3910,292 @@ function autosize() {
   syncSend();
 }
 
+// ------------------------------------------------------------------ slash
+
+/**
+ * Slash commands in the chat box, the way ChatGPT opens them: typing `/`
+ * lists them, a command with choices opens a second page, and Escape steps
+ * back one page at a time — choices, then the command list, then the input.
+ *
+ * Every command here is an existing action reached from a phone-sized list,
+ * so nothing new has to be learned; the verbosity choices are the same host
+ * setting as Settings → Chat detail.
+ */
+const slash = { open: false, level: 'commands', command: null, index: 0, items: [] };
+
+function slashCommands() {
+  return [
+    {
+      id: 'verbosity',
+      name: 'Verbosity',
+      hint: 'How much tool detail a chat shows',
+      current: () => state.verbosity,
+      options: [
+        { value: 'quiet', name: 'Quiet', hint: 'Summarise each turn' },
+        { value: 'normal', name: 'Normal', hint: 'Activity lines, edits, commands' },
+        { value: 'verbose', name: 'Verbose', hint: 'Tool inputs and raw output' },
+      ],
+      run: (value) => {
+        applySettings({ verbosity: value }, { rerender: true });
+        sendOp({ op: 'host.verbosity', level: value });
+      },
+    },
+    {
+      id: 'mode',
+      name: 'Mode',
+      hint: 'How the agent works',
+      current: () => els.mode.value,
+      options: () => [...els.mode.options].map((o) => ({ value: o.value, name: o.textContent })),
+      run: (value) => {
+        els.mode.value = value;
+        els.mode.onchange();
+      },
+    },
+    {
+      id: 'policy',
+      name: 'Approvals',
+      hint: 'When to ask before acting',
+      current: () => els.policy.value,
+      options: [
+        { value: 'ask', name: 'Ask every time' },
+        { value: 'ask-on-write', name: 'Ask before writes' },
+        { value: 'auto', name: 'Auto-approve' },
+      ],
+      run: (value) => {
+        els.policy.value = value;
+        els.policy.onchange();
+      },
+    },
+    {
+      id: 'model',
+      name: 'Model',
+      hint: 'Choose a model and its parameters',
+      run: () => {
+        if (!els.modelAuto.checked) setModelSheet(true);
+      },
+    },
+    { id: 'new', name: 'New session', hint: 'Start in a folder', run: () => $('new-session').click() },
+    { id: 'stop', name: 'Stop', hint: 'Interrupt the current turn', run: () => els.stop.onclick() },
+    { id: 'settings', name: 'Settings', hint: 'Theme, host, chat detail', run: () => $('sheet-open').click() },
+    { id: 'sync', name: 'Refresh sessions', hint: 'Re-read the agent and Cursor', run: () => sendOp({ op: 'sessions.sync' }) },
+    {
+      id: 'restart',
+      name: 'Restart Auto',
+      hint: 'Wait for the turn, then reapply changes',
+      run: () => $('restart').click(),
+    },
+  ];
+}
+
+/** A small inline glyph for a slash row. */
+function slashSpan(cls, text) {
+  const span = document.createElement('span');
+  span.className = cls;
+  span.textContent = text;
+  return span;
+}
+
+const slashOptions = (command) => {
+  const options = typeof command.options === 'function' ? command.options() : command.options;
+  return Array.isArray(options) ? options : [];
+};
+
+const slashHasOptions = (command) => slashOptions(command).length > 0;
+
+/** The text after `/`, or null when the box is not a command being typed. */
+function slashQuery() {
+  const value = els.box.value;
+  if (!value.startsWith('/')) return null;
+  const rest = value.slice(1);
+  if (/\s/.test(rest)) return null;
+  return rest.toLowerCase();
+}
+
+function renderSlash(query = '') {
+  const list = $('slash-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (slash.level === 'options' && slash.command) {
+    slash.items = slashOptions(slash.command).map((opt) => ({ kind: 'option', opt }));
+  } else {
+    const q = String(query || '').toLowerCase();
+    slash.items = slashCommands()
+      .filter(
+        (c) =>
+          !q ||
+          c.name.toLowerCase().includes(q) ||
+          c.id.includes(q) ||
+          (c.hint || '').toLowerCase().includes(q),
+      )
+      .map((command) => ({ kind: 'command', command }));
+  }
+
+  const current = slash.level === 'options' ? slash.command?.current?.() : null;
+  for (const [i, item] of slash.items.entries()) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'slash-row';
+    row.setAttribute('role', 'option');
+
+    const name = document.createElement('span');
+    name.className = 'slash-name';
+    const hint = document.createElement('span');
+    hint.className = 'slash-hint';
+
+    if (item.kind === 'command') {
+      name.textContent = item.command.name;
+      hint.textContent = item.command.hint || '';
+      row.append(name, hint);
+      if (slashHasOptions(item.command)) row.append(slashSpan('slash-chevron', '›'));
+    } else {
+      name.textContent = item.opt.name;
+      hint.textContent = item.opt.hint || '';
+      row.append(name, hint);
+      if (current != null && current === item.opt.value) row.append(slashSpan('slash-check', '✓'));
+    }
+
+    row.onmouseenter = () => {
+      slash.index = i;
+      paintSlashActive();
+    };
+    row.onclick = () => slashChoose(i);
+    list.append(row);
+  }
+
+  if (!slash.items.length) {
+    list.append(said('slash-empty', slash.level === 'options' ? 'No options.' : 'No matching command.'));
+  }
+  if (slash.index >= slash.items.length) slash.index = Math.max(0, slash.items.length - 1);
+  paintSlashActive();
+}
+
+function paintSlashActive() {
+  const rows = [...$('slash-list').querySelectorAll('.slash-row')];
+  rows.forEach((row, i) => {
+    const active = i === slash.index;
+    row.classList.toggle('active', active);
+    row.setAttribute('aria-selected', String(active));
+  });
+  rows[slash.index]?.scrollIntoView({ block: 'nearest' });
+}
+
+function slashSetLevel(level, command) {
+  slash.open = true;
+  slash.level = level;
+  slash.command = command || null;
+  if (level === 'options' && command) {
+    const at = slashOptions(command).findIndex((o) => o.value === command.current?.());
+    slash.index = at >= 0 ? at : 0;
+  } else {
+    slash.index = 0;
+  }
+  const panel = $('slash');
+  panel.hidden = false;
+  panel.querySelector('.slash-head').hidden = level !== 'options';
+  $('slash-title').textContent = command?.name || '';
+  renderSlash(level === 'commands' ? slashQuery() || '' : '');
+}
+
+function slashClose() {
+  slash.open = false;
+  slash.level = 'commands';
+  slash.command = null;
+  slash.index = 0;
+  slash.items = [];
+  const panel = $('slash');
+  if (panel) panel.hidden = true;
+}
+
+/** Everything that was typed to reach the palette is the palette's, not a message. */
+function clearSlashText() {
+  if (slashQuery() === null) return;
+  els.box.value = '';
+  clearDraft(state.sessionId);
+  autosize();
+}
+
+function slashBack() {
+  if (slash.level === 'options') {
+    slashSetLevel('commands', null);
+    return;
+  }
+  slashClose();
+  els.box.focus({ preventScroll: true });
+}
+
+function slashMove(delta) {
+  const count = slash.items.length;
+  if (!count) return;
+  slash.index = (slash.index + delta + count) % count;
+  paintSlashActive();
+}
+
+function slashChoose(i) {
+  const item = slash.items[i];
+  if (!item) return;
+  if (item.kind === 'command') {
+    if (slashHasOptions(item.command)) {
+      const command = item.command;
+      clearSlashText();
+      slashSetLevel('options', command);
+      // A tap on a row blurs the box; put the caret back so keys keep working.
+      els.box.focus({ preventScroll: true });
+      return;
+    }
+    const command = item.command;
+    slashClose();
+    clearSlashText();
+    command.run?.();
+    return;
+  }
+  const command = slash.command;
+  slashClose();
+  clearSlashText();
+  command?.run?.(item.opt.value);
+  els.box.focus({ preventScroll: true });
+}
+
+/** Keyboard while the palette is open: arrows move, Enter picks, Escape steps back. */
+function slashKey(e) {
+  if (!slash.open) return false;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    slashBack();
+    return true;
+  }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    e.stopPropagation();
+    slashMove(e.key === 'ArrowDown' ? 1 : -1);
+    return true;
+  }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    e.stopPropagation();
+    slashChoose(slash.index);
+    return true;
+  }
+  return false;
+}
+
+/** Follow what is typed: `/` opens the list, more letters filter it. */
+function slashSync() {
+  const query = slashQuery();
+  if (query === null) {
+    if (slash.open) slashClose();
+    return;
+  }
+  if (!slash.open) {
+    slashSetLevel('commands', null);
+    return;
+  }
+  if (slash.level === 'commands') renderSlash(query);
+}
+
+$('slash-back').onclick = () => slashBack();
+
 // Folding the queue away is a choice worth keeping; the count stays visible.
 els.queue.addEventListener('toggle', () => {
   els.queue.dataset.touched = '1';
@@ -3917,8 +4203,12 @@ els.queue.addEventListener('toggle', () => {
 
 els.send.onclick = () => submit();
 els.stop.onclick = () => sendOp({ op: 'cancel', sessionId: state.sessionId });
-els.box.addEventListener('input', autosize);
+els.box.addEventListener('input', () => {
+  autosize();
+  slashSync();
+});
 els.box.addEventListener('keydown', (e) => {
+  if (slashKey(e)) return;
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     submit();

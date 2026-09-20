@@ -4758,6 +4758,48 @@ if (existsSync(SRC)) {
   }
 }
 
+// Slash commands in the chat box: `/` lists them, a command with options opens
+// a second page, and Escape steps back a page at a time.
+{
+  const html = readFileSync(join(ROOT, 'src/web/index.html'), 'utf8');
+  const css = readFileSync(join(ROOT, 'src/web/style.css'), 'utf8');
+  const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
+  let failed = false;
+  if (!html.includes('id="slash"') || !html.includes('id="slash-list"') || !html.includes('id="slash-back"')) {
+    fail('the chat box needs a slash-command list');
+    failed = true;
+  }
+  for (const fn of ['slashCommands', 'slashQuery', 'renderSlash', 'slashSetLevel', 'slashBack', 'slashChoose', 'slashKey', 'slashSync']) {
+    if (!js.includes(`function ${fn}`)) {
+      fail(`slash palette missing ${fn}`);
+      failed = true;
+    }
+  }
+  if (!js.includes("id: 'verbosity'") || !js.includes("name: 'Verbosity'")) {
+    fail('Verbosity must be a slash command');
+    failed = true;
+  }
+  if (!js.includes('slashOptions') || !js.includes('slashHasOptions')) {
+    fail('a slash command with options must open a second page');
+    failed = true;
+  }
+  // Escape steps back a page, then back to the field.
+  const back = js.slice(js.indexOf('function slashBack'), js.indexOf('function slashMove'));
+  if (!back.includes("slashSetLevel('commands'") || !back.includes('els.box.focus')) {
+    fail('Escape must return to the command list, then focus the input');
+    failed = true;
+  }
+  if (!js.includes("els.box.addEventListener('keydown'") || !js.includes('slashKey(e)')) {
+    fail('the chat box must give the palette first go at the keys');
+    failed = true;
+  }
+  if (!css.includes('#slash') || !css.includes('.slash-row.active')) {
+    fail('the slash palette needs styling');
+    failed = true;
+  }
+  if (!failed) ok('v2 web: slash commands with options and Escape stepping');
+}
+
 // 1f. Telegram turn rendering: status on top, prose escaped, size bounded.
 {
   try {

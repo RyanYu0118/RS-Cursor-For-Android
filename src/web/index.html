@@ -213,6 +213,15 @@
         <summary><span id="queue-count"></span></summary>
         <div id="queue-list"></div>
       </details>
+      <!-- Slash commands, opened with `/` in the chat box. A command with
+           options opens a second page; Escape steps back a page at a time. -->
+      <div id="slash" hidden>
+        <div class="slash-head" hidden>
+          <button id="slash-back" class="icon" type="button" title="Back" aria-label="Back">‹</button>
+          <span id="slash-title"></span>
+        </div>
+        <div id="slash-list" role="listbox" aria-label="Commands"></div>
+      </div>
       <!-- One field, with its buttons inside it and its pickers beneath, the
           way Cursor's own chat box carries them. Pasted images sit in here
           too — above the text, still inside the same border. -->

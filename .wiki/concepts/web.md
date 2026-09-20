@@ -290,6 +290,17 @@ a 56px chip is a checkbox, not a preview. Stop interrupts. The busy
 session still accepts another message — it queues. `ask_question` is a
 Question card with real options, not an OTHER tool bar.
 
+Typing **`/`** in the box opens a **slash-command list** above it, the way
+ChatGPT does: arrow keys or a tap move the highlight, Enter or a tap picks,
+and further letters filter the list. A command with choices (Verbosity,
+Mode, Approvals) opens a second page with the current choice ticked;
+**Escape** steps back a page at a time — choices, then the command list,
+then the caret returns to the box. The commands are existing actions
+reached from a phone-sized list: Verbosity, Mode, Approvals, Model, New
+session, Stop, Settings, Refresh sessions, Restart Auto. Choosing one
+clears the `/…` text, and a space closes the palette so a message can still
+begin with `/`.
+
 Each session keeps its own unsent draft: switching chats parks what you
 were typing and restores it when you come back. An idle send appears in
 the stream at once — it used to wait until Cursor's window had taken it.
