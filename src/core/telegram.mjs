@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
 import { listProjects, workspaceIdFor } from './projects.mjs';
 import { desktopChats } from './desktop-chats.mjs';
 import { optionLetter, parseQuestionReply } from './questions.mjs';
-import { classifyTool, displayLabel, foldTools, isCreatedPlan, planFields, turnCopy } from './desktop-tool-ui.mjs';
+import { classifyTool, displayLabel, durationText, foldTools, isCreatedPlan, planFields, turnCopy } from './desktop-tool-ui.mjs';
 import { linkify } from '../web/markdown.js';
 import { modelPrice } from '../web/model-pricing.js';
 
@@ -169,7 +169,7 @@ export function renderTurn({
             return t.failure ? `${line} — ${esc(t.failure)}` : line;
           })
           .join('\n');
-  const clock = running && elapsedMs >= 1000 ? `⌛ <b>${Math.round(elapsedMs / 1000)}s</b>` : '';
+  const clock = running && elapsedMs >= 1000 ? `⌛ <b>${durationText(elapsedMs)}</b>` : '';
   if (verbosity === 'quiet') {
     head = [clock, head ? `▸ <i>${head}</i>` : ''].filter(Boolean).join(' ');
   } else if (clock) {

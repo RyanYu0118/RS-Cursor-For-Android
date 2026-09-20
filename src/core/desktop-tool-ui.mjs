@@ -6,7 +6,7 @@ export {
   activityCopy,
   classifyTool,
   displayLabel,
-  durationBits,
+  durationText,
   editCopy,
   editStatsForTurn,
   fileStats,

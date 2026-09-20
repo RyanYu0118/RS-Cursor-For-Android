@@ -17,7 +17,7 @@ sources:
   - id: telegram
     resource: /src/core/telegram.mjs
     title: /verbosity and quiet summary
-generated: { by: agent, at: 2026-09-19T00:00:00Z }
+generated: { by: agent, at: 2026-09-20T00:00:00Z }
 ---
 
 # Display settings
@@ -37,14 +37,16 @@ persists the choice, so it survives a restart.
 
 | Level | What a chat shows |
 | --- | --- |
-| `quiet` | One summary line per turn — what it did and how long — and no per-tool rows |
+| `quiet` | One summary line per turn — what it did and how long — and no per-tool rows; every spell of reasoning in the turn folds into a single Thinking block |
 | `normal` (default) | [Tool lanes](tool-lanes.md): activity lines, `Edited file +N −M`, command cards with their output |
 | `verbose` | On the web: everything, plus the tool's structured input, the raw `{output, metadata}` envelope when there is no readable text, and the tools Cursor deliberately hides. On Telegram: the hidden tools too, though command bodies stay on the web |
 
 `quiet` is a summary rather than a filter: reads, edits, and commands are
 tallied and drawn once, so a long turn is a few lines, not a wall. Created
 Plans, approvals, and questions stay visible at every level — they need an
-answer.
+answer. Reasoning is likewise one block per turn, not one per spell: how many
+times the agent paused is noise on a phone, only that it thought and for how
+long matters.
 
 "Show all" at `verbose` includes the MCP placeholders and internal bubbles
 the IDE omits; `normal` and `quiet` keep them out. That omission is the
@@ -52,10 +54,14 @@ IDE's, not a verbosity choice, so it only returns when explicitly asked for.
 
 ## The turn clock
 
-While a turn runs its line reads **Working… 12s**, ticking once a second;
-when it ends it becomes **Worked for 7m 3s** / **Thought for 1s**, plus the
-quiet tally. Telegram shows the same elapsed time on the edited turn
-message, and the finished "Worked for…" label.
+Times are clocks, not prose: `mm:ss` while under an hour (`07:03`, `00:08`),
+`hh:mm:ss` past it (`01:07:03`). While a turn runs its line reads
+**Working… 00:12**, ticking once a second; when it ends it becomes
+**Worked for 07:03** / **Thought for 00:01**. A finished turn always carries
+a description of what it did: the quiet tally is appended to the line, and at
+`normal`/`verbose` the agent's own answer carries it — the tally is added only
+when the turn produced no answer. Telegram shows the same clock on the edited
+turn message, and the finished "Worked for…" label.
 
 ## Related
 

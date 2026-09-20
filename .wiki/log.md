@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-09-20
+* **Update**: Turn times are clocks now: `mm:ss` under an hour, `hh:mm:ss` past it — "Working… 00:12", "Worked for 07:03", "Thought for 00:01", tool durations too. `durationBits` (s/m phrasing) became `durationText`, shared by web and Telegram. See [Display settings](concepts/settings.md).
+* **Update**: Under `quiet`, every spell of reasoning in a turn folds into a single **Thinking** block, its summary the total time spent thinking — not one block per pause. See [Web](concepts/web.md).
+* **Update**: A finished turn always carries a description of what it did. Quiet keeps its tally; at `normal`/`verbose` the tally is added when the turn produced no answer. See [Display settings](concepts/settings.md).
+
 ## 2026-09-19
 * **Feature**: Typing **`/`** in the web chat box opens a **slash-command list** above it (Verbosity, Mode, Approvals, Model, New session, Stop, Settings, Refresh sessions, Restart Auto). A command with choices opens a second page of options with the current one ticked; arrow keys / tap move, Enter / tap pick, and Escape steps back a page at a time — options, then the list, then the input. See [Web](concepts/web.md).
 * **Feature**: A host-owned **verbosity** setting (`state/settings.json`, `src/core/settings.mjs`) with three levels, shared by web and Telegram. Set it from Settings → **Chat detail** (`host.verbosity`) or Telegram `/verbosity` (bare lists the three as buttons); it persists and is broadcast so every client agrees. Quiet tallies a turn into one line, normal is the previous view, verbose restores tool inputs, raw output envelopes, and the tools Cursor hides. See [Display settings](concepts/settings.md).

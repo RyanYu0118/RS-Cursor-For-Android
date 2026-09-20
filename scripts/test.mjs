@@ -4595,19 +4595,20 @@ if (existsSync(SRC)) {
       [1, 1],
     );
 
-    const { turnCopy, durationBits } = await import('../src/core/desktop-tool-ui.mjs');
-    check('8 seconds', durationBits(8000), [8, 's']);
-    check('a minute thirty', durationBits(90_000), [1, 'm ', 30, 's']);
-    check('exact minutes', durationBits(120_000), [2, 'm']);
+    const { turnCopy, durationText } = await import('../src/core/desktop-tool-ui.mjs');
+    check('8 seconds', durationText(8000), '00:08');
+    check('a minute thirty', durationText(90_000), '01:30');
+    check('exact minutes', durationText(120_000), '02:00');
+    check('past an hour', durationText(3_723_000), '01:02:03');
     check(
       'worked',
       turnCopy({ durationMs: 423_000, worked: true }).label,
-      'Worked for 7m 3s',
+      'Worked for 07:03',
     );
     check(
       'thought',
       turnCopy({ durationMs: 1000, worked: false }).label,
-      'Thought for 1s',
+      'Thought for 00:01',
     );
     check('no clock yet', turnCopy({ durationMs: 0, worked: true }).label, 'Done');
 
@@ -4724,7 +4725,7 @@ if (existsSync(SRC)) {
     if ((quiet.match(/✓/g) || []).length) fail('quiet must not draw per-tool status lines');
     // The elapsed counter is shown while a turn is running.
     const clocked = renderTurn({ tools, running: true, elapsedMs: 5000 });
-    if (!clocked.includes('⌛') || !clocked.includes('5s')) fail(`a running turn should show elapsed time, got ${clocked}`);
+    if (!clocked.includes('⌛') || !clocked.includes('00:05')) fail(`a running turn should show elapsed time, got ${clocked}`);
     if (renderTurn({ tools, elapsedMs: 5000 }).includes('⌛')) fail('a finished turn should not keep the clock');
 
     // Wiring: web control + op, Telegram command, server op.
@@ -4743,6 +4744,12 @@ if (existsSync(SRC)) {
     }
     if (!js.includes('startTurnClock') || !js.includes('liveStatusParts')) {
       fail('the web must tick the live turn time');
+    }
+    if (!js.includes('quietThinking') || !js.includes('reuseQuiet')) {
+      fail('quiet must fold the turn’s thinking spells into one block');
+    }
+    if (!js.includes('durationText') || !tg.includes('durationText')) {
+      fail('times must be shown as mm:ss, or hh:mm:ss past an hour');
     }
     if (!js.includes("op: 'host.verbosity'")) fail('the web must send host.verbosity');
     if (!server.includes("OPS['host.verbosity']")) fail('the host must accept host.verbosity');

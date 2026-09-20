@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-19T00:00:00Z }
+generated: { by: agent, at: 2026-09-20T00:00:00Z }
 ---
 
 # Web app
@@ -188,8 +188,9 @@ is the way to start somewhere Cursor has never opened — see
   the first tap.
 - The [queue](queue.md) above the chat box, with reword / send now / delete.
 - Tool calls the way Cursor groups them — see [tool lanes](tool-lanes.md).
-- Diffs, thinking (folded when the block ends, timed from the record so a
-  replay says "Thought for 8s" rather than staying "Thinking"), permission
+- Diffs, thinking (folded into one block per turn under `quiet`, otherwise
+  folded when each block ends, timed from the record so a replay says
+  "Thought for 00:08" rather than staying "Thinking"), permission
   and question cards, [terminals](terminals.md), [browser](browser.md).
   Those two open as **tabs under the header**: Chat is always first and
   cannot be closed; Browser and each shell get an ×. The strip scrolls
@@ -202,10 +203,13 @@ is the way to start somewhere Cursor has never opened — see
   address both. User bubbles too. Images you attach show as thumbnails in
   the bubble (and inside the composer before send); tap one for a full-screen
   viewer you can pinch / scroll to zoom.
-- A turn still going says **Working… 12s** at the bottom of the stream, the
+- A turn still going says **Working… 00:12** at the bottom of the stream, the
   counter ticking once a second so waiting is legible. When it ends, that
-  line becomes **Worked for 7m 3s** or **Thought for 1s** above the answer,
-  the way Cursor labels a finished turn. Commands left
+  line becomes **Worked for 07:03** or **Thought for 00:01** above the answer,
+  the way Cursor labels a finished turn. Times are `mm:ss`, or `hh:mm:ss` past
+  an hour. A finished job always says what it did: the quiet tally rides the
+  line, and at other levels it is added when the agent left no answer. Commands
+  left
   "running…" after the session goes idle settle to stopped — an idle chip
   with live cards is a lie. Stopping a turn pulls the prompt back into the
   composer (and off the stream) so it can be edited and sent again — same
@@ -213,7 +217,8 @@ is the way to start somewhere Cursor has never opened — see
   reach the chat.
 - How much of that work is drawn is [display settings](settings.md): Settings
   → **Chat detail** is Quiet / Normal / Verbose, host-owned so web and
-  Telegram agree. Quiet tallies the turn instead of listing tools; Verbose
+  Telegram agree. Quiet tallies the turn instead of listing tools and folds
+  its reasoning into one block; Verbose
   brings back tool inputs, raw output envelopes, and the tools Cursor hides.
   Changing it re-draws the transcript from what is already cached.
 - While scrolling a long chat, a flush right-edge grip appears (rounded on

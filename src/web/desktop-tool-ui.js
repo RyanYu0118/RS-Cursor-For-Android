@@ -241,7 +241,7 @@ export function toolOutputText(out) {
   const ms = out.durationMs ?? meta.durationMs;
   const notes = [];
   if (exit !== undefined && exit !== null) notes.push(`exit ${exit}`);
-  if (ms) notes.push(`${(ms / 1000).toFixed(1)}s`);
+  if (ms) notes.push(durationText(ms));
   if (!text) return '';
   return notes.length ? `${text}\n[${notes.join(', ')}]` : text;
 }
@@ -362,25 +362,26 @@ export function editStatsForTurn(records = []) {
 }
 
 /**
- * How long a spell of work lasted, the way Cursor writes it: "8s", "7m 3s".
- * Counts stay separate from the units so a renderer can draw them louder.
+ * How long a spell of work lasted, as a clock: "07:03", or "01:07:03" once it
+ * runs past an hour. A bare count of seconds reads as noise across a long turn;
+ * minutes and seconds spelled out the way a stopwatch does read at a glance.
  */
-export function durationBits(ms) {
-  const s = Math.max(1, Math.round(Number(ms) / 1000) || 1);
-  if (s < 60) return [s, 's'];
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  if (!r) return [m, 'm'];
-  return [m, 'm ', r, 's'];
+export function durationText(ms) {
+  const total = Math.max(1, Math.round(Number(ms) / 1000) || 1);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
 /**
- * The line Cursor puts above a finished answer: "Worked for 7m 3s" when
- * anything was run, "Thought for 1s" when the turn was only thinking.
+ * The line Cursor puts above a finished answer: "Worked for 07:03" when
+ * anything was run, "Thought for 00:01" when the turn was only thinking.
  */
 export function turnCopy({ durationMs = 0, worked = false } = {}) {
   if (!(durationMs > 0)) return lineOf('Done');
-  return lineOf(worked ? 'Worked for ' : 'Thought for ', ...durationBits(durationMs));
+  return lineOf(worked ? 'Worked for ' : 'Thought for ', durationText(durationMs));
 }
 
 /** How many reads vs searches sit in a group of tool calls. */

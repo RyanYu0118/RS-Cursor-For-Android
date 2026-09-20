@@ -26,6 +26,7 @@ import {
   activityCopy,
   classifyTool,
   displayLabel,
+  durationText,
   editCopy,
   fileStats,
   groupTally,
@@ -152,6 +153,8 @@ const state = {
   streamBody: null,
   /** the thinking block being written to, so it can be folded when it ends */
   thinking: null,
+  /** quiet's one thinking block for the turn: sequential spells fold into it */
+  quietThinking: null,
   /** timestamp of the record currently being drawn, so replayed thinking is timed */
   now: 0,
   /** the open turn: when it started, whether tools ran, the live status line */
@@ -269,6 +272,7 @@ function resetChatUi() {
   state.streamKind = null;
   state.streamBody = null;
   state.thinking = null;
+  state.quietThinking = null;
   state.statusEl = null;
   state.turn = null;
   stopTurnClock();
@@ -1064,7 +1068,7 @@ function liveStatusParts() {
   const started = state.turn?.started || Date.now();
   const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
   const parts = [{ t: 'Working…' }];
-  if (secs >= 1) parts.push({ t: ` ${secs}s` });
+  if (secs >= 1) parts.push({ t: ` ${durationText(secs * 1000)}` });
   if (state.verbosity === 'quiet') {
     const extra = turnStatsParts(state.turn?.stats);
     if (extra.length) parts.push({ t: ' · ' }, ...extra);
@@ -1123,6 +1127,8 @@ function beginTurn(rec) {
     answer: null,
     stats: { files: 0, searches: 0, edits: 0, commands: 0, other: 0 },
   };
+  // Quiet folds a whole turn's reasoning into one block; a new turn gets its own.
+  state.quietThinking = null;
   paintLiveStatus();
 }
 
@@ -1149,10 +1155,12 @@ function endTurn(rec) {
   el.className = 'turn-status';
   el.removeAttribute('aria-live');
   const parts = turnCopy({ durationMs, worked }).parts;
-  // Quiet keeps the summary: how long it worked, and what it did.
-  if (state.verbosity === 'quiet') {
-    const extra = turnStatsParts(state.turn?.stats);
-    if (extra.length) parts.push({ t: ' · ' }, ...extra);
+  // A finished job always says what it did. Quiet hides the tool rows, so the
+  // tally is the only description there; at other levels the agent's own answer
+  // carries it, and the tally is only added when it said nothing.
+  const extra = turnStatsParts(state.turn?.stats);
+  if (extra.length && (state.verbosity === 'quiet' || !state.turn?.answer)) {
+    parts.push({ t: ' · ' }, ...extra);
   }
   paintParts(el, parts);
   const answer = state.turn?.answer;
@@ -1347,18 +1355,33 @@ function renderStreaming(rec) {
   if (!state.stream || state.streamKind !== rec.kind) {
     state.streamKind = rec.kind;
     if (isThought) {
-      const d = document.createElement('details');
-      d.className = 'think';
-      d.innerHTML = '<summary>Thinking</summary><div class="body"></div>';
-      // Open while it runs: on a phone this is the only sign of life between a
-      // prompt and the first words of an answer.
-      d.open = true;
-      d.dataset.started = String(rec.ts || Date.now());
-      add(d, { keepStream: true });
-      state.thinking = d;
-      state.stream = d.querySelector('.body');
-      state.streamBody = null;
-      state.stream.dataset.raw = '';
+      // Quiet folds every spell of reasoning in the turn into the one block:
+      // how many times it paused to think is not what a phone needs to know,
+      // only that it thought and for how long.
+      const reuseQuiet = state.verbosity === 'quiet' && state.quietThinking?.isConnected;
+      if (reuseQuiet) {
+        const d = state.quietThinking;
+        // A fresh run: time this spell from here, and keep the earlier total.
+        d.dataset.started = String(rec.ts || Date.now());
+        d.open = true;
+        state.thinking = d;
+        state.stream = d.querySelector('.body');
+        state.streamBody = null;
+      } else {
+        const d = document.createElement('details');
+        d.className = 'think';
+        d.innerHTML = '<summary>Thinking</summary><div class="body"></div>';
+        // Open while it runs: on a phone this is the only sign of life between a
+        // prompt and the first words of an answer.
+        d.open = true;
+        d.dataset.started = String(rec.ts || Date.now());
+        add(d, { keepStream: true });
+        state.thinking = d;
+        if (state.verbosity === 'quiet') state.quietThinking = d;
+        state.stream = d.querySelector('.body');
+        state.streamBody = null;
+        state.stream.dataset.raw = '';
+      }
     } else {
       // Body holds rendered HTML; the outer bubble keeps data-raw + the copy
       // footer. Rewriting innerHTML on the outer node would destroy the button.
@@ -4970,6 +4993,7 @@ function rerenderTranscript() {
   state.streamKind = null;
   state.streamBody = null;
   state.thinking = null;
+  state.quietThinking = null;
   state.statusEl = null;
   state.turn = null;
   stopTurnClock();
