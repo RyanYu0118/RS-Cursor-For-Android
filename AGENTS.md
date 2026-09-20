@@ -184,6 +184,14 @@ goes into the transcript and the agent. The queue is memory only, and stopping
   never recorded; a video stream is not worth replaying.
 - **The web and Telegram are projections.** Neither owns state. Anything one
   can do, the other should be able to do.
+- **Display settings live on the host.** `state/settings.json`
+  (`src/core/settings.mjs`) holds how much a chat shows — verbosity quiet /
+  normal / verbose — and is broadcast to every client, so the web and
+  Telegram cannot disagree. Set it from Settings → Chat detail or
+  `/verbosity`; the web re-draws from cache when it changes. Quiet is a
+  summary, normal is the default, verbose shows tool inputs and hidden
+  tools. Per-browser localStorage is only for what is private to a browser
+  (theme, rail, remembered model).
 
 ## Agents
 

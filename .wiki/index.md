@@ -23,6 +23,7 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [Browser](concepts/browser.md) - Headed Chrome, client-themed screencast, not recorded
 * [Terminals](concepts/terminals.md) - node-pty shells for the user and the agent
 * [Projects](concepts/projects.md) - Folders as Cursor sees them, plus a drives/folders browser for new ones
+* [Display settings](concepts/settings.md) - Host-owned chat detail (quiet / normal / verbose) and the turn clock, shared by web and Telegram
 * [Skills](concepts/skills.md) - Agent instructions, repo workflow, this wiki
 
 # Entities

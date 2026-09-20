@@ -303,6 +303,20 @@
       </div>
     </section>
 
+    <!-- How much of a turn's tool work the chat shows. Host-owned, so the
+         phone and every browser agree; see Settings → Chat detail. -->
+    <section class="sheet-block">
+      <h2>Chat detail</h2>
+      <div class="seg" id="verbosity-seg" role="group" aria-label="Chat detail">
+        <button data-verbosity-choice="quiet" aria-pressed="false">Quiet</button>
+        <button data-verbosity-choice="normal" aria-pressed="true">Normal</button>
+        <button data-verbosity-choice="verbose" aria-pressed="false">Verbose</button>
+      </div>
+      <div class="sheet-note" id="verbosity-note">
+        Quiet summarises a turn; Verbose shows tool inputs and raw output.
+      </div>
+    </section>
+
     <section class="sheet-block" id="install-block" hidden>
       <h2>Home Screen</h2>
       <div class="sheet-row" id="install-row" hidden>

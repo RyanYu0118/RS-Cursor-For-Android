@@ -156,6 +156,10 @@ const state = {
   now: 0,
   /** the open turn: when it started, whether tools ran, the live status line */
   turn: null,
+  /** interval ticking the live turn's elapsed time, or null */
+  turnClock: null,
+  /** how much tool detail to draw: quiet | normal | verbose (host-owned) */
+  verbosity: 'normal',
   /** "Working…" while a turn runs; becomes "Worked for 7m 3s" when it ends */
   statusEl: null,
   /** true while history is being painted, so finished turns do not flash Working */
@@ -265,6 +269,7 @@ function resetChatUi() {
   state.thinking = null;
   state.statusEl = null;
   state.turn = null;
+  stopTurnClock();
   resetTerminals();
 }
 
@@ -1026,20 +1031,79 @@ function paintParts(el, parts) {
 }
 
 /**
+ * What a quiet turn did, as parts: "Explored 3 files, 1 search · Edited 2
+ * files · Ran 1 command". Quiet does not list steps; this is the whole row.
+ */
+function turnStatsParts(stats) {
+  if (!stats) return [];
+  const groups = [];
+  if (stats.files || stats.searches) {
+    groups.push(activityCopy({ files: stats.files, searches: stats.searches, running: false }).parts);
+  }
+  if (stats.edits) {
+    groups.push([{ t: 'Edited ' }, { n: stats.edits }, { t: stats.edits === 1 ? ' file' : ' files' }]);
+  }
+  if (stats.commands) {
+    groups.push([{ t: 'Ran ' }, { n: stats.commands }, { t: stats.commands === 1 ? ' command' : ' commands' }]);
+  }
+  if (!groups.length && stats.other) {
+    groups.push([{ t: 'Used ' }, { n: stats.other }, { t: stats.other === 1 ? ' tool' : ' tools' }]);
+  }
+  const out = [];
+  for (const [i, group] of groups.entries()) {
+    if (i) out.push({ t: ' · ' });
+    out.push(...group);
+  }
+  return out;
+}
+
+/** "Working… 12s" — and, in quiet, what the turn has done so far. */
+function liveStatusParts() {
+  const started = state.turn?.started || Date.now();
+  const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
+  const parts = [{ t: 'Working…' }];
+  if (secs >= 1) parts.push({ t: ` ${secs}s` });
+  if (state.verbosity === 'quiet') {
+    const extra = turnStatsParts(state.turn?.stats);
+    if (extra.length) parts.push({ t: ' · ' }, ...extra);
+  }
+  return parts;
+}
+
+/** Tick the live turn's elapsed time once a second, so waiting is legible. */
+function startTurnClock() {
+  if (state.turnClock) return;
+  state.turnClock = setInterval(() => {
+    if (state.turn && state.statusEl?.isConnected && !state.replaying) {
+      paintParts(state.statusEl, liveStatusParts());
+    } else {
+      stopTurnClock();
+    }
+  }, 1000);
+}
+
+function stopTurnClock() {
+  if (!state.turnClock) return;
+  clearInterval(state.turnClock);
+  state.turnClock = null;
+}
+
+/**
  * The line that says the turn is still going, or how long it took.
  *
  * Cursor writes "Worked for 7m 3s" / "Thought for 1s" above the answer. While
- * the turn is live the same slot says "Working…" and stays at the bottom of
- * the stream, so a finished-looking command cannot be mistaken for the end.
+ * the turn is live the same slot says "Working… 12s" and stays at the bottom
+ * of the stream, so a finished-looking command cannot be mistaken for the end.
  */
 function paintLiveStatus() {
   if (state.replaying) return;
   const el = state.statusEl && state.statusEl.isConnected ? state.statusEl : div('turn-status live');
   el.className = 'turn-status live';
   el.setAttribute('aria-live', 'polite');
-  el.textContent = 'Working…';
+  paintParts(el, liveStatusParts());
   state.statusEl = el;
   els.transcript.appendChild(el);
+  startTurnClock();
   scrollDown();
 }
 
@@ -1047,14 +1111,21 @@ function dropLiveStatus() {
   if (!state.statusEl?.classList.contains('live')) return;
   state.statusEl.remove();
   state.statusEl = null;
+  stopTurnClock();
 }
 
 function beginTurn(rec) {
-  state.turn = { started: rec.ts || state.now || Date.now(), worked: false, answer: null };
+  state.turn = {
+    started: rec.ts || state.now || Date.now(),
+    worked: false,
+    answer: null,
+    stats: { files: 0, searches: 0, edits: 0, commands: 0, other: 0 },
+  };
   paintLiveStatus();
 }
 
 function endTurn(rec) {
+  stopTurnClock();
   // A turn that was pulled back into the composer has nothing left to summarise.
   if (rec?.interrupted || state.withdrawnTurn) {
     state.withdrawnTurn = false;
@@ -1075,7 +1146,13 @@ function endTurn(rec) {
   const el = state.statusEl && state.statusEl.isConnected ? state.statusEl : div('turn-status');
   el.className = 'turn-status';
   el.removeAttribute('aria-live');
-  paintParts(el, turnCopy({ durationMs, worked }).parts);
+  const parts = turnCopy({ durationMs, worked }).parts;
+  // Quiet keeps the summary: how long it worked, and what it did.
+  if (state.verbosity === 'quiet') {
+    const extra = turnStatsParts(state.turn?.stats);
+    if (extra.length) parts.push({ t: ' · ' }, ...extra);
+  }
+  paintParts(el, parts);
   const answer = state.turn?.answer;
   if (answer?.isConnected) answer.before(el);
   else if (!el.isConnected) add(el, { keepStream: true });
@@ -1564,23 +1641,47 @@ function addBundleItem(rec, ui) {
   paintBundle(state.bundle);
 }
 
+/** Tally a quiet turn's work so its one-line summary can say what happened. */
+function quietCountTool(ui) {
+  const stats = state.turn?.stats;
+  if (!stats) return;
+  if (ui.lane === 'fileChange') stats.edits += 1;
+  else if (ui.toolKind === 'search') stats.searches += 1;
+  else if (ui.toolKind === 'read' || ui.lane === 'group') stats.files += 1;
+  else if (ui.toolKind === 'execute') stats.commands += 1;
+  else stats.other += 1;
+}
+
 function renderToolCall(rec) {
   const ui = classifyTool(rec);
-  if (ui.lane === 'hide') {
+  const level = state.verbosity;
+  // Cursor hides a handful of internal bubbles; only verbose brings them back.
+  if (ui.lane === 'hide' && level !== 'verbose') {
     if (rec.toolCallId) state.toolCards.set(rec.toolCallId, { hidden: true });
     return;
   }
   if (state.turn) state.turn.worked = true;
+
+  // A Created Plan is actionable from the phone, so quiet still shows it.
+  if (isCreatedPlan(rec)) {
+    flushBundle();
+    renderCreatedPlan(rec);
+    return;
+  }
+
+  // Quiet is a summary: the turn's status line carries the tally, not the tool.
+  if (level === 'quiet') {
+    flushBundle();
+    quietCountTool(ui);
+    if (rec.toolCallId) state.toolCards.set(rec.toolCallId, { hidden: true });
+    return;
+  }
+
   if (ui.lane === 'fileChange' || ui.lane === 'group') {
     addBundleItem(rec, ui);
     return;
   }
   flushBundle();
-
-  if (isCreatedPlan(rec)) {
-    renderCreatedPlan(rec);
-    return;
-  }
 
   const card = document.createElement('details');
   card.className = 'tool';
@@ -1597,9 +1698,15 @@ function renderToolCall(rec) {
   card.querySelector('.label').textContent = toolLabel(rec);
 
   const body = card.querySelector('.body');
-  // The structured input is not shown: its braces buried the one useful line,
-  // and what matters is already in the label (command, path, query). Content
-  // blocks — diffs, images, text the agent chose to show — still come through.
+  // The structured input is only for verbose: its braces bury the one useful
+  // line, and what matters is already in the label (command, path, query).
+  // Content blocks — diffs, images, text the agent chose to show — always come.
+  if (level === 'verbose' && rec.rawInput && Object.keys(rec.rawInput).length) {
+    const pre = document.createElement('pre');
+    pre.innerHTML = `<code>${esc(JSON.stringify(rec.rawInput, null, 2))}</code>`;
+    body.appendChild(div('cap', 'input'));
+    body.appendChild(pre);
+  }
   renderContent(body, rec.content, card);
   // Opening a card by hand means you want it open: it stays that way when the
   // command finishes, instead of folding itself up under your thumb.
@@ -1700,6 +1807,14 @@ function renderToolUpdate(rec) {
   showOutput(card, out, failed);
 }
 
+/** Verbose output: the readable text, or the raw JSON when there is none. */
+function verboseOutputText(out) {
+  const text = toolOutputText(out);
+  if (text) return text;
+  if (out && typeof out === 'object') return JSON.stringify(out, null, 2);
+  return '';
+}
+
 /** How many lines of a command's output a folded card shows. */
 const PEEK_LINES = 6;
 
@@ -1716,7 +1831,7 @@ const PEEK_LINES = 6;
  * worked. The whole log is still a tap away.
  */
 function showOutput(card, out, failed) {
-  const text = toolOutputText(out);
+  const text = state.verbosity === 'verbose' ? verboseOutputText(out) : toolOutputText(out);
   if (!text) return;
   const body = card.querySelector('.body');
 
@@ -3292,6 +3407,7 @@ function connect() {
       if (msg.agents) state.agents = msg.agents;
       if (msg.chats) state.chats = msg.chats;
       if (msg.host) applyHost(msg.host);
+      if (msg.settings) applySettings(msg.settings);
       renderRail();
       return;
     }
@@ -3304,6 +3420,11 @@ function connect() {
 
     if (msg.type === 'host') {
       if (msg.host) applyHost(msg.host);
+      return;
+    }
+
+    if (msg.type === 'settings') {
+      applySettings(msg.settings, { rerender: true });
       return;
     }
 
@@ -4398,6 +4519,14 @@ for (const b of document.querySelectorAll('#theme-seg button')) {
   };
 }
 
+for (const b of document.querySelectorAll('#verbosity-seg button')) {
+  b.onclick = () => {
+    // Optimistic, then the host persists and broadcasts to every client.
+    applySettings({ verbosity: b.dataset.verbosityChoice }, { rerender: true });
+    sendOp({ op: 'host.verbosity', level: b.dataset.verbosityChoice });
+  };
+}
+
 prefersLight.addEventListener('change', () => {
   if (themeChoice() === 'system') applyTheme();
 });
@@ -4452,6 +4581,58 @@ function applyHost(host) {
       ? `hostname · ${state.host.hostname}`
       : '';
   }
+}
+
+/**
+ * How much detail a chat draws. Host-owned, so it arrives on hello and again
+ * whenever anyone (this browser, another, or Telegram) changes it; a change
+ * re-draws the transcript rather than waiting for the next turn.
+ */
+function applySettings(settings, { rerender = false } = {}) {
+  const level = settings?.verbosity;
+  if (!level || level === state.verbosity) {
+    paintVerbosityControls();
+    return;
+  }
+  state.verbosity = level;
+  paintVerbosityControls();
+  if (rerender && state.sessionId) rerenderTranscript();
+}
+
+function paintVerbosityControls() {
+  for (const b of document.querySelectorAll('#verbosity-seg button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.verbosityChoice === state.verbosity));
+  }
+}
+
+/**
+ * Draw the transcript again from what is already in memory, so a detail change
+ * is immediate. Terminal panes and the browser are host-owned and untouched.
+ */
+function rerenderTranscript() {
+  if (!els.transcript) return;
+  els.transcript.innerHTML = '';
+  state.toolCards.clear();
+  state.bundle = null;
+  state.permCards.clear();
+  state.askCards.clear();
+  state.stream = null;
+  state.streamKind = null;
+  state.streamBody = null;
+  state.thinking = null;
+  state.statusEl = null;
+  state.turn = null;
+  stopTurnClock();
+  state.replaying = true;
+  paintTranscriptParts(
+    state.liveHead.slice(),
+    state.liveHead.length ? state.liveEarlier : 0,
+    state.liveRecords.slice(),
+  );
+  state.replaying = false;
+  if (state.busy && state.turn) paintLiveStatus();
+  decorate(els.transcript);
+  scrollDown(true);
 }
 
 /**

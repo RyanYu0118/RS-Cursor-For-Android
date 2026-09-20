@@ -143,17 +143,39 @@ export function sayImages(text) {
  * top, what it is saying underneath. The tool list is reserved space, so a long
  * answer cannot push the status out of view.
  */
-export function renderTurn({ text = '', tools = [], conclusion = '' } = {}) {
-  const head = foldTools(tools)
-    .map((t) => {
-      const said = t.parts?.length
-        ? t.parts.map((p) => (p.n != null ? `<b>${p.n}</b>` : esc(p.t))).join('')
-        : esc(t.label);
-      const line = `${ICON[t.status] || '▸'} <i>${said}</i>`;
-      // One word, on the same line: a phone has better uses for its rows.
-      return t.failure ? `${line} — ${esc(t.failure)}` : line;
-    })
-    .join('\n');
+export function renderTurn({
+  text = '',
+  tools = [],
+  conclusion = '',
+  verbosity = 'normal',
+  elapsedMs = 0,
+  running = false,
+} = {}) {
+  const folded = foldTools(tools, { includeHidden: verbosity === 'verbose' });
+  const said = (t) =>
+    t.parts?.length
+      ? t.parts.map((p) => (p.n != null ? `<b>${p.n}</b>` : esc(p.t))).join('')
+      : esc(t.label);
+
+  // Quiet is a summary, not a list: one line of what the turn did, with the
+  // time it took, and no per-step rows.
+  let head =
+    verbosity === 'quiet'
+      ? folded.map(said).filter(Boolean).join(' · ')
+      : folded
+          .map((t) => {
+            const line = `${ICON[t.status] || '▸'} <i>${said(t)}</i>`;
+            // One word, on the same line: a phone has better uses for its rows.
+            return t.failure ? `${line} — ${esc(t.failure)}` : line;
+          })
+          .join('\n');
+  const clock = running && elapsedMs >= 1000 ? `⌛ <b>${Math.round(elapsedMs / 1000)}s</b>` : '';
+  if (verbosity === 'quiet') {
+    head = [clock, head ? `▸ <i>${head}</i>` : ''].filter(Boolean).join(' ');
+  } else if (clock) {
+    head = [clock, head].filter(Boolean).join('\n');
+  }
+
   const done = conclusion ? `<i>${esc(conclusion)}</i>` : '';
   const room = LIMIT - head.length - done.length - 8;
   const body = linkify(clamp(esc(sayImages(String(text).trim())), Math.max(500, room)), '');
@@ -197,13 +219,15 @@ export function planText(rec) {
 }
 
 export class TelegramBridge extends EventEmitter {
-  constructor({ sessions, stateDir, auth = loadTelegramAuth(), webUrl = '', restart = null }) {
+  constructor({ sessions, stateDir, auth = loadTelegramAuth(), webUrl = '', restart = null, settings = null }) {
     super();
     this.sessions = sessions;
     this.auth = auth;
     this.webUrl = webUrl;
     /** Supplied by the host, since restarting is its business, not ours. */
     this.restart = restart;
+    /** Host-owned display settings (verbosity); shared with the web client. */
+    this.settings = settings;
     this.offsetPath = join(stateDir, 'telegram-offset.json');
     this.running = false;
     /** sessionId -> live turn render state */
@@ -224,6 +248,22 @@ export class TelegramBridge extends EventEmitter {
 
   get enabled() {
     return Boolean(this.auth?.token && this.auth?.chatId);
+  }
+
+  /** How much of a turn's tool work the phone shows, host-owned. */
+  #verbosity() {
+    return this.settings?.get().verbosity || 'normal';
+  }
+
+  /** Set verbosity (persisted and broadcast by the settings store) and say so. */
+  #useVerbosity(level) {
+    if (!this.settings) return 'Display settings are not available here.';
+    try {
+      this.settings.setVerbosity(level);
+    } catch (err) {
+      return esc(err.message);
+    }
+    return `Chat detail → <b>${esc(level)}</b>`;
   }
 
   // ------------------------------------------------------------------ plumbing
@@ -458,6 +498,7 @@ export class TelegramBridge extends EventEmitter {
             '/chats — continue a chat from the desktop app',
             '/model — pick a model',
             '/policy ask|ask-on-write|auto',
+            '/verbosity quiet|normal|verbose',
             '/status — what is running',
             '/restart — apply code changes',
             this.webUrl ? `/web — ${esc(this.webUrl)}` : '',
@@ -653,6 +694,29 @@ export class TelegramBridge extends EventEmitter {
         this.sessions.setPolicy(active.id, arg);
         return this.send(`Approvals → <b>${esc(arg)}</b>`);
 
+      case '/verbosity': {
+        const levels = ['quiet', 'normal', 'verbose'];
+        if (!levels.includes(arg.toLowerCase())) {
+          return this.send(
+            `Chat detail is <b>${esc(this.#verbosity())}</b>. Pick one:`,
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: 'Quiet', callback_data: this.tokenFor({ kind: 'verbosity', level: 'quiet' }) },
+                    { text: 'Normal', callback_data: this.tokenFor({ kind: 'verbosity', level: 'normal' }) },
+                  ],
+                  [
+                    { text: 'Verbose', callback_data: this.tokenFor({ kind: 'verbosity', level: 'verbose' }) },
+                  ],
+                ],
+              },
+            },
+          );
+        }
+        return this.send(this.#useVerbosity(arg.toLowerCase()));
+      }
+
       case '/status': {
         if (!active) return this.send('No active session.');
         const pending = this.sessions.permissions.list(active.id).length;
@@ -780,6 +844,13 @@ export class TelegramBridge extends EventEmitter {
 
     if (!payload) {
       await answer('That button has expired.');
+      return;
+    }
+
+    if (payload.kind === 'verbosity') {
+      const said = this.#useVerbosity(payload.level);
+      await answer(`Chat detail: ${payload.level}`);
+      await this.send(said);
       return;
     }
 
@@ -970,6 +1041,9 @@ export class TelegramBridge extends EventEmitter {
       text: turn.text,
       tools: [...turn.tools.values()],
       conclusion: turn.conclusion,
+      verbosity: this.#verbosity(),
+      elapsedMs: turn.started ? Date.now() - turn.started : 0,
+      running: !turn.conclusion,
     });
   }
 
@@ -1039,7 +1113,8 @@ export class TelegramBridge extends EventEmitter {
         break;
 
       case 'tool_call':
-        if (classifyTool(rec).lane === 'hide') break;
+        // Verbose is the one setting that shows what Cursor deliberately hides.
+        if (classifyTool(rec).lane === 'hide' && this.#verbosity() !== 'verbose') break;
         if (isCreatedPlan(rec)) {
           await this.#sendPlan(sessionId, rec);
           break;

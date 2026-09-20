@@ -202,14 +202,20 @@ is the way to start somewhere Cursor has never opened — see
   address both. User bubbles too. Images you attach show as thumbnails in
   the bubble (and inside the composer before send); tap one for a full-screen
   viewer you can pinch / scroll to zoom.
-- A turn still going says **Working…** at the bottom of the stream. When it
-  ends, that line becomes **Worked for 7m 3s** or **Thought for 1s** above
-  the answer, the way Cursor labels a finished turn. Commands left
+- A turn still going says **Working… 12s** at the bottom of the stream, the
+  counter ticking once a second so waiting is legible. When it ends, that
+  line becomes **Worked for 7m 3s** or **Thought for 1s** above the answer,
+  the way Cursor labels a finished turn. Commands left
   "running…" after the session goes idle settle to stopped — an idle chip
   with live cards is a lie. Stopping a turn pulls the prompt back into the
   composer (and off the stream) so it can be edited and sent again — same
   gesture as Cursor's own Stop; Cursor's box is cleared so a phone can still
   reach the chat.
+- How much of that work is drawn is [display settings](settings.md): Settings
+  → **Chat detail** is Quiet / Normal / Verbose, host-owned so web and
+  Telegram agree. Quiet tallies the turn instead of listing tools; Verbose
+  brings back tool inputs, raw output envelopes, and the tools Cursor hides.
+  Changing it re-draws the transcript from what is already cached.
 - While scrolling a long chat, a flush right-edge grip appears (rounded on
   the left, drag ridges — Google Photos style). Grabbing it expands a labeled
   timeline **to the left of the thumb** — your messages, questions, plans,

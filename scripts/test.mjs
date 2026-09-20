@@ -4675,6 +4675,89 @@ if (existsSync(SRC)) {
   }
 }
 
+// Verbosity is one host-owned display setting shared by web and Telegram:
+// quiet summarises a turn, normal is the default, verbose shows everything.
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'auto-settings-'));
+  try {
+    const { DisplaySettings, DEFAULT_VERBOSITY } = await import('../src/core/settings.mjs');
+    const store = new DisplaySettings(tmp);
+    if (store.get().verbosity !== 'normal') fail(`verbosity should default to normal, got ${store.get().verbosity}`);
+    if (DEFAULT_VERBOSITY !== 'normal') fail('DEFAULT_VERBOSITY should be normal');
+
+    let changed = null;
+    store.on('change', (s) => {
+      changed = s;
+    });
+    store.setVerbosity('quiet');
+    if (store.get().verbosity !== 'quiet') fail('setVerbosity should apply');
+    if (changed?.verbosity !== 'quiet') fail('a verbosity change must be broadcast');
+
+    let threw = false;
+    try {
+      store.setVerbosity('loud');
+    } catch {
+      threw = true;
+    }
+    if (!threw) fail('an unknown verbosity level must be refused');
+    if (new DisplaySettings(tmp).get().verbosity !== 'quiet') {
+      fail('verbosity must survive a restart');
+    }
+
+    // Quiet folds a turn into one summary line; normal keeps the per-tool rows.
+    const { renderTurn } = await import('../src/core/telegram.mjs');
+    const tools = [
+      { title: 'read_file_v2', status: 'completed' },
+      { title: 'read_file_v2', status: 'completed' },
+      { title: 'edit_file_v2', rawInput: { relativeWorkspacePath: 'a.css' }, status: 'completed' },
+    ];
+    const normal = renderTurn({ text: 'hi', tools });
+    const quiet = renderTurn({ text: 'hi', tools, verbosity: 'quiet' });
+    // Counts are wrapped in <b>…</b>, so match the words around them.
+    if (!normal.includes('Explored ') || !normal.includes('Edited a.css')) {
+      fail(`normal should list tool lines, got ${normal}`);
+    }
+    if ((normal.match(/▸|✓/g) || []).length < 2) fail('normal should draw a line per folded tool');
+    if (!quiet.includes('Explored ') || !quiet.includes('Edited a.css')) {
+      fail(`quiet should still summarise, got ${quiet}`);
+    }
+    if ((quiet.match(/✓/g) || []).length) fail('quiet must not draw per-tool status lines');
+    // The elapsed counter is shown while a turn is running.
+    const clocked = renderTurn({ tools, running: true, elapsedMs: 5000 });
+    if (!clocked.includes('⌛') || !clocked.includes('5s')) fail(`a running turn should show elapsed time, got ${clocked}`);
+    if (renderTurn({ tools, elapsedMs: 5000 }).includes('⌛')) fail('a finished turn should not keep the clock');
+
+    // Wiring: web control + op, Telegram command, server op.
+    const html = readFileSync(join(ROOT, 'src/web/index.html'), 'utf8');
+    const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
+    const server = readFileSync(join(ROOT, 'src/server/index.mjs'), 'utf8');
+    const tg = readFileSync(join(ROOT, 'src/core/telegram.mjs'), 'utf8');
+    if (!html.includes('id="verbosity-seg"') || !html.includes('data-verbosity-choice="quiet"')) {
+      fail('Settings needs a Chat detail control');
+    }
+    if (!js.includes('function applySettings') || !js.includes('function rerenderTranscript')) {
+      fail('the web must apply and re-draw on a verbosity change');
+    }
+    if (!js.includes('function quietCountTool') || !js.includes('verboseOutputText')) {
+      fail('the web must render quiet summaries and verbose input/output');
+    }
+    if (!js.includes('startTurnClock') || !js.includes('liveStatusParts')) {
+      fail('the web must tick the live turn time');
+    }
+    if (!js.includes("op: 'host.verbosity'")) fail('the web must send host.verbosity');
+    if (!server.includes("OPS['host.verbosity']")) fail('the host must accept host.verbosity');
+    if (!tg.includes("case '/verbosity'") || !tg.includes("kind: 'verbosity'")) {
+      fail('Telegram needs a /verbosity command with buttons');
+    }
+
+    if (!failed) ok('v2 core: verbosity levels, summary and clock');
+  } catch (e) {
+    fail(`v2 verbosity: ${e.message}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 // 1f. Telegram turn rendering: status on top, prose escaped, size bounded.
 {
   try {

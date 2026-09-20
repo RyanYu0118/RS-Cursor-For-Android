@@ -32,7 +32,10 @@ the [web](web.md) and [Telegram](telegram.md) share one copy
 | `card` | A named step: command, question, Created Plan, other |
 
 `create_plan` stays a card. `ask_question` is hidden from the OTHER lane —
-the Question card is the real UI. See [approvals](approvals.md).
+the Question card is the real UI. See [approvals](approvals.md). How much of
+these lanes a chat draws is the [verbosity setting](settings.md): `quiet`
+tallies the turn into one line, `normal` is this table, and `verbose` also
+shows the `hide` lane.
 
 Cursor names its tools (`edit_file_v2`, `ripgrep_raw_search`). An ACP agent
 such as opencode sends its own names (`edit`, `read`, `bash`) with a

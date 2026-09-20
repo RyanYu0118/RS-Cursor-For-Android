@@ -439,13 +439,24 @@ function fileChangeSummary(batch) {
  *
  * Items may be records or `{ rec, status, failure }` wrappers.
  */
-export function foldTools(tools = []) {
+export function foldTools(tools = [], { includeHidden = false } = {}) {
   const out = [];
   let i = 0;
   while (i < tools.length) {
     const rec = recOf(tools[i]);
     const ui = classifyTool(rec);
     if (ui.lane === 'hide') {
+      // Verbose asks for what Cursor hides; keep it as an ordinary card.
+      if (includeHidden) {
+        const item = tools[i];
+        out.push({
+          label: item.label || displayLabel(rec),
+          status: item.status || rec.status || 'completed',
+          failure: item.failure || null,
+          lane: 'card',
+          count: 1,
+        });
+      }
       i += 1;
       continue;
     }

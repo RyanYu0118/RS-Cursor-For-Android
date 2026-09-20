@@ -16,6 +16,7 @@ import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { SessionManager, POLICY, STATUS } from '../core/sessions.mjs';
+import { DisplaySettings } from '../core/settings.mjs';
 import { BrowserHost } from '../core/browser.mjs';
 import { HostIdentity } from '../core/host-identity.mjs';
 import { TelegramBridge } from '../core/telegram.mjs';
@@ -56,6 +57,10 @@ const DEFAULT_FOLDER = arg('folder', ROOT);
 
 const STATE_DIR = join(ROOT, 'state');
 const hostIdentity = new HostIdentity(STATE_DIR);
+// Display settings are host-owned, so web and Telegram cannot disagree about
+// how much a chat shows. Every change is pushed to all connected clients.
+const settings = new DisplaySettings(STATE_DIR);
+settings.on('change', (snapshot) => broadcast({ type: 'settings', settings: snapshot }));
 
 const sessions = new SessionManager({
   stateDir: STATE_DIR,
@@ -86,6 +91,7 @@ browser.on('log', (m) => console.log(`[browser] ${m}`));
 const telegram = new TelegramBridge({
   sessions,
   stateDir: STATE_DIR,
+  settings,
   webUrl: process.env.AUTO_WEB_URL || `http://127.0.0.1:${PORT}`,
   restart: (opts) => restartHost(opts),
 });
@@ -776,6 +782,7 @@ async function route(req, res) {
       watching: sessions.watchingCount(),
       activeId: sessions.activeId,
       telegram: telegram.running,
+      verbosity: settings.get().verbosity,
       webBuild: webBuildId(assetTag),
       ...hostIdentity.snapshot(),
     });
@@ -874,6 +881,7 @@ wss.on('connection', async (ws, req) => {
     agents: sessions.agents(),
     chats: recentChats(),
     host: hostIdentity.snapshot(),
+    settings: settings.get(),
     webBuild: webBuildId(assetTag),
   });
   // A client says which chat it was in, in the URL, because the first thing
@@ -967,6 +975,10 @@ OPS['host.setNick'] = (_ws, _state, msg) => {
   broadcast({ type: 'host', host });
   return host;
 };
+
+// How much of a turn's tool work every chat shows. `setVerbosity` emits, and
+// the server's own listener broadcasts, so Telegram and web cannot diverge.
+OPS['host.verbosity'] = (_ws, _state, msg) => settings.setVerbosity(msg.level);
 
 /** Announce the return, so a restart requested from a phone visibly completes. */
 function announceRestart() {

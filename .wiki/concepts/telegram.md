@@ -8,7 +8,7 @@ sources:
   - id: telegram
     resource: /src/core/telegram.mjs
     title: Telegram bridge
-generated: { by: agent, at: 2026-08-23T21:27:00Z }
+generated: { by: agent, at: 2026-09-19T00:00:00Z }
 ---
 
 # Telegram
@@ -45,7 +45,11 @@ already there, so they are not pasted back.
 ## Commands
 
 `/help`, `/sessions`, `/new [folder]`, `/stop`, `/mode`, `/projects`,
-`/chats`, `/model`, `/policy`, `/status`, `/restart`, `/web`.
+`/chats`, `/model`, `/policy`, `/verbosity`, `/status`, `/restart`, `/web`.
+
+`/verbosity` (bare, or `quiet|normal|verbose`) sets how much of a turn's
+tool work the chat shows; it is the same host setting as the web's Settings
+→ Chat detail, so the two never diverge. See [display settings](settings.md).
 
 `/mode` and `/model` on a desktop chat press Cursor's own pickers. On ACP
 they use the catalog from `session/new`. `/mode` accepts Agent, Plan,
