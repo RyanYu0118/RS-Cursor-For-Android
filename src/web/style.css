@@ -479,7 +479,7 @@ html[data-standalone] .rail-head {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 6px 10px;
+  padding: 2px 10px;
   border-radius: 8px;
   cursor: pointer;
   min-width: 0;
