@@ -347,14 +347,20 @@ html[data-standalone] .rail-head {
 
 .repo > summary::-webkit-details-marker { display: none; }
 
-.repo > summary::before {
-  content: '▸';
+/* A real chevron, not a tiny glyph: closed points right, open points down. */
+.repo > summary > .repo-caret {
   flex: none;
-  font-size: 10px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--faint);
+  transition: transform 0.15s ease;
 }
 
-.repo[open] > summary::before { content: '▾'; }
+.repo > summary > .repo-caret svg { width: 100%; height: 100%; display: block; }
+.repo[open] > summary > .repo-caret { transform: rotate(90deg); }
 
 .repo-name {
   flex: 1;
