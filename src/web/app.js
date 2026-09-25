@@ -1466,15 +1466,19 @@ function saveDraft(sessionId = state.sessionId) {
   if (sessionId !== state.sessionId || state.draftApplying) return;
   state.draftAt = Date.now();
   clearTimeout(state.draftTimer);
+  // Short pause so a fast burst becomes one write; the host still coalesces
+  // overlapping writes if another keystroke lands before CDP finishes.
   state.draftTimer = setTimeout(() => {
     if (state.sessionId !== sessionId) return;
+    const at = Date.now();
+    state.draftAt = Math.max(state.draftAt, at);
     sendOp({
       op: 'session.draft',
       sessionId,
       text: els.box.value,
-      at: state.draftAt,
+      at,
     });
-  }, 250);
+  }, 120);
 }
 
 function loadDraft(sessionId) {
@@ -1495,6 +1499,15 @@ function applyRemoteDraft(draft) {
   const text = String(draft.text ?? '');
   const at = Number(draft.at) || 0;
   if (at && at < state.draftAt) return;
+  // While this box is being typed into, a lagging computer echo must not
+  // yank the caret back to an older prefix.
+  if (
+    draft.source !== 'clear' &&
+    document.activeElement === els.box &&
+    Date.now() - state.draftAt < 2000
+  ) {
+    return;
+  }
   if (els.box.value === text) {
     state.draftAt = Math.max(state.draftAt, at);
     return;

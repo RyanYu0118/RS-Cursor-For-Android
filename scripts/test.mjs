@@ -3607,6 +3607,7 @@ if (existsSync(SRC)) {
   if (
     !sessionsJs.includes('setDraft(') ||
     !sessionsJs.includes('#pullComposerDrafts') ||
+    !sessionsJs.includes('#pumpDraft') ||
     !sessionsJs.includes('syncComposerDraft') ||
     !js.includes('function applyRemoteDraft') ||
     !js.includes("op: 'session.draft'")

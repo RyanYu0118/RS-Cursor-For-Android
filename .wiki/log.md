@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-25
+* **Fix**: Fast typing no longer leaves the two chat boxes on different text — draft writes are coalesced in order, and a lagging computer echo is ignored while the phone box is being typed into. See [Cursor window](concepts/cursor-window.md).
 * **Fix**: Clearing the chat box on either side clears the other. If the two drafts disagree, the message is whatever the side that pressed send had written. See [Cursor window](concepts/cursor-window.md) and [Web](concepts/web.md).
 * **Update**: Unsent words in the chat box are shared between the tablet and Cursor. Typing on either side updates the other without focusing the window. See [Cursor window](concepts/cursor-window.md) and [Web](concepts/web.md).
 * **Update**: The tablet and the computer share one model. A tablet change is written through Cursor's model-config service, not by opening the menu, and a send waits until that model reads back. A computer change is shown on the tablet. See [Cursor window](concepts/cursor-window.md).

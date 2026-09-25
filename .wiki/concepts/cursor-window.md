@@ -17,7 +17,7 @@ sources:
   - id: clipboard
     resource: /src/core/clipboard.mjs
     title: Image paste via clipboard
-generated: { by: agent, at: 2026-09-25T15:20:00Z }
+generated: { by: agent, at: 2026-09-25T15:25:00Z }
 ---
 
 # The Cursor window
@@ -148,7 +148,8 @@ fires `ShouldForceText` — the box updates without focusing the window.
 Typing on the computer is read from the open editor when that chat is
 showing, otherwise from the loaded composer, and shown on the phone.
 Clearing either box clears the other, including an empty ProseMirror
-document. When the two boxes disagree, the side that presses send is the
+document. Fast typing is coalesced so an older write cannot overwrite a
+newer one. When the two boxes disagree, the side that presses send is the
 message that goes: a phone send replaces the computer box, and a computer
 send leaves that text and clears the phone.
 

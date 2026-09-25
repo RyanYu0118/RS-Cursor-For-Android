@@ -1739,11 +1739,56 @@ export class SessionManager extends EventEmitter {
       const text = String(row.text ?? '');
       const runtime = this.live.get(meta.id);
       if (runtime?.draftWriteUntil > Date.now()) continue;
+      if (runtime?.draftPump || runtime?.draftWanted != null) continue;
       const current = this.drafts.get(meta.id);
       if ((current?.text ?? '') === text) continue;
+      // Phone typed recently: Cursor may still show an older prefix. Do not
+      // push that shorter text back with a fresh timestamp.
+      if (
+        current?.source === 'phone' &&
+        Date.now() - (current.at || 0) < 2500 &&
+        (current.text.startsWith(text) || text.startsWith(current.text))
+      ) {
+        continue;
+      }
       const next = { text, at: Date.now(), source: 'computer' };
       this.drafts.set(meta.id, next);
       this.emit('draft', { sessionId: meta.id, ...next });
+    }
+  }
+
+  /**
+   * Write the latest wanted draft into Cursor. Fast typing queues many
+   * updates; only the newest text is written, in order, so an older CDP
+   * round-trip cannot overwrite a newer one.
+   */
+  async #pumpDraft(id) {
+    const meta = this.meta.get(id);
+    if (!meta?.desktopThreadId || typeof this.cursor.syncComposerDraft !== 'function') return;
+    const runtime = this.live.get(id) || {};
+    try {
+      while (Object.prototype.hasOwnProperty.call(runtime, 'draftWanted')) {
+        const want = runtime.draftWanted;
+        delete runtime.draftWanted;
+        runtime.draftWriteUntil = Date.now() + 2500;
+        this.live.set(id, runtime);
+        const result = await this.cursor
+          .syncComposerDraft({ threadId: meta.desktopThreadId, text: want })
+          .catch((err) => ({ status: 'error', reason: err.message }));
+        runtime.draftWriteUntil = Date.now() + 2500;
+        this.live.set(id, runtime);
+        if (result.status !== 'ok') {
+          this.emit('log', `draft sync: ${result.reason || result.status}`);
+        }
+      }
+    } finally {
+      const r = this.live.get(id) || runtime;
+      r.draftPump = null;
+      // A keystroke may have arrived after the last write and before we cleared.
+      if (Object.prototype.hasOwnProperty.call(r, 'draftWanted')) {
+        r.draftPump = this.#pumpDraft(id);
+      }
+      this.live.set(id, r);
     }
   }
 
@@ -1769,13 +1814,21 @@ export class SessionManager extends EventEmitter {
 
     if (meta.kind === 'desktop' && meta.desktopThreadId && typeof this.cursor.syncComposerDraft === 'function') {
       const runtime = this.live.get(id) || {};
-      runtime.draftWriteUntil = Date.now() + 2000;
+      runtime.draftWanted = nextText;
+      runtime.draftWriteUntil = Date.now() + 2500;
+      if (!runtime.draftPump) runtime.draftPump = this.#pumpDraft(id);
       this.live.set(id, runtime);
-      const result = await this.cursor
-        .syncComposerDraft({ threadId: meta.desktopThreadId, text: nextText })
-        .catch((err) => ({ status: 'error', reason: err.message }));
-      if (result.status !== 'ok') {
-        return { ok: false, text: nextText, at, reason: result.reason || result.status };
+      // Drain until this snapshot or a newer one has been written.
+      for (;;) {
+        const r = this.live.get(id);
+        if (r?.draftPump) await r.draftPump;
+        const latest = this.drafts.get(id);
+        if ((latest?.at || 0) > at) {
+          return { ok: true, text: latest.text, at: latest.at };
+        }
+        if (!r?.draftPump && !Object.prototype.hasOwnProperty.call(r || {}, 'draftWanted')) {
+          return { ok: true, text: latest?.text ?? nextText, at: latest?.at ?? at };
+        }
       }
     }
     return { ok: true, text: nextText, at };
@@ -1794,9 +1847,10 @@ export class SessionManager extends EventEmitter {
     const meta = this.meta.get(id);
     if (meta?.kind === 'desktop' && meta.desktopThreadId && typeof this.cursor.syncComposerDraft === 'function') {
       const runtime = this.live.get(id) || {};
-      runtime.draftWriteUntil = at + 2000;
+      runtime.draftWanted = '';
+      runtime.draftWriteUntil = at + 2500;
+      if (!runtime.draftPump) runtime.draftPump = this.#pumpDraft(id);
       this.live.set(id, runtime);
-      this.cursor.syncComposerDraft({ threadId: meta.desktopThreadId, text: '' }).catch(() => {});
     }
   }
 
