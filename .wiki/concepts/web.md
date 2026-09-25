@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-25T15:50:00Z }
+generated: { by: agent, at: 2026-09-25T16:20:00Z }
 ---
 
 # Web app
@@ -128,9 +128,9 @@ Messages scroll through a short fade and under the field. A measured
 `--composer-height` pads the transcript (and lifts the jump button /
 scrub rail) so the newest line stays readable at the live edge.
 
-Mode, an Auto switch, and one compact model summary live beside the
-composer; tapping the model opens its settings dialog (a bottom sheet on
-phones), which takes the composer's own edge and radius. Approval policy
+Mode and model sit as text chips inside the pill, on the right of the text;
+tapping the model chip opens its settings dialog (a bottom sheet on phones).
+Approval policy
 lives in the top bar (and in Settings on a narrow screen). The topbar
 also has **New chat** — one tap starts an empty conversation in the open
 session's folder (`session.create`), without the project picker, and puts
@@ -318,25 +318,16 @@ the side that pressed send. An idle send
 appears in the stream at once — it used to wait until Cursor's window had
 taken it.
 
-Mode and the model summary are chips under the text: a slight background and
-rounded edges so a thumb can see where each starts. Their base font is
-**16px** — iOS Safari zooms the page into anything smaller and never zooms
-back out, and an older `zoom: 0.75` trick still triggered it (WebKit uses
-the scaled size). They sit in a `.composer-pickers` group scaled with
-`transform: scale(0.75)` so the chips and the gap between them shrink
-together (about 12px) without overlapping; computed font-size stays 16px.
-The installed PWA is different: there the viewport sets `maximum-scale=1`,
-which a Home Screen app honours, so focus-zoom is impossible and the chips
-draw at a true 12px with no transform, the size Cursor gives them.
+The composer is a single pill: **+** on the left (a `label[for=file]`, so
+Android WebView and iOS actually open the image picker), the text field in
+the middle, then mode, the Auto/model chip, optional voice, and a white
+circular send. Attachment thumbnails sit above the row inside the same
+border. The text field stays **16px** so iOS Safari does not zoom the page.
 
-Auto is a switch on the composer, beside the mode chip and built like one.
-While it is on there is no model button at all — an Auto chat has no model
-to summarise — and the sheet behind it never offers Auto, because the
-switch outside it is the only place that lives.
-
-With Auto off the composer has one model button, summarising the model plus
-its most useful active parameter (for example `GPT-5.6 Sol · Medium ·
-Fast`). It opens a centred dialog on desktop and a bottom sheet on a phone,
+When Auto is on the model chip still says **Auto** and still opens the
+sheet — Auto is toggled there. With Auto off the chip summarises the model
+plus its most useful active parameter (for example `GPT-5.6 Sol · Medium ·
+Fast`). The sheet is a centred dialog on desktop and a bottom sheet on a phone,
 drawn from the same parts as the chat box: the composer's radius, its
 mode-coloured edge, chips on `--bg-3` for anything pressable, and the
 scrubber's way of marking the live row — a coloured left edge and a soft

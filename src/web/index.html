@@ -34,18 +34,10 @@
   html[data-standalone] .rail-head {
     padding-top: max(14px, env(safe-area-inset-top, 0px), 59px) !important;
   }
-  /* Mode/model draw at 12px in the installed PWA, where maximum-scale=1 makes
-     focus-zoom impossible — see style.css. A cached sheet must not resurrect
-     the old zoom: 0.75 trick or leave transform: scale on the pickers group. */
-  html[data-standalone] .composer-pickers {
-    transform: none !important;
-    gap: 4px !important;
-  }
-  html[data-standalone] .composer-controls select {
-    font-size: 12px !important;
-    zoom: normal !important;
-    transform: none !important;
-    max-width: 12rem !important;
+  /* Mode/model chips stay 16px in the tab; the installed PWA can go smaller
+     because maximum-scale=1 makes focus-zoom impossible. */
+  html[data-standalone] .composer-chip {
+    font-size: 13px !important;
   }
 </style>
 <script>
@@ -231,44 +223,46 @@
         </div>
         <div id="slash-list" role="listbox" aria-label="Commands"></div>
       </div>
-      <!-- One field, with its buttons inside it and its pickers beneath, the
-          way Cursor's own chat box carries them. Pasted images sit in here
-          too — above the text, still inside the same border. -->
+      <!-- One pill field: attach on the left, text in the middle, model /
+           voice / send on the right — the way Cursor's own chat box reads. -->
       <div class="composer-box" data-mode="agent">
         <div id="attachments" hidden></div>
-        <div class="composer-main">
-          <textarea id="box" rows="2" placeholder="Message the agent…"></textarea>
-          <button id="stop" class="in-box stop" title="Stop" aria-label="Stop" hidden>■</button>
-          <button id="send" class="in-box send" title="Send" aria-label="Send">↑</button>
-        </div>
-        <div class="composer-controls">
-          <div class="composer-pickers">
-            <select id="mode" title="Agent mode" aria-label="Agent mode">
+        <div class="composer-row">
+          <!-- Label (not a JS click on a hidden input): Android WebView and
+               iOS both refuse a programmatic file-picker open. -->
+          <label id="attach" class="composer-icon attach" for="file" title="Attach image" aria-label="Attach image">+</label>
+          <textarea id="box" rows="1" placeholder="Message the agent…"></textarea>
+          <div class="composer-trailing">
+            <select id="mode" class="composer-chip" title="Agent mode" aria-label="Agent mode">
               <option value="agent">Agent</option>
               <option value="plan">Plan</option>
               <option value="debug">Debug</option>
               <option value="multitask">Multitask</option>
               <option value="ask">Ask</option>
             </select>
-            <label class="composer-auto" title="Let Cursor choose the model">
-              <span>Auto</span>
-              <input id="model-auto" type="checkbox" role="switch" aria-label="Auto-select" />
-              <span class="composer-auto-track" aria-hidden="true"></span>
-            </label>
-            <button id="model-open" class="model-summary" type="button" title="Model settings" aria-haspopup="dialog">
-              <span id="model-summary">Model</span>
-              <span class="model-summary-chevron" aria-hidden="true">⌄</span>
+            <button id="model-open" class="composer-chip model-summary" type="button" title="Model settings" aria-haspopup="dialog">
+              <span id="model-summary">Auto</span>
+              <span class="composer-chevron" aria-hidden="true">⌄</span>
             </button>
-          </div>
-          <div class="composer-actions">
-            <button id="usage" class="in-box usage" type="button" title="Usage" aria-label="Usage" hidden>
+            <button id="usage" class="composer-icon usage" type="button" title="Usage" aria-label="Usage" hidden>
               <span class="usage-dial" aria-hidden="true"></span>
             </button>
-            <button id="attach" class="in-box attach" title="Attach image" aria-label="Attach image">+</button>
+            <button id="voice" class="composer-icon voice" type="button" title="Voice input" aria-label="Voice input" hidden>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/>
+                <path d="M19 11a7 7 0 0 1-14 0"/>
+                <path d="M12 18v3"/>
+              </svg>
+            </button>
+            <button id="stop" class="composer-icon stop" title="Stop" aria-label="Stop" hidden>■</button>
+            <button id="send" class="composer-send" title="Send" aria-label="Send">↑</button>
           </div>
         </div>
+        <!-- Visually hidden, not `hidden`: a label[for] must reach a pickable input. -->
+        <input id="file" class="sr-only" type="file" accept="image/*" multiple />
+        <!-- Auto-select lives in the model sheet; keep the checkbox for the same JS. -->
+        <input id="model-auto" class="sr-only" type="checkbox" role="switch" aria-label="Auto-select" />
       </div>
-      <input id="file" type="file" accept="image/*" multiple hidden />
     </footer>
     </div>
 

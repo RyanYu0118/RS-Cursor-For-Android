@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-25
+* **Fix**: Pad composer is a Cursor-style pill: + on the left opens attachments via `label[for=file]` (fixes Android WebView), with model chip, optional voice, and a white send button on the right. See [Web](concepts/web.md).
 * **Fix**: Home Screen icons were scaled 1.28× and reused as maskable, so Android cropped the mark. `any` is 1.0 again; maskable PNGs use 0.8 safe padding. See [Web](concepts/web.md).
 * **Fix**: Editing either chat box takes push rights immediately; the other side loses them at once, so a computer keystroke is no longer overwritten by the pad a second later. See [Cursor window](concepts/cursor-window.md).
 * **Update**: Unsent drafts force-sync every second from the last side that typed, so fast typing cannot leave the boxes apart. See [Cursor window](concepts/cursor-window.md).

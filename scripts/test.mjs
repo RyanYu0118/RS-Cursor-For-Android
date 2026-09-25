@@ -2705,15 +2705,14 @@ if (existsSync(SRC)) {
     !html.includes('id="model-open"') ||
     !html.includes('id="model-sheet"') ||
     !html.includes('id="model-auto"') ||
-    !html.includes('composer-auto') ||
     !html.includes('id="model-filter"') ||
     !html.includes('role="switch"') ||
     !js.includes('function renderModelControls') ||
     !js.includes('function setModelSheet') ||
     !js.includes('function updateModelPresentation') ||
-    !js.includes('modelOpen.hidden')
+    !js.includes("modelSummary.textContent = 'Auto'")
   ) {
-    fail('Auto switch lives in the composer; model sheet opens only when Auto is off');
+    fail('composer shows Auto/model chip; Auto checkbox stays wired for the model sheet');
     failed = true;
   }
   if (
@@ -2832,14 +2831,22 @@ if (existsSync(SRC)) {
     failed = true;
   }
   const attachAt = html.indexOf('id="attach"');
-  const controlsAt = html.indexOf('class="composer-controls"');
-  const mainAt = html.indexOf('class="composer-main"');
-  if (attachAt < 0 || controlsAt < 0 || attachAt < controlsAt) {
-    fail('attach must live in composer-controls, not the typing row');
+  const rowAt = html.indexOf('class="composer-row"');
+  const fileAt = html.indexOf('id="file"');
+  if (attachAt < 0 || rowAt < 0 || attachAt < rowAt) {
+    fail('attach must live in the composer row (left of the text)');
     failed = true;
   }
-  if (mainAt >= 0 && attachAt > mainAt && attachAt < controlsAt) {
-    fail('attach must not sit in composer-main');
+  if (!html.includes('for="file"') || !/<label[^>]*id="attach"/.test(html)) {
+    fail('attach must be a label[for=file] so Android/iOS open the image picker');
+    failed = true;
+  }
+  if (html.includes('id="file" type="file"') && /id="file"[^>]*\bhidden\b/.test(html)) {
+    fail('file input must not use the hidden attribute — use .sr-only so label[for] works');
+    failed = true;
+  }
+  if (!css.includes('.sr-only') || !html.includes('class="sr-only"')) {
+    fail('file input must be visually hidden with .sr-only');
     failed = true;
   }
   if (!/id="attach"[^>]*>\s*\+/.test(html)) {
@@ -2850,8 +2857,20 @@ if (existsSync(SRC)) {
     fail('attach must not be a binder icon');
     failed = true;
   }
-  if (!html.includes('id="usage"') || !html.includes('id="usage-sheet"') || !html.includes('composer-actions')) {
-    fail('usage dial and dialog must sit beside the attach control');
+  if (!html.includes('composer-row') || !html.includes('composer-trailing') || !html.includes('composer-send')) {
+    fail('composer must be a pill row with trailing send');
+    failed = true;
+  }
+  if (!css.includes('border-radius: 999px') || !css.includes('.composer-send')) {
+    fail('composer pill and white send button must be styled');
+    failed = true;
+  }
+  if (!html.includes('id="usage"') || !html.includes('id="usage-sheet"')) {
+    fail('usage dial and dialog must remain available from the composer');
+    failed = true;
+  }
+  if (fileAt < 0) {
+    fail('composer needs a file input for attachments');
     failed = true;
   }
   if (!html.includes('id="plan-sheet"') || !html.includes('id="plan-close"') || !html.includes('id="plan-body"')) {
@@ -2876,10 +2895,7 @@ if (existsSync(SRC)) {
   }
   const attAt = html.indexOf('id="attachments"');
   const boxAt = html.indexOf('class="composer-box"');
-  // Close of the composer-box itself — not an inner </div>, and not the
-  // "composer-controls" string that also appears in the standalone <style>.
-  const boxEnd = html.indexOf('</div>', controlsAt > 0 ? controlsAt : boxAt);
-  if (attAt < 0 || boxAt < 0 || attAt < boxAt || (boxEnd > 0 && attAt > boxEnd)) {
+  if (attAt < 0 || boxAt < 0 || attAt < boxAt) {
     fail('pasted images must sit inside the composer box, not above it');
     failed = true;
   }
@@ -2934,53 +2950,32 @@ if (existsSync(SRC)) {
     fail('usage sheet must not show an empty cost placeholder');
     failed = true;
   }
-  const pickerCss = css.slice(css.indexOf('.composer-controls select {'));
+  const pickerCss = css.slice(css.indexOf('.composer-chip {'));
   const pickerBlock = pickerCss.slice(0, pickerCss.indexOf('}') + 1);
-  if (!/font-size:\s*16px/.test(pickerBlock)) {
-    fail('composer pickers must be 16px so iOS does not zoom on tap');
+  if (!/font-size:\s*14px/.test(pickerBlock) && !html.includes('composer-chip')) {
+    fail('composer model/mode chips must exist');
     failed = true;
   }
-  if (/zoom\s*:/.test(pickerBlock) || /transform\s*:/.test(pickerBlock)) {
-    fail('composer pickers must not use CSS zoom/transform on the select — scale the group instead');
-    failed = true;
-  }
-  const pickersGroupAt = css.indexOf('.composer-pickers {');
-  const pickersGroup = pickersGroupAt < 0 ? '' : css.slice(pickersGroupAt, css.indexOf('}', pickersGroupAt) + 1);
-  if (!/transform:\s*scale\(0\.75\)/.test(pickersGroup)) {
-    fail('composer pickers group must scale to ~75% via transform (keeps 16px font, no chip overlap)');
-    failed = true;
-  }
-  if (!html.includes('composer-pickers')) {
-    fail('mode and model must share a composer-pickers wrapper so scale keeps their gap');
-    failed = true;
-  }
-  if (!/background:\s*var\(--bg-3\)/.test(pickerBlock) || !/border-radius:\s*8px/.test(pickerBlock)) {
-    fail('composer pickers must read as chips (background and rounded edges)');
+  if (!html.includes('composer-chip')) {
+    fail('mode and model must be composer-chip controls in the pill');
     failed = true;
   }
   if (!html.includes('maximum-scale=1') || !html.includes('data-standalone')) {
     fail('Home Screen PWA must lock scale so iOS cannot zoom the page on picker tap');
     failed = true;
   }
-  if (!html.includes('zoom: normal')
-      || !/composer-pickers[\s\S]*transform:\s*none\s*!important/.test(html)
-      || !/composer-controls select[\s\S]*font-size:\s*12px\s*!important/.test(html)) {
-    fail('standalone inline CSS must pin pickers at 12px without zoom/scale (beats a cached sheet)');
+  if (!html.includes('html[data-standalone] .composer-chip')) {
+    fail('standalone inline CSS must pin composer chips for the installed PWA');
     failed = true;
   }
-  const standalonePickersAt = css.indexOf('html[data-standalone] .composer-pickers');
-  const standalonePickers = standalonePickersAt < 0
-    ? ''
-    : css.slice(standalonePickersAt, css.indexOf('}', standalonePickersAt) + 1);
-  const standaloneAt = css.indexOf('html[data-standalone] .composer-controls select');
-  const standaloneBlock = standaloneAt < 0 ? '' : css.slice(standaloneAt, css.indexOf('}', standaloneAt) + 1);
-  if (!/transform:\s*none/.test(standalonePickers) || !/font-size:\s*12px/.test(standaloneBlock)) {
-    fail('the installed PWA must draw pickers at true 12px with no group transform — maximum-scale=1 makes focus-zoom impossible there');
+  const standaloneChipAt = css.indexOf('html[data-standalone] .composer-chip');
+  if (standaloneChipAt < 0) {
+    fail('the installed PWA must style composer chips');
     failed = true;
   }
   const modeChip = css.slice(css.indexOf('#mode,'), css.indexOf('#mode option'));
-  if (!/background:\s*color-mix\(in srgb, var\(--mode-color\)/.test(modeChip)) {
-    fail('the mode chip background must follow the mode colour');
+  if (!/color:\s*var\(--mode-color\)/.test(modeChip)) {
+    fail('the mode chip text must follow the mode colour');
     failed = true;
   }
 

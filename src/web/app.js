@@ -62,6 +62,7 @@ const els = {
   transcript: $('transcript'),
   historyLoading: $('transcript-loading'),
   box: $('box'),
+  voice: $('voice'),
   send: $('send'),
   stop: $('stop'),
   title: $('session-title'),
@@ -3596,15 +3597,16 @@ function selectedModelLabel() {
   return els.model.selectedOptions[0]?.textContent || state.modelControls?.model || 'Choose a model';
 }
 
-/** One compact composer button; details belong in the sheet. */
+/** One compact composer chip; Auto stays visible when selected. */
 function updateModelPresentation() {
   if (!state.modelUpdating && state.modelControls) {
     els.modelAuto.checked = Boolean(state.modelControls.auto);
   }
   const automatic = els.modelAuto.checked;
-  els.modelOpen.hidden = automatic;
+  els.modelOpen.hidden = false;
 
   if (automatic) {
+    els.modelSummary.textContent = 'Auto';
     return;
   }
 
@@ -5019,11 +5021,44 @@ dropBox.addEventListener('drop', dropImages);
 window.addEventListener('dragover', (e) => { if (dragHasFiles(e)) e.preventDefault(); });
 window.addEventListener('drop', (e) => { if (dragHasFiles(e)) e.preventDefault(); });
 
-$('attach').onclick = () => els.file.click();
+// Label[for=file] opens the picker; keep a fallback for older WebViews.
 els.file.onchange = () => {
   [...els.file.files].forEach(addImage);
   els.file.value = '';
 };
+
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRec && els.voice) {
+  els.voice.hidden = false;
+  let recognition = null;
+  els.voice.onclick = () => {
+    if (recognition) {
+      recognition.stop();
+      return;
+    }
+    recognition = new SpeechRec();
+    recognition.lang = navigator.language || 'zh-CN';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    const start = els.box.value;
+    recognition.onresult = (event) => {
+      let spoken = '';
+      for (let i = 0; i < event.results.length; i++) spoken += event.results[i][0].transcript;
+      els.box.value = start ? `${start.replace(/\s+$/, '')} ${spoken}` : spoken;
+      els.box.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    recognition.onend = () => {
+      recognition = null;
+      els.voice.classList.remove('listening');
+    };
+    recognition.onerror = () => {
+      recognition = null;
+      els.voice.classList.remove('listening');
+    };
+    els.voice.classList.add('listening');
+    recognition.start();
+  };
+}
 
 els.transcript.addEventListener('scroll', () => {
   syncToBottom();

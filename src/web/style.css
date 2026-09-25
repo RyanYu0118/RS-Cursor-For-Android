@@ -1897,22 +1897,20 @@ html[data-standalone] #composer {
 }
 
 /**
- * One field that happens to contain its own buttons, rather than a box with
- * controls parked beside it. The border and the focus ring belong to the
- * whole thing, so it reads as a single place to type.
+ * One pill that holds attach, the text, and the trailing actions — the way
+ * Cursor's own chat box reads on a phone.
  */
 .composer-box {
   --mode-color: var(--mode-agent);
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 6px;
   background: var(--bg-2);
-  border: 1px solid var(--mode-color);
-  border-radius: 18px;
-  /* One inset for the whole field, so text, chips and circles share an edge. */
-  padding: 8px;
-  transition: border-color 0.12s ease, background-color 0.12s ease;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 999px;
+  padding: 6px 8px 6px 6px;
+  transition: border-color 0.12s ease, background-color 0.12s ease, border-radius 0.12s ease;
 }
 
 .composer-box[data-mode='plan'] { --mode-color: var(--mode-plan); }
@@ -1920,12 +1918,15 @@ html[data-standalone] #composer {
 .composer-box[data-mode='debug'] { --mode-color: var(--mode-debug); }
 .composer-box[data-mode='multitask'] { --mode-color: var(--mode-multitask); }
 
-.composer-box:focus-within { border-color: var(--mode-color); }
+.composer-box:focus-within {
+  border-color: color-mix(in srgb, var(--mode-color) 55%, var(--line));
+}
 
-/* A file dragged over the field: the whole box turns into the target — a
-   tinted, dashed ring with a label across it, so it is unmistakable where the
-   image will land. The overlay never takes the pointer, so the drag keeps
-   reaching the box underneath. */
+.composer-box:has(#attachments:not([hidden])) {
+  border-radius: 22px;
+  padding: 10px;
+}
+
 .composer-box.dropping {
   border-color: color-mix(in srgb, var(--focus) 60%, transparent);
   background: color-mix(in srgb, var(--focus) 10%, var(--bg-2));
@@ -1948,162 +1949,129 @@ html[data-standalone] #composer {
   pointer-events: none;
 }
 
-.composer-main {
+.composer-row {
   display: flex;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-/*
- * Mode and model sit under the text they govern, as Cursor's chat box has
- * them. A chip background shows where each picker starts and stops.
- *
- * The base font must stay at least 16px: iOS Safari zooms the page into any
- * form control smaller than that and never zooms back out. Do not use CSS
- * `zoom` to fake a smaller chip — WebKit's focus-zoom uses the scaled size,
- * so 16px at zoom 0.75 still triggers the page zoom. Scale the pickers
- * *group* with `transform` instead: computed font-size stays 16px, the chips
- * draw at ~75%, and the gap between them scales with them (no overlap).
- * Unused layout space falls to the right of the group, before the actions.
- */
-.composer-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 0 0 4px;
-}
-
-.composer-pickers {
-  display: flex;
-  align-items: center;
-  /* 4px / 0.75 so the gap reads as ~4px after scale. */
-  gap: calc(4px / 0.75);
-  min-width: 0;
-  flex: 0 1 auto;
-  transform: scale(0.75);
-  transform-origin: left center;
-}
-
-/*
- * Auto sits beside the mode chip and is built like one: same border, radius
- * and type, with the switch drawn in `em` so it keeps its proportions at both
- * the 16px tab size and the 12px standalone one.
- */
-.composer-auto {
-  display: inline-flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 6px;
+  min-width: 0;
+}
+
+.composer-trailing {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   flex: 0 0 auto;
-  padding: 3px 8px;
-  border: 1px solid var(--line-2);
-  border-radius: 8px;
-  background: var(--bg-3);
+  padding-bottom: 2px;
+}
+
+/* Reachable by a <label for>, never display:none / hidden. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.composer-icon {
+  flex: none;
+  position: relative;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
   color: var(--muted);
-  font-size: 16px;
-  line-height: 1.2;
+  font-size: 22px;
+  line-height: 1;
   cursor: pointer;
   user-select: none;
 }
 
-.composer-auto:hover {
-  background: var(--bg);
-  border-color: var(--line);
-  color: var(--text);
-}
-
-.composer-auto input {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.composer-auto-track {
-  position: relative;
-  flex: 0 0 auto;
-  width: 1.6em;
-  height: 0.95em;
-  border-radius: 999px;
-  background: var(--line-2);
-  transition: background 120ms ease;
-}
-
-.composer-auto-track::after {
+.composer-icon::after {
   content: '';
   position: absolute;
-  top: 0.14em;
-  left: 0.14em;
-  width: 0.67em;
-  height: 0.67em;
-  border-radius: 50%;
-  background: var(--muted);
-  transition: transform 120ms ease, background 120ms ease;
+  inset: -4px;
 }
 
-.composer-auto input:checked + .composer-auto-track {
-  background: color-mix(in srgb, var(--focus) 70%, var(--bg-3));
-}
+.composer-icon[hidden] { display: none; }
+.composer-icon:hover { color: var(--text); background: var(--bg-3); }
 
-.composer-auto input:checked + .composer-auto-track::after {
-  transform: translateX(0.65em);
-  background: #fff;
-}
-
-.composer-auto:has(input:checked) {
-  color: var(--focus);
-  background: color-mix(in srgb, var(--focus) 14%, var(--bg-3));
-  border-color: color-mix(in srgb, var(--focus) 40%, transparent);
-}
-
-.composer-auto:focus-within {
-  outline: 2px solid color-mix(in srgb, var(--focus) 55%, transparent);
-  outline-offset: 1px;
-}
-
-.composer-auto:has(input:disabled) {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.model-summary[hidden] {
-  display: none;
-}
-
-.model-summary {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  max-width: min(17rem, 50vw);
-  min-width: 0;
-  padding: 3px 8px;
-  border: 1px solid var(--line-2);
-  border-radius: 8px;
+.composer-icon.attach {
   background: var(--bg-3);
+  color: var(--text);
+  font-weight: 400;
+}
+
+.composer-icon.attach:hover {
+  background: color-mix(in srgb, var(--bg-3) 70%, var(--bg));
+}
+
+.composer-icon.voice.listening {
+  color: var(--red, #e85d5d);
+  background: color-mix(in srgb, var(--red, #e85d5d) 14%, var(--bg-2));
+}
+
+.composer-icon.stop {
+  color: var(--red);
+  font-size: 12px;
+  border: 1px solid var(--danger-border);
+}
+
+.composer-icon.stop:hover { background: var(--danger-bg); }
+
+.composer-icon.usage { overflow: hidden; }
+
+.composer-chip {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  max-width: 9rem;
+  margin: 0;
+  padding: 6px 4px 6px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   color: var(--muted);
-  font-size: 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
   line-height: 1.2;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 32px;
 }
 
-.model-summary:hover {
-  color: var(--text);
-  border-color: var(--line);
-  background: var(--bg);
+.composer-chip:hover { color: var(--text); }
+
+select.composer-chip {
+  padding-right: 18px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23888' d='M1 1l4 4 4-4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
 }
 
-#model-summary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.composer-chip .composer-chevron {
+  font-size: 11px;
+  opacity: 0.75;
 }
 
-.model-summary-chevron {
-  flex: 0 0 auto;
-  color: var(--faint);
+button.composer-chip.model-summary {
+  border: 0;
+  background: transparent;
+  padding: 6px 4px 6px 6px;
 }
 
-.model-summary.loading .model-summary-chevron {
+button.composer-chip.model-summary.loading .composer-chevron {
   width: 10px;
   height: 10px;
   border: 1.5px solid var(--line-2);
@@ -2113,7 +2081,56 @@ html[data-standalone] #composer {
   animation: spin 0.8s linear infinite;
 }
 
-/* The sheet's own switches, cut to the same pattern as the composer's Auto. */
+#model-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 7.5rem;
+}
+
+.composer-send {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: #f2f2f2;
+  color: #111;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.composer-send:hover { background: #fff; }
+
+.composer-send:disabled {
+  background: var(--bg-3);
+  color: var(--faint);
+  cursor: default;
+}
+
+.composer-send.queueing {
+  background: color-mix(in srgb, var(--mode-color) 22%, var(--bg-3));
+  color: var(--mode-color);
+}
+
+html[data-theme='light'] .composer-send {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+html[data-theme='light'] .composer-send:hover { background: #000; }
+
+html[data-theme='light'] .composer-send:disabled {
+  background: var(--bg-3);
+  color: var(--faint);
+}
+
+/* The sheet's own switches. */
 .model-switch {
   display: inline-flex;
   align-items: center;
@@ -2167,60 +2184,13 @@ html[data-standalone] #composer {
   outline-offset: 2px;
 }
 
-.composer-controls select {
-  background: var(--bg-3);
-  border: 1px solid var(--line-2);
-  border-radius: 8px;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.2;
-  padding: 3px 8px;
-  max-width: 12rem;
-  min-width: 0;
+html[data-standalone] .composer-chip {
+  font-size: 13px;
 }
 
-/*
- * Installed as a Home Screen app the viewport is locked with maximum-scale=1
- * (index.html), and a standalone PWA honours it — focus-zoom cannot happen,
- * so the chips can draw at a true 12px. Safari ignores that lock in a plain
- * tab, which is why the 16px + scaled group above stays the guard.
- */
-html[data-standalone] .composer-pickers {
-  transform: none;
-  gap: 4px;
-}
-
-html[data-standalone] .composer-controls select {
-  font-size: 12px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  max-width: 12rem;
-}
-
-html[data-standalone] .model-summary,
-html[data-standalone] .composer-auto {
-  padding: 3px 7px;
-  border-radius: 6px;
-  font-size: 12px;
-}
-
-.composer-controls select:hover {
-  background: var(--bg);
-  border-color: var(--line);
-  color: var(--text);
-}
-
-/* The mode chip carries its mode's hue — word and a tint of background,
-   the way Cursor colours its own picker. The model chip stays neutral. */
 #mode,
 #mode:hover {
   color: var(--mode-color);
-  background: color-mix(in srgb, var(--mode-color) 14%, var(--bg-3));
-  border-color: color-mix(in srgb, var(--mode-color) 40%, transparent);
-}
-
-#mode:hover {
-  background: color-mix(in srgb, var(--mode-color) 22%, var(--bg-3));
 }
 
 #mode option[value='agent'] { color: var(--mode-agent); }
@@ -2237,88 +2207,11 @@ html[data-standalone] .composer-auto {
   outline: none;
   resize: none;
   max-height: 40vh;
-  /* Horizontal inset lives on the box, plus a little extra so the placeholder
-     clears the 18px corner. The picker row matches this on the left. */
-  padding: 4px 0 4px 4px;
-  /* Two lines at rest: padding + 2 × 1.45 line-height. Send stays on the first. */
-  min-height: calc(8px + 2.9em);
-  line-height: 1.45;
-  /* iOS zooms the page into any field under 16px, and never zooms back out. */
+  padding: 8px 4px;
+  min-height: 36px;
+  line-height: 1.4;
   font-size: 16px;
-}
-
-.in-box {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  border: 1px solid transparent;
-  background: none;
-  color: var(--muted);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-  position: relative;
-}
-
-/* Keep a 40px thumb without letting the circle inflate the box. */
-.in-box::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-}
-
-.in-box[hidden] { display: none; }
-.in-box:hover { background: var(--bg-3); color: var(--text); }
-
-.in-box.send {
-  background: var(--mode-color);
-  border-color: var(--mode-color);
-  color: var(--primary-fg);
-}
-
-.in-box.send:hover {
-  background: color-mix(in srgb, var(--mode-color) 82%, #fff);
-  color: var(--primary-fg);
-}
-
-/* Nothing to send is a state worth showing, not a click worth taking. */
-.in-box.send:disabled {
-  background: var(--bg-3);
-  border-color: var(--line-2);
-  color: var(--faint);
-  cursor: default;
-}
-
-/* Sending onto a running turn adds to a queue; it should not look like sending. */
-.in-box.send.queueing {
-  background: var(--bg-3);
-  border-color: var(--mode-color);
-  color: var(--mode-color);
-}
-
-.in-box.send.queueing:hover { background: var(--mode-color); color: var(--primary-fg); }
-
-.in-box.stop { color: var(--red); border-color: var(--danger-border); font-size: 12px; }
-.in-box.stop:hover { background: var(--danger-bg); color: var(--red); }
-
-/* Attach + usage dial share the lower-right of the box. */
-.composer-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.in-box.attach { margin-left: 0; }
-
-/* Context dial: a ring that fills as this chat's window fills. */
-.in-box.usage {
-  padding: 0;
-  overflow: hidden;
+  color: var(--text);
 }
 
 .usage-dial {
@@ -2334,8 +2227,8 @@ html[data-standalone] .composer-auto {
   mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
 }
 
-.in-box.usage[data-level='warn'] { --usage-fill: var(--usage-accent); }
-.in-box.usage[data-level='hot'] { --usage-fill: var(--red, #e85d5d); }
+.composer-icon.usage[data-level='warn'] { --usage-fill: var(--usage-accent); }
+.composer-icon.usage[data-level='hot'] { --usage-fill: var(--red, #e85d5d); }
 
 #usage-sheet {
   position: fixed;
@@ -4422,7 +4315,7 @@ pre:hover .copy,
   #browser-url,
   .sheet-panel input[type='text'],
   select,
-  .composer-controls select {
+  .composer-chip {
     font-size: 16px;
   }
   /* No hover on a phone, so copy is always showing — and worth hitting. */
