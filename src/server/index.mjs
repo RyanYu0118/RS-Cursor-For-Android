@@ -437,8 +437,20 @@ const OPS = {
       at: Number(msg.at) || Date.now(),
       source: 'phone',
       force: Boolean(msg.force),
+      claim: Boolean(msg.claim),
     });
     send(ws, { type: 'draft.set', sessionId: id, ...result });
+    if (result.leader === 'computer') {
+      send(ws, {
+        type: 'draft',
+        sessionId: id,
+        text: result.text,
+        at: result.at,
+        source: 'computer',
+        leader: 'computer',
+        force: true,
+      });
+    }
   },
 
   'session.policy'(_ws, state, msg) {

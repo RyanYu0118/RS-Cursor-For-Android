@@ -192,6 +192,8 @@ const state = {
   drafts: new Map(),
   /** When we last changed the box locally — remote drafts older than this lose. */
   draftAt: 0,
+  /** Which side currently owns push rights for the shared draft. */
+  draftLeader: null,
   draftLastLocal: 0,
   draftTimer: null,
   draftForceTimer: null,
@@ -1466,37 +1468,39 @@ function saveDraft(sessionId = state.sessionId) {
     });
   }
   if (sessionId !== state.sessionId || state.draftApplying) return;
+  // Local edit: take push rights immediately; the computer loses them.
+  state.draftLeader = 'phone';
   state.draftAt = Date.now();
   state.draftLastLocal = Date.now();
   clearTimeout(state.draftTimer);
   state.draftTimer = setTimeout(() => {
     if (state.sessionId !== sessionId) return;
-    pushDraft({ force: false });
+    pushDraft({ force: false, claim: true });
   }, 120);
 }
 
-/** Send the full box to the host. A forced tick always re-asserts last-writer. */
-function pushDraft({ force = false } = {}) {
+/** Send the full box to the host. */
+function pushDraft({ force = false, claim = false } = {}) {
   if (!state.sessionId || state.draftApplying) return;
+  if (force && state.draftLeader !== 'phone') return;
   const at = Date.now();
-  if (force) state.draftAt = Math.max(state.draftAt, at);
-  else state.draftAt = Math.max(state.draftAt, at);
+  state.draftAt = Math.max(state.draftAt, at);
   sendOp({
     op: 'session.draft',
     sessionId: state.sessionId,
     text: els.box.value,
     at,
     force: Boolean(force),
+    claim: Boolean(claim) || !force,
   });
 }
 
-/** Every second: if this box was last typed, push its full text to the other side. */
+/** Every second: only the owning side pushes its full text. */
 if (!state.draftForceTimer) {
   state.draftForceTimer = setInterval(() => {
     if (!state.sessionId || state.draftApplying) return;
-    // Only the last typing device keeps asserting — idle focus does not count.
-    if (Date.now() - (state.draftLastLocal || 0) >= 5000) return;
-    pushDraft({ force: true });
+    if (state.draftLeader !== 'phone') return;
+    pushDraft({ force: true, claim: false });
   }, 1000);
 }
 
@@ -1518,15 +1522,27 @@ function applyRemoteDraft(draft) {
   const text = String(draft.text ?? '');
   const at = Number(draft.at) || 0;
   const forced = Boolean(draft.force);
+  const leader = draft.leader || draft.source || null;
+  // Computer (or another phone) took the box — drop our push rights at once.
+  if (leader === 'computer' || draft.source === 'computer') {
+    state.draftLeader = 'computer';
+  } else if (leader === 'phone' && draft.source === 'phone' && !forced) {
+    /* echo of our own claim */
+  }
   if (at && at < state.draftAt && !forced) return;
-  // Local typing wins for a moment; a forced computer push still waits until
-  // this box is idle so a mid-keystroke yank cannot happen.
+  // While we still own the box and are typing, ignore lagging echoes.
   if (
+    state.draftLeader === 'phone' &&
     draft.source !== 'clear' &&
+    draft.source !== 'computer' &&
     document.activeElement === els.box &&
     Date.now() - (state.draftLastLocal || state.draftAt) < 1000
   ) {
     return;
+  }
+  // Computer owns it: always apply, even if we had focus a moment ago.
+  if (draft.source === 'computer' || leader === 'computer') {
+    state.draftLeader = 'computer';
   }
   if (els.box.value === text) {
     state.draftAt = Math.max(state.draftAt, at);
@@ -4357,6 +4373,13 @@ function connect() {
 
     if (msg.type === 'draft') {
       applyRemoteDraft(msg);
+      return;
+    }
+
+    if (msg.type === 'draft.set') {
+      if (msg.sessionId && msg.sessionId !== state.sessionId) return;
+      if (msg.leader === 'computer') state.draftLeader = 'computer';
+      else if (msg.leader === 'phone') state.draftLeader = 'phone';
       return;
     }
 

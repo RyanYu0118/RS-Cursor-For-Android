@@ -82,8 +82,9 @@ value as setup documentation is fine.
   computer shows up on the phone the same way. Unsent words in the chat box
   are shared the same way — type or clear on either side and the other
   follows. Every second the last side that typed force-sends its full
-  text to the other. If the two boxes disagree, the side that presses send
-  is the message that goes.
+  text to the other. Editing either box takes push rights immediately;
+  the other side loses them at once. If the two boxes disagree, the side
+  that presses send is the message that goes.
   The pickers beside
   Cursor's chat box are the one part of the window that ignores a dispatched
   click — they open only on input the window believes came from a mouse — so

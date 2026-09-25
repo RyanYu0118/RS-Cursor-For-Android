@@ -1726,14 +1726,26 @@ export class SessionManager extends EventEmitter {
     this.#forceSyncDrafts().catch(() => {});
   }
 
+  /** Stop queued phone → Cursor writes; the other side now owns the box. */
+  #stopPhoneDraftWrites(id) {
+    const runtime = this.live.get(id) || {};
+    delete runtime.draftWanted;
+    runtime.draftForce = false;
+    runtime.draftWriteUntil = 0;
+    this.live.set(id, runtime);
+    return runtime;
+  }
+
   /**
-   * Every second: the last side that typed pushes its full text to the other.
-   * Phone → Cursor writes the host draft; computer → phone broadcasts the box.
+   * Ownership is checked often; full-text push from the owner runs about once
+   * a second. The first keystroke on the other side takes ownership immediately
+   * and the previous side loses push rights at once.
    */
   async #forceSyncDrafts() {
     if (typeof this.cursor.liveComposerDrafts !== 'function') return;
     const live = await this.cursor.liveComposerDrafts();
     const byThread = Array.isArray(live) ? new Map(live.map((row) => [row.threadId, row])) : new Map();
+    const now = Date.now();
 
     for (const meta of this.meta.values()) {
       if (meta.kind !== 'desktop' || meta.status === STATUS.archived) continue;
@@ -1743,43 +1755,59 @@ export class SessionManager extends EventEmitter {
       const computerText = row ? String(row.text ?? '') : null;
       const runtime = this.live.get(meta.id) || {};
 
-      // Computer typed something the host does not have yet — it becomes last.
-      if (
-        computerText != null &&
-        computerText !== (current.text ?? '') &&
-        !runtime.draftPump &&
-        !(runtime.draftWriteUntil > Date.now()) &&
-        (current.source !== 'phone' || Date.now() - (current.at || 0) > 1000)
-      ) {
-        const nextDraft = { text: computerText, at: Date.now(), source: 'computer' };
-        this.drafts.set(meta.id, nextDraft);
-        this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true });
+      if (computerText != null) {
+        if (runtime.lastSeenComputerText === undefined) {
+          runtime.lastSeenComputerText = computerText;
+          this.live.set(meta.id, runtime);
+        } else if (computerText !== runtime.lastSeenComputerText) {
+          runtime.lastSeenComputerText = computerText;
+          // Our own phone write landing is not a computer claim.
+          if (computerText === runtime.lastWrittenText) {
+            this.live.set(meta.id, runtime);
+          } else {
+            this.#stopPhoneDraftWrites(meta.id);
+            const nextDraft = { text: computerText, at: now, source: 'computer' };
+            this.drafts.set(meta.id, nextDraft);
+            const r = this.live.get(meta.id) || {};
+            r.lastSeenComputerText = computerText;
+            r.lastWrittenText = computerText;
+            r.lastForcePushAt = now;
+            this.live.set(meta.id, r);
+            this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true, leader: 'computer' });
+            continue;
+          }
+        }
+      }
+
+      const owned = this.drafts.get(meta.id) || current;
+      const pushDue = !runtime.lastForcePushAt || now - runtime.lastForcePushAt >= 1000;
+      if (!pushDue) continue;
+
+      if (owned.source === 'phone' || owned.source === 'clear') {
+        const text = owned.text ?? '';
+        const r = this.live.get(meta.id) || {};
+        r.draftWanted = text;
+        r.draftForce = true;
+        r.draftWriteUntil = now + 1500;
+        r.lastForcePushAt = now;
+        if (!r.draftPump) r.draftPump = this.#pumpDraft(meta.id);
+        this.live.set(meta.id, r);
         continue;
       }
 
-      const source = (this.drafts.get(meta.id) || current).source;
-      if (source === 'phone' || source === 'clear') {
-        const text = this.drafts.get(meta.id)?.text ?? '';
-        runtime.draftWanted = text;
-        runtime.draftForce = true;
-        runtime.draftWriteUntil = Date.now() + 1500;
-        if (!runtime.draftPump) runtime.draftPump = this.#pumpDraft(meta.id);
+      if (owned.source === 'computer' && computerText != null) {
+        const nextDraft = { text: computerText, at: now, source: 'computer' };
+        this.drafts.set(meta.id, nextDraft);
+        runtime.lastForcePushAt = now;
         this.live.set(meta.id, runtime);
-        continue;
-      }
-
-      if (source === 'computer' && computerText != null) {
-        const nextDraft = { text: computerText, at: Date.now(), source: 'computer' };
-        this.drafts.set(meta.id, nextDraft);
-        this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true });
+        this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true, leader: 'computer' });
       }
     }
   }
 
   /**
-   * Write the latest wanted draft into Cursor. Fast typing queues many
-   * updates; only the newest text is written, in order, so an older CDP
-   * round-trip cannot overwrite a newer one.
+   * Write the latest wanted draft into Cursor. Aborts if the computer has
+   * taken ownership mid-flight.
    */
   async #pumpDraft(id) {
     const meta = this.meta.get(id);
@@ -1787,6 +1815,11 @@ export class SessionManager extends EventEmitter {
     const runtime = this.live.get(id) || {};
     try {
       while (Object.prototype.hasOwnProperty.call(runtime, 'draftWanted')) {
+        if (this.drafts.get(id)?.source === 'computer') {
+          delete runtime.draftWanted;
+          runtime.draftForce = false;
+          break;
+        }
         const want = runtime.draftWanted;
         const force = Boolean(runtime.draftForce);
         delete runtime.draftWanted;
@@ -1796,6 +1829,12 @@ export class SessionManager extends EventEmitter {
         const result = await this.cursor
           .syncComposerDraft({ threadId: meta.desktopThreadId, text: want, force })
           .catch((err) => ({ status: 'error', reason: err.message }));
+        if (this.drafts.get(id)?.source === 'computer') {
+          runtime.draftWriteUntil = 0;
+          this.live.set(id, runtime);
+          break;
+        }
+        runtime.lastWrittenText = want;
         runtime.draftWriteUntil = Date.now() + 1500;
         this.live.set(id, runtime);
         if (result.status !== 'ok') {
@@ -1805,7 +1844,10 @@ export class SessionManager extends EventEmitter {
     } finally {
       const r = this.live.get(id) || runtime;
       r.draftPump = null;
-      if (Object.prototype.hasOwnProperty.call(r, 'draftWanted')) {
+      if (
+        Object.prototype.hasOwnProperty.call(r, 'draftWanted') &&
+        this.drafts.get(id)?.source !== 'computer'
+      ) {
         r.draftPump = this.#pumpDraft(id);
       }
       this.live.set(id, r);
@@ -1813,29 +1855,41 @@ export class SessionManager extends EventEmitter {
   }
 
   /**
-   * Phone → computer. The words wait in both boxes until they are sent.
+   * Phone → computer. A real edit claims ownership; a force heartbeat does
+   * not steal it back from the computer.
    *
-   * @returns {Promise<{ ok: boolean, text: string, at: number, reason?: string }>}
+   * @returns {Promise<{ ok: boolean, text: string, at: number, reason?: string, leader?: string }>}
    */
-  async setDraft(id, text, { at = Date.now(), source = 'phone', force = false } = {}) {
+  async setDraft(id, text, { at = Date.now(), source = 'phone', force = false, claim = false } = {}) {
     const meta = this.meta.get(id);
     if (!meta) return { ok: false, text: '', at, reason: 'no such chat' };
     const nextText = String(text ?? '');
     const current = this.drafts.get(id);
-    if (current && at < current.at && !force) {
-      return { ok: true, text: current.text, at: current.at, stale: true };
+    // Heartbeats must not yank ownership back after the computer typed.
+    const reclaim = Boolean(claim) || !force;
+    if (source === 'phone' && current?.source === 'computer' && !reclaim) {
+      return {
+        ok: true,
+        text: current.text,
+        at: current.at,
+        stale: true,
+        leader: 'computer',
+      };
     }
-    if ((current?.text ?? '') === nextText && !force) {
-      return { ok: true, text: nextText, at: current?.at || at };
+    if (current && at < current.at && !reclaim) {
+      return { ok: true, text: current.text, at: current.at, stale: true, leader: current.source };
+    }
+    if ((current?.text ?? '') === nextText && !force && current?.source === source) {
+      return { ok: true, text: nextText, at: current?.at || at, leader: source };
     }
     const nextDraft = { text: nextText, at, source };
     this.drafts.set(id, nextDraft);
-    this.emit('draft', { sessionId: id, ...nextDraft, force: Boolean(force) });
+    this.emit('draft', { sessionId: id, ...nextDraft, force: Boolean(force), leader: source });
 
     if (meta.kind === 'desktop' && meta.desktopThreadId && typeof this.cursor.syncComposerDraft === 'function') {
       const runtime = this.live.get(id) || {};
       runtime.draftWanted = nextText;
-      runtime.draftForce = Boolean(force);
+      runtime.draftForce = Boolean(force) || Boolean(reclaim);
       runtime.draftWriteUntil = Date.now() + 1500;
       if (!runtime.draftPump) runtime.draftPump = this.#pumpDraft(id);
       this.live.set(id, runtime);
@@ -1843,15 +1897,18 @@ export class SessionManager extends EventEmitter {
         const r = this.live.get(id);
         if (r?.draftPump) await r.draftPump;
         const latest = this.drafts.get(id);
+        if (latest?.source === 'computer' && source === 'phone') {
+          return { ok: true, text: latest.text, at: latest.at, leader: 'computer' };
+        }
         if ((latest?.at || 0) > at) {
-          return { ok: true, text: latest.text, at: latest.at };
+          return { ok: true, text: latest.text, at: latest.at, leader: latest.source };
         }
         if (!r?.draftPump && !Object.prototype.hasOwnProperty.call(r || {}, 'draftWanted')) {
-          return { ok: true, text: latest?.text ?? nextText, at: latest?.at ?? at };
+          return { ok: true, text: latest?.text ?? nextText, at: latest?.at ?? at, leader: source };
         }
       }
     }
-    return { ok: true, text: nextText, at };
+    return { ok: true, text: nextText, at, leader: source };
   }
 
   /** What is waiting in the chat box for this session. */

@@ -3607,10 +3607,12 @@ if (existsSync(SRC)) {
   if (
     !sessionsJs.includes('setDraft(') ||
     !sessionsJs.includes('#forceSyncDrafts') ||
+    !sessionsJs.includes('#stopPhoneDraftWrites') ||
     !sessionsJs.includes('#pumpDraft') ||
     !sessionsJs.includes('syncComposerDraft') ||
     !js.includes('function applyRemoteDraft') ||
     !js.includes('function pushDraft') ||
+    !js.includes('draftLeader') ||
     !js.includes("op: 'session.draft'")
   ) {
     fail('the phone and Cursor must share the unsent words in the chat box');
