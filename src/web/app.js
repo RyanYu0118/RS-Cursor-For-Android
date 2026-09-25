@@ -92,6 +92,16 @@ const els = {
   modelParameters: $('model-parameters'),
   modelParametersGroup: $('model-parameters-group'),
   modelStatus: $('model-status'),
+  plusPop: $('plus-pop'),
+  plusFilter: $('plus-filter'),
+  plusModes: $('plus-modes'),
+  plusModelValue: $('plus-model-value'),
+  modelPop: $('model-pop'),
+  modelPopParams: $('model-pop-params'),
+  modelPopList: $('model-pop-list'),
+  modelPopFilter: $('model-pop-filter'),
+  modelPopModels: $('model-pop-models'),
+  attach: $('attach'),
   policy: $('policy'),
   conn: $('conn'),
   sheet: $('sheet'),
@@ -3607,18 +3617,21 @@ function updateModelPresentation() {
 
   if (automatic) {
     els.modelSummary.textContent = 'Auto';
+    if (els.plusModelValue) els.plusModelValue.textContent = 'Auto';
     return;
   }
 
   const model = modelDisplayName(state.modelControls?.model || selectedModelLabel());
-  els.modelChoiceLabel.textContent = model;
-  els.modelChoice.disabled = Boolean(state.modelUpdating);
+  if (els.modelChoiceLabel) els.modelChoiceLabel.textContent = model;
+  if (els.modelChoice) els.modelChoice.disabled = Boolean(state.modelUpdating);
 
   const parameters = state.modelControls?.parameters || [];
   const thinking = parameters.find((parameter) => /^(reasoning|effort|reasoning_effort)$/i.test(parameter.id));
   const fast = parameters.find((parameter) => parameter.id === 'fast' && parameter.value);
   const parts = [model, thinking?.value, fast ? 'Fast' : null].filter(Boolean);
-  els.modelSummary.textContent = parts.join(' · ') || 'Model';
+  // Match Cursor's compact trigger: "Grok 4.7 Medium Fast".
+  els.modelSummary.textContent = parts.join(' ') || 'Model';
+  if (els.plusModelValue) els.plusModelValue.textContent = model || 'Model';
 }
 
 /**
@@ -3844,6 +3857,10 @@ function renderModelControls(controls) {
   setModelUpdating(false);
   updateModelPresentation();
   sizeModelRail();
+  if (els.modelPop && !els.modelPop.hidden) {
+    renderModelPopParams();
+    if (els.modelPopList && !els.modelPopList.hidden) renderModelPopList();
+  }
 }
 
 /**
@@ -3858,6 +3875,329 @@ const CURSOR_MODES = [
   { id: 'multitask', name: 'Multitask' },
   { id: 'ask', name: 'Ask' },
 ];
+
+/** Rows in the + menu (Agent stays the default; it is not listed here). */
+const PLUS_MODE_ROWS = [
+  {
+    id: 'plan',
+    name: 'Plan',
+    desc: 'Generate an implementation plan',
+    icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>',
+  },
+  {
+    id: 'debug',
+    name: 'Debug',
+    desc: 'Pinpoint the root cause of an issue',
+    icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2l1.5 1.5M16 2l-1.5 1.5M12 6v2M8 9H5M19 9h-3M9 22h6a4 4 0 0 0 4-4v-5a5 5 0 0 0-10 0v5a4 4 0 0 0 4 4zM5 13H3M21 13h-2M5 17H3M21 17h-2"/><path d="M4 4l16 16"/></svg>',
+  },
+  {
+    id: 'multitask',
+    name: 'Multitask',
+    desc: 'Orchestrate multiple subagents in parallel',
+    icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/></svg>',
+  },
+  {
+    id: 'ask',
+    name: 'Ask',
+    desc: 'Answer questions without making edits',
+    icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M12 8v.01M12 11v4"/></svg>',
+  },
+];
+
+function closeComposerPops() {
+  setPlusPop(false);
+  setModelPop(false);
+}
+
+function setPlusPop(open) {
+  if (!els.plusPop) return;
+  if (!open) {
+    els.plusPop.hidden = true;
+    els.attach?.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  setModelPop(false);
+  if (els.plusFilter) els.plusFilter.value = '';
+  renderPlusMenu();
+  els.plusPop.hidden = false;
+  els.attach?.setAttribute('aria-expanded', 'true');
+  if (window.matchMedia('(hover: hover)').matches) {
+    setTimeout(() => els.plusFilter?.focus(), 0);
+  }
+}
+
+function setModelPop(open, { list = false } = {}) {
+  if (!els.modelPop) return;
+  if (!open) {
+    els.modelPop.hidden = true;
+    if (els.modelPopList) els.modelPopList.hidden = true;
+    els.modelOpen?.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  setPlusPop(false);
+  if (els.modelPopFilter) els.modelPopFilter.value = '';
+  renderModelPopParams();
+  if (els.modelPopList) {
+    els.modelPopList.hidden = !list;
+    if (list) renderModelPopList();
+  }
+  els.modelPop.hidden = false;
+  els.modelOpen?.setAttribute('aria-expanded', 'true');
+}
+
+function renderPlusMenu() {
+  if (!els.plusModes) return;
+  const query = String(els.plusFilter?.value || '').trim().toLowerCase();
+  const current = canonicalModeId(els.mode.value);
+  els.plusModes.innerHTML = '';
+  for (const row of PLUS_MODE_ROWS) {
+    const hay = `${row.name} ${row.desc}`.toLowerCase();
+    if (query && !hay.includes(query)) continue;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'composer-pop-row';
+    button.dataset.mode = row.id;
+    if (current === row.id) {
+      button.classList.add('is-active');
+      button.setAttribute('aria-selected', 'true');
+    }
+    button.innerHTML = `
+      <span class="composer-pop-ico" aria-hidden="true">${row.icon}</span>
+      <span class="composer-pop-copy"><strong>${esc(row.name)}</strong><span class="composer-pop-desc">${esc(row.desc)}</span></span>
+    `;
+    button.onclick = () => {
+      // Tapping the active mode again returns to Agent (default).
+      const next = current === row.id ? 'agent' : row.id;
+      els.mode.value = next;
+      els.mode.onchange();
+      setPlusPop(false);
+    };
+    els.plusModes.append(button);
+  }
+
+  for (const row of els.plusPop?.querySelectorAll('[data-plus-act]') || []) {
+    const act = row.getAttribute('data-plus-act');
+    const label = act === 'files' ? 'Files' : act === 'model' ? `Model ${els.plusModelValue?.textContent || ''}` : 'MCP';
+    row.hidden = Boolean(query && !label.toLowerCase().includes(query));
+  }
+  updateModelPresentation();
+}
+
+function parameterDisplay(parameter) {
+  if (!parameter) return '';
+  if (parameter.type === 'toggle') return parameter.value ? 'On' : 'Off';
+  return parameter.value || '';
+}
+
+function renderModelPopParams() {
+  if (!els.modelPopParams) return;
+  els.modelPopParams.innerHTML = '';
+  const automatic = els.modelAuto.checked;
+  const parameters = state.modelControls?.parameters || [];
+  const listOpen = els.modelPopList && !els.modelPopList.hidden;
+
+  if (automatic && !parameters.length) {
+    const tip = document.createElement('div');
+    tip.className = 'composer-pop-tip';
+    tip.textContent = 'Balanced quality and speed, recommended for most tasks';
+    els.modelPopParams.append(tip);
+  } else {
+    // Cursor order: Fast, then Context / Effort (selects), then Model.
+    const ordered = [
+      ...parameters.filter((p) => p.id === 'fast'),
+      ...parameters.filter((p) => p.id !== 'fast'),
+    ];
+    for (const parameter of ordered) {
+      if (parameter.type === 'toggle') {
+        const row = document.createElement('div');
+        row.className = 'composer-pop-param';
+        const label = document.createElement('span');
+        label.className = 'composer-pop-param-label';
+        label.textContent = parameter.label;
+        const sw = document.createElement('label');
+        sw.className = 'composer-pop-switch';
+        sw.title = parameter.label;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.role = 'switch';
+        input.checked = Boolean(parameter.value);
+        input.disabled = Boolean(state.modelUpdating);
+        input.setAttribute('aria-label', parameter.label);
+        const track = document.createElement('span');
+        track.className = 'composer-pop-switch-track';
+        track.setAttribute('aria-hidden', 'true');
+        input.onchange = () => {
+          rememberParameter(parameter.id, input.checked);
+          sendOp({
+            op: 'session.modelParameter',
+            sessionId: state.sessionId,
+            parameter: parameter.id,
+            value: input.checked,
+          });
+          renderModelPopParams();
+        };
+        sw.append(input, track);
+        row.append(label, sw);
+        els.modelPopParams.append(row);
+        continue;
+      }
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'composer-pop-param';
+      button.disabled = Boolean(state.modelUpdating);
+      button.innerHTML = `
+        <span class="composer-pop-param-label">${esc(parameter.label)}</span>
+        <span class="composer-pop-param-right">${esc(parameterDisplay(parameter))}<span class="composer-pop-chevron" aria-hidden="true">›</span></span>
+      `;
+      button.onclick = () => openParameterChoices(parameter);
+      els.modelPopParams.append(button);
+    }
+    if (parameters.length) {
+      const rule = document.createElement('div');
+      rule.className = 'composer-pop-rule';
+      rule.setAttribute('aria-hidden', 'true');
+      els.modelPopParams.append(rule);
+    }
+  }
+
+  const modelRow = document.createElement('button');
+  modelRow.type = 'button';
+  modelRow.className = 'composer-pop-param' + (listOpen ? ' is-active' : '');
+  modelRow.disabled = Boolean(state.modelUpdating);
+  const modelLabel = automatic ? 'Auto' : modelDisplayName(state.modelControls?.model || selectedModelLabel());
+  modelRow.innerHTML = `
+    <span class="composer-pop-param-label">Model</span>
+    <span class="composer-pop-param-right">${esc(modelLabel)}<span class="composer-pop-chevron" aria-hidden="true">›</span></span>
+  `;
+  modelRow.onclick = () => {
+    if (!els.modelPopList) return;
+    els.modelPopList.hidden = !els.modelPopList.hidden;
+    if (!els.modelPopList.hidden) {
+      if (els.modelPopFilter) els.modelPopFilter.value = '';
+      renderModelPopList();
+      if (window.matchMedia('(hover: hover)').matches) {
+        setTimeout(() => els.modelPopFilter?.focus(), 0);
+      }
+    }
+    renderModelPopParams();
+  };
+  els.modelPopParams.append(modelRow);
+}
+
+/** Nested options for Context / Effort inside the model popover. */
+function openParameterChoices(parameter) {
+  if (!els.modelPopParams || parameter.type === 'toggle') return;
+  const options = parameter.options || [parameter.value];
+  els.modelPopParams.innerHTML = '';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'composer-pop-param';
+  back.innerHTML = `<span class="composer-pop-param-label">‹ ${esc(parameter.label)}</span>`;
+  back.onclick = () => renderModelPopParams();
+  els.modelPopParams.append(back);
+  for (const value of options) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'composer-pop-param';
+    button.setAttribute('aria-selected', String(value === parameter.value));
+    if (value === parameter.value) button.classList.add('is-active');
+    button.innerHTML = `
+      <span class="composer-pop-param-label">${esc(value)}</span>
+      <span class="composer-pop-model-check" aria-hidden="true">${value === parameter.value ? '✓' : ''}</span>
+    `;
+    button.onclick = () => {
+      rememberParameter(parameter.id, value);
+      sendOp({
+        op: 'session.modelParameter',
+        sessionId: state.sessionId,
+        parameter: parameter.id,
+        value,
+      });
+      renderModelPopParams();
+    };
+    els.modelPopParams.append(button);
+  }
+}
+
+function isCursorBundledModel(modelId, label) {
+  const hay = `${modelId || ''} ${label || ''}`.toLowerCase();
+  return /\bgrok\b|\bcomposer\b|^cursor\b/.test(hay);
+}
+
+function modelPopMeta(modelId) {
+  const controls = controlsFor(modelId);
+  const thinking = controls.parameters?.find((p) => /^(reasoning|effort|reasoning_effort)$/i.test(p.id));
+  const fast = controls.parameters?.find((p) => p.id === 'fast' && p.value);
+  return [thinking?.value, fast ? 'Fast' : null].filter(Boolean).join(' ');
+}
+
+function renderModelPopList() {
+  if (!els.modelPopModels) return;
+  const query = String(els.modelPopFilter?.value || '').trim().toLowerCase();
+  const automatic = els.modelAuto.checked;
+  const selected = automatic ? 'default[]' : els.model.value;
+  els.modelPopModels.innerHTML = '';
+
+  const addRow = (modelId, label, { checkAuto = false } = {}) => {
+    if (query && !label.toLowerCase().includes(query)) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'composer-pop-model';
+    button.setAttribute('role', 'option');
+    const selectedNow = checkAuto ? automatic : (!automatic && modelId === selected);
+    button.setAttribute('aria-selected', String(selectedNow));
+    const meta = checkAuto ? '' : modelPopMeta(modelId);
+    button.innerHTML = `
+      <span class="composer-pop-model-name">${esc(label)}${meta ? `<span class="composer-pop-model-meta">${esc(meta)}</span>` : ''}</span>
+      <span class="composer-pop-model-check" aria-hidden="true">${selectedNow ? '✓' : ''}</span>
+    `;
+    button.onclick = () => {
+      if (checkAuto) {
+        els.modelAuto.checked = true;
+        els.modelAuto.onchange();
+      } else {
+        els.model.value = modelId;
+        els.model.onchange();
+      }
+      if (els.modelPopList) els.modelPopList.hidden = true;
+      renderModelPopParams();
+      renderModelPopList();
+    };
+    els.modelPopModels.append(button);
+  };
+
+  addRow('default[]', 'Auto', { checkAuto: true });
+
+  const cursor = [];
+  const other = [];
+  for (const option of els.model.options) {
+    if (!option.value || option.value === 'default[]') continue;
+    const bucket = isCursorBundledModel(option.value, option.textContent) ? cursor : other;
+    bucket.push(option);
+  }
+
+  const paintGroup = (title, rows) => {
+    if (!rows.length) return;
+    const visible = rows.filter((o) => !query || o.textContent.toLowerCase().includes(query));
+    if (!visible.length) return;
+    const head = document.createElement('div');
+    head.className = 'composer-pop-group';
+    head.textContent = title;
+    els.modelPopModels.append(head);
+    for (const option of visible) addRow(option.value, option.textContent);
+  };
+
+  paintGroup('Cursor Models', cursor);
+  paintGroup('Other Models', other);
+
+  if (!els.modelPopModels.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'composer-pop-tip';
+    empty.textContent = 'No matching models';
+    els.modelPopModels.append(empty);
+  }
+}
 
 function canonicalModeId(raw) {
   const id = String(raw || 'agent').toLowerCase();
@@ -3887,6 +4227,7 @@ function paintMode(mode = els.mode.value) {
   els.composerBox.dataset.mode = id;
   // The model sheet is the chat box opened out, so it carries the same edge.
   if (els.modelPanel) els.modelPanel.dataset.mode = id;
+  if (els.plusPop && !els.plusPop.hidden) renderPlusMenu();
 }
 
 /**
@@ -4735,7 +5076,7 @@ function slashCommands() {
       name: 'Model',
       hint: 'Choose a model and its parameters',
       run: () => {
-        setModelSheet(true);
+        setModelPop(true);
       },
     },
     { id: 'new', name: 'New session', hint: 'Start in a folder', run: () => $('new-session').click() },
@@ -5907,6 +6248,11 @@ document.addEventListener('keydown', (e) => {
   // tool view, which sits over the rail.
   if (!$('lightbox').hidden) closeLightbox();
   else if (!els.planSheet.hidden) setPlanSheet(false);
+  else if (els.modelPop && !els.modelPop.hidden && els.modelPopList && !els.modelPopList.hidden) {
+    els.modelPopList.hidden = true;
+    renderModelPopParams();
+  } else if (els.modelPop && !els.modelPop.hidden) setModelPop(false);
+  else if (els.plusPop && !els.plusPop.hidden) setPlusPop(false);
   // Escape leaves the list before it leaves the sheet: one step back at a time.
   else if (!els.modelSheet.hidden && els.modelPanel.dataset.page === 'list') {
     setModelPage('settings');
@@ -5927,6 +6273,10 @@ els.model.onchange = () => {
   paintBuiltinParameters(els.model.value);
   rememberModel(sessionAgent(), els.model.value);
   sendOp({ op: 'session.model', sessionId: state.sessionId, modelId: els.model.value });
+  if (els.modelPop && !els.modelPop.hidden) {
+    renderModelPopParams();
+    if (els.modelPopList && !els.modelPopList.hidden) renderModelPopList();
+  }
 };
 els.modelAuto.onchange = () => {
   const automatic = els.modelAuto.checked;
@@ -5940,10 +6290,43 @@ els.modelAuto.onchange = () => {
     sessionId: state.sessionId,
     enabled: automatic,
   });
+  if (els.modelPop && !els.modelPop.hidden) {
+    renderModelPopParams();
+    if (els.modelPopList && !els.modelPopList.hidden) renderModelPopList();
+  }
 };
 els.modelOpen.onclick = () => {
-  setModelSheet(true);
+  if (els.modelPop && !els.modelPop.hidden) setModelPop(false);
+  else setModelPop(true);
 };
+els.attach.onclick = () => {
+  if (els.plusPop && !els.plusPop.hidden) setPlusPop(false);
+  else setPlusPop(true);
+};
+els.plusFilter?.addEventListener('input', renderPlusMenu);
+els.modelPopFilter?.addEventListener('input', renderModelPopList);
+els.plusPop?.addEventListener('click', (e) => {
+  const act = e.target.closest('[data-plus-act]')?.getAttribute('data-plus-act');
+  if (!act) return;
+  if (act === 'files') {
+    // label[for=file] opens the picker; close the menu after.
+    setTimeout(() => setPlusPop(false), 0);
+    return;
+  }
+  if (act === 'model') {
+    e.preventDefault();
+    setPlusPop(false);
+    setModelPop(true, { list: false });
+  }
+});
+document.addEventListener('pointerdown', (e) => {
+  const inPlus = els.plusPop && !els.plusPop.hidden && els.plusPop.contains(e.target);
+  const inModel = els.modelPop && !els.modelPop.hidden && els.modelPop.contains(e.target);
+  const onAttach = els.attach?.contains(e.target);
+  const onModelOpen = els.modelOpen?.contains(e.target);
+  if (!inPlus && !onAttach && els.plusPop && !els.plusPop.hidden) setPlusPop(false);
+  if (!inModel && !onModelOpen && els.modelPop && !els.modelPop.hidden) setModelPop(false);
+});
 els.modelClose.onclick = () => setModelSheet(false);
 els.modelSheet.onclick = (e) => {
   if (e.target === els.modelSheet) setModelSheet(false);

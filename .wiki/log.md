@@ -1,6 +1,8 @@
 # Directory Update Log
 
 ## 2026-09-25
+* **Fix**: Draft sync pauses while Cursor is on another chat; each side keeps its text locally and syncs again when that same chat is focused. See [Cursor window](concepts/cursor-window.md).
+* **Update**: Composer **+** opens Cursor-style Plan/Debug/Multitask/Ask + Files/Model/MCP; the Agent chip is gone from the pill. The model chip opens Fast/Context/Effort then a nested model list (Auto / Cursor Models / Other Models). See [Web](concepts/web.md).
 * **Fix**: Pad composer is a Cursor-style pill: + on the left opens attachments via `label[for=file]` (fixes Android WebView), with model chip, optional voice, and a white send button on the right. See [Web](concepts/web.md).
 * **Fix**: Home Screen icons were scaled 1.28× and reused as maskable, so Android cropped the mark. `any` is 1.0 again; maskable PNGs use 0.8 safe padding. See [Web](concepts/web.md).
 * **Fix**: Editing either chat box takes push rights immediately; the other side loses them at once, so a computer keystroke is no longer overwritten by the pad a second later. See [Cursor window](concepts/cursor-window.md).

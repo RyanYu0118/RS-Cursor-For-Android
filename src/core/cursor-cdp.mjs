@@ -735,8 +735,9 @@ const LIVE_COMPOSER_DRAFTS = `(() => {
   return ids.map((id) => {
     const data = dataSvc.getComposerDataIfLoaded(id);
     const stored = String(data?.text ?? '');
-    const text = focused?.id === id && visible != null ? visible : stored;
-    return { threadId: id, text };
+    const isFocused = focused?.id === id;
+    const text = isFocused && visible != null ? visible : stored;
+    return { threadId: id, text, focused: Boolean(isFocused) };
   });
 })()`;
 
@@ -745,6 +746,8 @@ const LIVE_COMPOSER_DRAFTS = `(() => {
  *
  * Cursor stores plain text and a ProseMirror document. Updating both and
  * firing ShouldForceText is what makes the open editor show them.
+ * When that chat is not the one on screen, leave Cursor alone — the host
+ * keeps the draft until the computer switches back.
  */
 function syncComposerDraftExpression({ threadId, text, force = false }) {
   const req = JSON.stringify({
@@ -765,14 +768,17 @@ function syncComposerDraftExpression({ threadId, text, force = false }) {
     if (handle && typeof handle.then === 'function') handle = await handle;
     if (!handle) return { status: 'unknown-thread', reason: 'chat is not loaded' };
     const before = String(dataSvc.getComposerDataIfLoaded(req.threadId)?.text ?? '');
+    const focused = globalThis.__SSG_COMPOSER_PROVIDER__?.getStates?.().find((row) => row.state === 'focused');
+    if (focused?.id !== req.threadId) {
+      return { status: 'not-focused', text: before };
+    }
     const richText = req.text ? req.richText : ${JSON.stringify(richTextFromPlain(''))};
     if (before !== req.text || req.force) {
       dataSvc.updateComposerData(handle, { text: req.text, richText });
     }
     events?.fireShouldForceText?.({ composerId: req.threadId });
-    const focused = globalThis.__SSG_COMPOSER_PROVIDER__?.getStates?.().find((row) => row.state === 'focused');
     const box = document.querySelector('.tiptap.ProseMirror.ui-prompt-input-editor__input');
-    if (focused?.id === req.threadId && box) {
+    if (box) {
       const editor = box.editor || box.pmViewDesc?.editor || box.__editor;
       if (editor?.commands?.setContent) editor.commands.setContent(req.text || '', false);
       else if (!req.text) box.textContent = '';
@@ -1233,7 +1239,7 @@ export class CursorCdp {
   /**
    * The unsent words in every loaded chat's box.
    *
-   * @returns {Promise<Array<{ threadId: string, text: string }>|null>}
+   * @returns {Promise<Array<{ threadId: string, text: string, focused: boolean }>|null>}
    */
   async liveComposerDrafts() {
     const result = await this.#withComposer((window) => window.evaluate(LIVE_COMPOSER_DRAFTS));
@@ -1242,8 +1248,10 @@ export class CursorCdp {
 
   /**
    * Put unsent words into a loaded chat without focusing the window.
+   * Returns `not-focused` when that chat is not on screen — the host keeps
+   * the draft locally until the computer switches back.
    *
-   * @returns {Promise<{ status: 'ok'|'unknown-thread'|'no-cdp'|'error', text?: string, reason?: string }>}
+   * @returns {Promise<{ status: 'ok'|'not-focused'|'unknown-thread'|'no-cdp'|'error', text?: string, reason?: string }>}
    */
   async syncComposerDraft({ threadId, text, force = false }) {
     if (!threadId) return { status: 'error', reason: 'no chat was named' };

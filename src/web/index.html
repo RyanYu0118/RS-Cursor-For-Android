@@ -228,19 +228,19 @@
       <div class="composer-box" data-mode="agent">
         <div id="attachments" hidden></div>
         <div class="composer-row">
-          <!-- Label (not a JS click on a hidden input): Android WebView and
-               iOS both refuse a programmatic file-picker open. -->
-          <label id="attach" class="composer-icon attach" for="file" title="Attach image" aria-label="Attach image">+</label>
+          <!-- Button opens the + menu; Files inside that menu picks images. -->
+          <button id="attach" class="composer-icon attach" type="button" title="Add" aria-label="Add" aria-haspopup="dialog" aria-expanded="false">+</button>
           <textarea id="box" rows="1" placeholder="Message the agent…"></textarea>
           <div class="composer-trailing">
-            <select id="mode" class="composer-chip" title="Agent mode" aria-label="Agent mode">
+            <!-- Mode is chosen from the + menu on pad; keep a hidden select for the session API. -->
+            <select id="mode" class="sr-only" title="Agent mode" aria-label="Agent mode">
               <option value="agent">Agent</option>
               <option value="plan">Plan</option>
               <option value="debug">Debug</option>
               <option value="multitask">Multitask</option>
               <option value="ask">Ask</option>
             </select>
-            <button id="model-open" class="composer-chip model-summary" type="button" title="Model settings" aria-haspopup="dialog">
+            <button id="model-open" class="composer-chip model-summary" type="button" title="Model settings" aria-haspopup="dialog" aria-expanded="false">
               <span id="model-summary">Auto</span>
               <span class="composer-chevron" aria-hidden="true">⌄</span>
             </button>
@@ -260,8 +260,42 @@
         </div>
         <!-- Visually hidden, not `hidden`: a label[for] must reach a pickable input. -->
         <input id="file" class="sr-only" type="file" accept="image/*" multiple />
-        <!-- Auto-select lives in the model sheet; keep the checkbox for the same JS. -->
         <input id="model-auto" class="sr-only" type="checkbox" role="switch" aria-label="Auto-select" />
+        <!-- Anchored to the pill (not #composer padding), so menus sit flush above it. -->
+        <div id="plus-pop" class="composer-pop" hidden role="dialog" aria-label="Add">
+          <input id="plus-filter" class="composer-pop-search" type="search" placeholder="Search skills, context, chats…" autocomplete="off" />
+          <div id="plus-modes" class="composer-pop-section"></div>
+          <div class="composer-pop-rule" aria-hidden="true"></div>
+          <div id="plus-actions" class="composer-pop-section">
+            <label class="composer-pop-row" for="file" data-plus-act="files">
+              <span class="composer-pop-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              </span>
+              <span class="composer-pop-copy"><strong>Files</strong></span>
+            </label>
+            <button type="button" class="composer-pop-row" data-plus-act="model">
+              <span class="composer-pop-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z"/></svg>
+              </span>
+              <span class="composer-pop-copy"><strong>Model</strong></span>
+              <span id="plus-model-value" class="composer-pop-value">Auto</span>
+            </button>
+            <button type="button" class="composer-pop-row" data-plus-act="mcp" disabled title="MCP servers are configured in Cursor">
+              <span class="composer-pop-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              </span>
+              <span class="composer-pop-copy"><strong>MCP</strong></span>
+              <span class="composer-pop-chevron" aria-hidden="true">›</span>
+            </button>
+          </div>
+        </div>
+        <div id="model-pop" class="composer-pop model-pop" hidden role="dialog" aria-label="Model">
+          <div id="model-pop-params" class="composer-pop-panel"></div>
+          <div id="model-pop-list" class="composer-pop-panel composer-pop-flyout" hidden>
+            <input id="model-pop-filter" class="composer-pop-search" type="search" placeholder="Search models" autocomplete="off" />
+            <div id="model-pop-models" class="composer-pop-models" role="listbox" aria-label="Models"></div>
+          </div>
+        </div>
       </div>
     </footer>
     </div>

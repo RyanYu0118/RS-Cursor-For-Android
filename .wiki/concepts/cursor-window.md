@@ -17,7 +17,7 @@ sources:
   - id: clipboard
     resource: /src/core/clipboard.mjs
     title: Image paste via clipboard
-generated: { by: agent, at: 2026-09-25T15:40:00Z }
+generated: { by: agent, at: 2026-09-25T16:40:00Z }
 ---
 
 # The Cursor window
@@ -142,15 +142,17 @@ chat that has no model stored on the session is shown from that record —
 an empty choice is not Auto. When Cursor changes those knobs, replace the
 snapshot.
 
-Unsent words in the chat box are shared the same way. Typing on the phone
-writes Cursor's composer `text` / `richText` through the chat service and
-fires `ShouldForceText` — the box updates without focusing the window.
-Typing on the computer is read from the open editor when that chat is
-showing, otherwise from the loaded composer, and shown on the phone.
-Clearing either box clears the other, including an empty ProseMirror
-document. Every second the owning side force-sends its full text to the
-other. Editing either box takes ownership immediately and the other side
-loses push rights at once. When the two boxes disagree, the side that
+Unsent words in the chat box are shared the same way — **only while Cursor
+is showing that same chat**. Typing on the phone writes Cursor's composer
+`text` / `richText` through the chat service and fires `ShouldForceText`
+when that chat is on screen; if the computer is on another tab, the draft
+stays on the host (and the phone) until Cursor switches back, then it is
+pushed. Typing on the computer is read from the open editor when that chat
+is showing, and shown on the phone. Clearing either box clears the other
+when they are paired, including an empty ProseMirror document. Every second
+the owning side force-sends its full text to the other **while the chat is
+focused**. Editing either box takes ownership immediately and the other
+side loses push rights at once. When the two boxes disagree, the side that
 presses send is the message that goes: a phone send replaces the computer
 box, and a computer send leaves that text and clears the phone.
 

@@ -1740,6 +1740,9 @@ export class SessionManager extends EventEmitter {
    * Ownership is checked often; full-text push from the owner runs about once
    * a second. The first keystroke on the other side takes ownership immediately
    * and the previous side loses push rights at once.
+   *
+   * Sync only while Cursor is showing this same chat. If the computer is on
+   * another tab, both sides keep their drafts locally until it switches back.
    */
   async #forceSyncDrafts() {
     if (typeof this.cursor.liveComposerDrafts !== 'function') return;
@@ -1753,7 +1756,24 @@ export class SessionManager extends EventEmitter {
       const current = this.drafts.get(meta.id) || { text: '', at: 0, source: null };
       const row = byThread.get(meta.desktopThreadId);
       const computerText = row ? String(row.text ?? '') : null;
+      const focused = Boolean(row?.focused);
       const runtime = this.live.get(meta.id) || {};
+      const wasFocused = Boolean(runtime.computerFocused);
+      runtime.computerFocused = focused;
+
+      if (!focused) {
+        // Another Cursor chat is in front — park the draft on the host.
+        this.live.set(meta.id, runtime);
+        continue;
+      }
+
+      if (!wasFocused) {
+        // Just switched back to this chat: reseat the baseline so a tab change
+        // is not read as a computer edit, then sync immediately.
+        runtime.lastForcePushAt = 0;
+        if (computerText != null) runtime.lastSeenComputerText = computerText;
+        this.live.set(meta.id, runtime);
+      }
 
       if (computerText != null) {
         if (runtime.lastSeenComputerText === undefined) {
@@ -1772,6 +1792,7 @@ export class SessionManager extends EventEmitter {
             r.lastSeenComputerText = computerText;
             r.lastWrittenText = computerText;
             r.lastForcePushAt = now;
+            r.computerFocused = true;
             this.live.set(meta.id, r);
             this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true, leader: 'computer' });
             continue;
@@ -1790,6 +1811,7 @@ export class SessionManager extends EventEmitter {
         r.draftForce = true;
         r.draftWriteUntil = now + 1500;
         r.lastForcePushAt = now;
+        r.computerFocused = true;
         if (!r.draftPump) r.draftPump = this.#pumpDraft(meta.id);
         this.live.set(meta.id, r);
         continue;
@@ -1799,6 +1821,7 @@ export class SessionManager extends EventEmitter {
         const nextDraft = { text: computerText, at: now, source: 'computer' };
         this.drafts.set(meta.id, nextDraft);
         runtime.lastForcePushAt = now;
+        runtime.computerFocused = true;
         this.live.set(meta.id, runtime);
         this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true, leader: 'computer' });
       }
@@ -1829,6 +1852,12 @@ export class SessionManager extends EventEmitter {
         const result = await this.cursor
           .syncComposerDraft({ threadId: meta.desktopThreadId, text: want, force })
           .catch((err) => ({ status: 'error', reason: err.message }));
+        if (result.status === 'not-focused') {
+          // Computer is on another chat — keep the host draft and wait.
+          runtime.draftWriteUntil = 0;
+          this.live.set(id, runtime);
+          break;
+        }
         if (this.drafts.get(id)?.source === 'computer') {
           runtime.draftWriteUntil = 0;
           this.live.set(id, runtime);

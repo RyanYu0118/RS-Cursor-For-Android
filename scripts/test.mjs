@@ -2837,8 +2837,20 @@ if (existsSync(SRC)) {
     fail('attach must live in the composer row (left of the text)');
     failed = true;
   }
-  if (!html.includes('for="file"') || !/<label[^>]*id="attach"/.test(html)) {
-    fail('attach must be a label[for=file] so Android/iOS open the image picker');
+  if (!/<button[^>]*id="attach"/.test(html) || !html.includes('id="plus-pop"') || !html.includes('id="model-pop"')) {
+    fail('attach must open a + menu; model chip must open a nested model popover');
+    failed = true;
+  }
+  if (!html.includes('for="file"') || !/<label[^>]*for="file"/.test(html)) {
+    fail('Files in the + menu must be a label[for=file] so Android/iOS open the image picker');
+    failed = true;
+  }
+  if (!js.includes('function setPlusPop') || !js.includes('function setModelPop') || !js.includes('PLUS_MODE_ROWS')) {
+    fail('composer + / model popovers must be wired in app.js');
+    failed = true;
+  }
+  if (!/<select[^>]*id="mode"[^>]*class="[^"]*sr-only/.test(html) && !/id="mode"[^>]*\bsr-only\b/.test(html)) {
+    fail('tablet Agent mode select must be visually hidden; modes live in the + menu');
     failed = true;
   }
   if (html.includes('id="file" type="file"') && /id="file"[^>]*\bhidden\b/.test(html)) {
@@ -2855,6 +2867,10 @@ if (existsSync(SRC)) {
   }
   if (html.includes('binder-icon') || css.includes('.binder-icon')) {
     fail('attach must not be a binder icon');
+    failed = true;
+  }
+  if (!css.includes('.composer-pop') || !css.includes('.composer-pop-flyout')) {
+    fail('composer popovers need Cursor-style nested menu styles');
     failed = true;
   }
   if (!html.includes('composer-row') || !html.includes('composer-trailing') || !html.includes('composer-send')) {
@@ -2956,8 +2972,8 @@ if (existsSync(SRC)) {
     fail('composer model/mode chips must exist');
     failed = true;
   }
-  if (!html.includes('composer-chip')) {
-    fail('mode and model must be composer-chip controls in the pill');
+  if (!html.includes('composer-chip') || !html.includes('id="model-open"')) {
+    fail('model summary must remain a composer-chip in the pill');
     failed = true;
   }
   if (!html.includes('maximum-scale=1') || !html.includes('data-standalone')) {
@@ -3577,6 +3593,7 @@ if (existsSync(SRC)) {
 {
   const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
   const sessionsJs = readFileSync(join(ROOT, 'src/core/sessions.mjs'), 'utf8');
+  const cdpJs = readFileSync(join(ROOT, 'src/core/cursor-cdp.mjs'), 'utf8');
   let failed = false;
   if (!js.includes('function saveDraft') || !js.includes('function loadDraft')) {
     fail('switching chats must park and restore the composer draft');
@@ -3628,12 +3645,16 @@ if (existsSync(SRC)) {
     !sessionsJs.includes('#stopPhoneDraftWrites') ||
     !sessionsJs.includes('#pumpDraft') ||
     !sessionsJs.includes('syncComposerDraft') ||
+    !sessionsJs.includes('not-focused') ||
+    !sessionsJs.includes('computerFocused') ||
+    !cdpJs.includes("status: 'not-focused'") ||
+    !cdpJs.includes('focused: Boolean(isFocused)') ||
     !js.includes('function applyRemoteDraft') ||
     !js.includes('function pushDraft') ||
     !js.includes('draftLeader') ||
     !js.includes("op: 'session.draft'")
   ) {
-    fail('the phone and Cursor must share the unsent words in the chat box');
+    fail('the phone and Cursor must share the unsent words only while the same chat is on screen');
     failed = true;
   }
   if (!desktopPrompt.includes("result.status === 'queued'")) {

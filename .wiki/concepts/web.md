@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-25T16:20:00Z }
+generated: { by: agent, at: 2026-09-25T16:40:00Z }
 ---
 
 # Web app
@@ -292,8 +292,8 @@ is the way to start somewhere Cursor has never opened — see
 
 ## Composer
 
-Enter sends. Images attach from a + on the lower-right of the box,
-or paste, or drop, and go with the next prompt. Their thumbnails are 112px —
+Enter sends. Images attach from **Files** in the **+** menu, or paste, or
+drop, and go with the next prompt. Their thumbnails are 112px —
 a 56px chip is a checkbox, not a preview. Stop interrupts. The busy
 session still accepts another message — it queues. `ask_question` is a
 Question card with real options, not an OTHER tool bar.
@@ -311,50 +311,53 @@ begin with `/`.
 
 Each session keeps its own unsent draft: switching chats parks what you
 were typing and restores it when you come back. For a desktop chat the
-draft is shared with Cursor's box — type on the phone or the computer and
-the other side shows the same words within about a second, and emptying
-either box empties the other. If the two disagree, send uses the box on
+draft is shared with Cursor's box **when that same chat is on screen** —
+type on the phone or the computer and the other side shows the same words
+within about a second. If Cursor is on another tab, the phone keeps its
+draft locally until Cursor switches back. Emptying either box empties the
+other while they are paired. If the two disagree, send uses the box on
 the side that pressed send. An idle send
 appears in the stream at once — it used to wait until Cursor's window had
 taken it.
 
-The composer is a single pill: **+** on the left (a `label[for=file]`, so
-Android WebView and iOS actually open the image picker), the text field in
-the middle, then mode, the Auto/model chip, optional voice, and a white
-circular send. Attachment thumbnails sit above the row inside the same
-border. The text field stays **16px** so iOS Safari does not zoom the page.
+The composer is a single pill: **+** on the left, the text field in the
+middle, then the Auto/model chip, optional voice, and a white circular
+send. There is no Agent/mode chip on the pill — modes live in the **+**
+menu (Plan / Debug / Multitask / Ask; tap the active one again for Agent).
+**Files** in that menu is a `label[for=file]` so Android WebView and iOS
+open the image picker; **Model** opens the same nested model popover as
+the chip; **MCP** is listed but not wired (servers stay in Cursor).
+Attachment thumbnails sit above the row inside the same border. The text
+field stays **16px** so iOS Safari does not zoom the page.
 
-When Auto is on the model chip still says **Auto** and still opens the
-sheet — Auto is toggled there. With Auto off the chip summarises the model
-plus its most useful active parameter (for example `GPT-5.6 Sol · Medium ·
-Fast`). The sheet is a centred dialog on desktop and a bottom sheet on a phone,
-drawn from the same parts as the chat box: the composer's radius, its
-mode-coloured edge, chips on `--bg-3` for anything pressable, and the
-scrubber's way of marking the live row — a coloured left edge and a soft
-ring, not a tick alone. Rows are grouped into cards rather than running
-full-bleed under hairlines; a plain settings list is the one thing the rest
-of the app never looks like. Fast, Context, Reasoning, and Effort appear as
-labelled rows only when Cursor reports them for the selected model. Changes
-apply immediately. While Cursor is opening or pressing its own picker, the
-sheet disables duplicate presses and shows progress.
+The model chip opens a Cursor-style popover first. With a named model it
+shows Fast (toggle), Context / Effort (nested choice lists), then
+**Model ›**. With Auto on it shows the balanced tip and **Model › Auto**.
+Opening Model flies out a search list: Auto, then **Cursor Models** and
+**Other Models**, with a check on the current row. Escape closes the list
+before the params panel, then the popover. When Auto is on the chip says
+**Auto**; with Auto off it summarises like Cursor's trigger
+(`Grok 4.7 Medium Fast`). Changes apply immediately. The older full-screen
+model sheet remains available (slash `/model` and Escape paths) and still
+carries relative price badges on known rows.
 
-Choosing a model is a **page you go to**, not a drawer that unfolds under
-the row you tapped. The sheet is two pages on one rail: the list arrives
-from the right over the whole dialog, the settings page steps back and
-dims behind it, and the list leaves the same way when a model is picked,
-Back is pressed, or Escape is hit — Escape leaves the list before it
-leaves the sheet. The header follows, growing a back chevron and changing
-to **Choose model**.
+Choosing a model from the sheet is still a **page you go to**, not a
+drawer that unfolds under the row you tapped. The sheet is two pages on
+one rail: the list arrives from the right over the whole dialog, the
+settings page steps back and dims behind it, and the list leaves the same
+way when a model is picked, Back is pressed, or Escape is hit — Escape
+leaves the list before it leaves the sheet. The header follows, growing a
+back chevron and changing to **Choose model**.
 
-Known model rows carry an amber relative token-price mark: **$** lower,
-**$$** moderate, **$$$** higher. There is no legend under the search box;
-the badge's accessible label / desktop tooltip gives the published base
-input and output rates. The bands are deliberately broad because cache use,
-input/output mix, context length, plan, and regional uplifts change actual
-spend. An id whose encoded defaults include `fast=true` uses that published
-Fast rate. A future model with no known published rate gets no badge rather
-than a guessed price. The search box is sticky, so it stays at the top while
-the model rows scroll under it.
+Known model rows on the sheet carry an amber relative token-price mark:
+**$** lower, **$$** moderate, **$$$** higher. There is no legend under the
+search box; the badge's accessible label / desktop tooltip gives the
+published base input and output rates. The bands are deliberately broad
+because cache use, input/output mix, context length, plan, and regional
+uplifts change actual spend. An id whose encoded defaults include
+`fast=true` uses that published Fast rate. A future model with no known
+published rate gets no badge rather than a guessed price. The search box
+is sticky, so it stays at the top while the model rows scroll under it.
 
 The model you pick is remembered **per agent** in the browser, so a new
 session opens on it instead of Auto-select — choosing a gateway model such
