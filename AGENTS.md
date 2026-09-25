@@ -12,7 +12,7 @@ the same way — see [Agents](#agents). Any session working in this repo — one
 Auto's own sessions or a manual one — follows the rules below.
 
 These rules apply when this clone is the Auto host you are running. If you
-are only browsing the code, you can ignore the commit-and-push loop.
+are only browsing the code, you can ignore the commit loop (`y` / `c` / `n`).
 
 ## Reporting back
 
@@ -233,20 +233,26 @@ for what it does.
 ## Mandatory workflow for changes to this repo
 
 1. **Run tests** unless the change is markdown only (`README.md`, `docs/`,
-   `AGENTS.md`, `CLAUDE.md`, `.wiki/`). `npm test` syntax-checks everything,
-   exercises transcripts, permissions, PTYs, diff rendering, the browser
-   address bar and Telegram rendering, validates skill frontmatter, and —
-   if the host is running — checks its health and session API. Skill
-   `SKILL.md` files still need tests (frontmatter).
-2. **If tests pass** (or were skipped): `git add -A`, commit with a short
-   message describing the change, and **push**. Then restart the host so
-   the change takes effect (see below). Docs and wiki need no restart.
+   `AGENTS.md`, `CLAUDE.md`, `.wiki/`, `.cursorrules`, `.cursor/rules/`).
+   `npm test` syntax-checks everything, exercises transcripts, permissions,
+   PTYs, diff rendering, the browser address bar and Telegram rendering,
+   validates skill frontmatter, and — if the host is running — checks its
+   health and session API. Skill `SKILL.md` files still need tests (frontmatter).
+2. **If tests pass** (or were skipped): ask whether to commit — see
+   `.cursor/rules/agent-git-commit.mdc` and `.cursorrules`.
+   - **`y`** → bilingual commit + push to the branch upstream
+   - **`c`** → bilingual commit only
+   - **`n`** → skip Git
+   Do not commit or push until the user answers. After a commit that
+   changed `src/`, restart the host so the change takes effect (see below).
+   Docs, wiki, and rules need no restart.
 3. **If tests fail**: revert (`git checkout -- <files>`), tell the user
    which check failed and why, then fix the root cause and start again.
 
-Do not skip the commit — uncommitted fixes are invisible to anyone
-restarting later, which has silently lost fixes before. Do not skip the
-push either; an unpushed commit exists only on this machine.
+Commit messages are **bilingual Conventional Commits** (Chinese title first,
+English second) per `.cursorrules`. Leaving fixes uncommitted is fine only
+when the user chose **`n`**; otherwise prefer **`y`** so another machine
+can pull them.
 
 **Testing a send goes to a scratch chat, not this one.** A message delivered
 into the session you are working in becomes a prompt: it interrupts the turn
@@ -296,5 +302,6 @@ session by id or title.
 
 Skills live in `.claude/skills/<name>/SKILL.md` and load in every session in
 this repo. To create or update one, follow the `create-skill` skill. Skills
-go through the same workflow as any change: `npm test` (it validates
-frontmatter), commit, **push**. No restart needed.
+go through the same workflow as any change: `npm test` (frontmatter), then
+ask `y` / `c` / `n` before the bilingual commit (and push on `y`). No restart
+needed.

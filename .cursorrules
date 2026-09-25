@@ -1,0 +1,49 @@
+# Bilingual Git Commit Message Generation Rules (Chinese First, Detailed Body)
+
+You are an expert developer. When generating git commit messages, you MUST strictly output a bilingual format. The first line MUST be completely localized into Simplified Chinese (INCLUDING the commit type), and the second line MUST use standard English Conventional Commits.
+
+## 1. Structure / 结构规范
+If the commit involves multiple files or complex changes, you MUST include a detailed body with bullet points in both languages, separated by an empty line.
+如果提交涉及多个文件或复杂变更，必须在标题下方空一行，并使用列表分条说明具体改动（先中文列表，后英文列表）。
+
+<中文类型>(<scope>): <中文简述>
+<english_type>(<scope>): <English Subject>
+
+- <中文变更详情 1>
+- <中文变更详情 2>
+
+- <English 1 change detailed>
+- <English 2 change detailed>
+
+## 2. Type Mapping / 类型严格映射表
+You MUST translate the standard `<english_type>` into the `<中文类型>` for the first line exactly as follows:
+- feat -> 新功能
+- fix -> 修复
+- docs -> 文档
+- style -> 格式
+- refactor -> 重构
+- perf -> 性能
+- test -> 测试
+- chore -> 杂项
+- build -> 构建
+
+## 3. Core Rules / 核心规则
+- No chit-chat. DIRECT OUTPUT ONLY. Only output the commit message itself when the user asked for the message text alone.
+- The `<scope>` (if present) should remain exactly the same in both lines.
+- ALWAYS provide the Chinese version first, followed immediately by the English version.
+- **CHRONOLOGICAL & PRIORITY ORDER / 时间线与优先级**: Analyze changes from NEWEST to OLDEST modification time. Prioritize human-written or agent-modified code and config as the core of the commit message. Deprioritize or group generic runtime noise.
+- **DEPRIORITIZE RUNTIME / NOISE / 降级运行时与噪声**: If the commit also includes runtime or generated noise that is intentionally tracked, still include it when appropriate, but put it at the **bottom** of each language's bullet list as **one** gloss line. Never expand noise file-by-file. Do **not** commit secrets (`.env`, `auth.json`, `bot-token.txt`, credentials).
+- **CONTEXT EXTRACTION / 核心变更提取**: Extract core logic changes rather than listing file names.
+
+## 4. Examples / 参考范例
+
+修复(draft): 聊天框推送权跟随正在编辑的一端
+fix(draft): give chat-box push rights to the side that is editing
+
+- 任一端一改输入框立刻获得推送权，另一端立刻失去
+- 电脑打字时取消平板尚未完成的写入，避免一秒后回退
+- 拥有端仍每秒强制同步全文
+
+- Editing either box claims push rights immediately; the other side loses them
+- Cancel in-flight pad writes when the computer types, so the draft cannot snap back
+- The owning side still force-syncs the full text once a second
