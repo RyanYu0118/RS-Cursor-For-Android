@@ -1712,48 +1712,67 @@ export class SessionManager extends EventEmitter {
     return true;
   }
 
-  /** Follow the model and the unsent words the open Cursor window is using. */
+  /** Follow the model and force-sync the unsent words every second. */
   #watchComposerModels() {
-    const timer = setInterval(() => {
+    const modelTimer = setInterval(() => {
       this.#pullComposerModels().catch((err) => this.emit('log', `model sync: ${err.message}`));
-      this.#pullComposerDrafts().catch((err) => this.emit('log', `draft sync: ${err.message}`));
     }, 750);
-    timer.unref?.();
+    modelTimer.unref?.();
+    const draftTimer = setInterval(() => {
+      this.#forceSyncDrafts().catch((err) => this.emit('log', `draft sync: ${err.message}`));
+    }, 1000);
+    draftTimer.unref?.();
     this.#pullComposerModels().catch(() => {});
-    this.#pullComposerDrafts().catch(() => {});
+    this.#forceSyncDrafts().catch(() => {});
   }
 
   /**
-   * Computer → phone. The loaded composer's text is what Cursor will send.
-   * A write we just made is left alone for a moment so the two don't chase.
+   * Every second: the last side that typed pushes its full text to the other.
+   * Phone → Cursor writes the host draft; computer → phone broadcasts the box.
    */
-  async #pullComposerDrafts() {
+  async #forceSyncDrafts() {
     if (typeof this.cursor.liveComposerDrafts !== 'function') return;
     const live = await this.cursor.liveComposerDrafts();
-    if (!Array.isArray(live)) return;
-    const byThread = new Map(live.map((row) => [row.threadId, row]));
+    const byThread = Array.isArray(live) ? new Map(live.map((row) => [row.threadId, row])) : new Map();
+
     for (const meta of this.meta.values()) {
       if (meta.kind !== 'desktop' || meta.status === STATUS.archived) continue;
+      if (!meta.desktopThreadId) continue;
+      const current = this.drafts.get(meta.id) || { text: '', at: 0, source: null };
       const row = byThread.get(meta.desktopThreadId);
-      if (!row) continue;
-      const text = String(row.text ?? '');
-      const runtime = this.live.get(meta.id);
-      if (runtime?.draftWriteUntil > Date.now()) continue;
-      if (runtime?.draftPump || runtime?.draftWanted != null) continue;
-      const current = this.drafts.get(meta.id);
-      if ((current?.text ?? '') === text) continue;
-      // Phone typed recently: Cursor may still show an older prefix. Do not
-      // push that shorter text back with a fresh timestamp.
+      const computerText = row ? String(row.text ?? '') : null;
+      const runtime = this.live.get(meta.id) || {};
+
+      // Computer typed something the host does not have yet — it becomes last.
       if (
-        current?.source === 'phone' &&
-        Date.now() - (current.at || 0) < 2500 &&
-        (current.text.startsWith(text) || text.startsWith(current.text))
+        computerText != null &&
+        computerText !== (current.text ?? '') &&
+        !runtime.draftPump &&
+        !(runtime.draftWriteUntil > Date.now()) &&
+        (current.source !== 'phone' || Date.now() - (current.at || 0) > 1000)
       ) {
+        const nextDraft = { text: computerText, at: Date.now(), source: 'computer' };
+        this.drafts.set(meta.id, nextDraft);
+        this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true });
         continue;
       }
-      const next = { text, at: Date.now(), source: 'computer' };
-      this.drafts.set(meta.id, next);
-      this.emit('draft', { sessionId: meta.id, ...next });
+
+      const source = (this.drafts.get(meta.id) || current).source;
+      if (source === 'phone' || source === 'clear') {
+        const text = this.drafts.get(meta.id)?.text ?? '';
+        runtime.draftWanted = text;
+        runtime.draftForce = true;
+        runtime.draftWriteUntil = Date.now() + 1500;
+        if (!runtime.draftPump) runtime.draftPump = this.#pumpDraft(meta.id);
+        this.live.set(meta.id, runtime);
+        continue;
+      }
+
+      if (source === 'computer' && computerText != null) {
+        const nextDraft = { text: computerText, at: Date.now(), source: 'computer' };
+        this.drafts.set(meta.id, nextDraft);
+        this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true });
+      }
     }
   }
 
@@ -1769,13 +1788,15 @@ export class SessionManager extends EventEmitter {
     try {
       while (Object.prototype.hasOwnProperty.call(runtime, 'draftWanted')) {
         const want = runtime.draftWanted;
+        const force = Boolean(runtime.draftForce);
         delete runtime.draftWanted;
-        runtime.draftWriteUntil = Date.now() + 2500;
+        runtime.draftForce = false;
+        runtime.draftWriteUntil = Date.now() + 1500;
         this.live.set(id, runtime);
         const result = await this.cursor
-          .syncComposerDraft({ threadId: meta.desktopThreadId, text: want })
+          .syncComposerDraft({ threadId: meta.desktopThreadId, text: want, force })
           .catch((err) => ({ status: 'error', reason: err.message }));
-        runtime.draftWriteUntil = Date.now() + 2500;
+        runtime.draftWriteUntil = Date.now() + 1500;
         this.live.set(id, runtime);
         if (result.status !== 'ok') {
           this.emit('log', `draft sync: ${result.reason || result.status}`);
@@ -1784,7 +1805,6 @@ export class SessionManager extends EventEmitter {
     } finally {
       const r = this.live.get(id) || runtime;
       r.draftPump = null;
-      // A keystroke may have arrived after the last write and before we cleared.
       if (Object.prototype.hasOwnProperty.call(r, 'draftWanted')) {
         r.draftPump = this.#pumpDraft(id);
       }
@@ -1797,28 +1817,28 @@ export class SessionManager extends EventEmitter {
    *
    * @returns {Promise<{ ok: boolean, text: string, at: number, reason?: string }>}
    */
-  async setDraft(id, text, { at = Date.now(), source = 'phone' } = {}) {
+  async setDraft(id, text, { at = Date.now(), source = 'phone', force = false } = {}) {
     const meta = this.meta.get(id);
     if (!meta) return { ok: false, text: '', at, reason: 'no such chat' };
     const nextText = String(text ?? '');
     const current = this.drafts.get(id);
-    if (current && at < current.at) {
+    if (current && at < current.at && !force) {
       return { ok: true, text: current.text, at: current.at, stale: true };
     }
-    if ((current?.text ?? '') === nextText) {
+    if ((current?.text ?? '') === nextText && !force) {
       return { ok: true, text: nextText, at: current?.at || at };
     }
-    const next = { text: nextText, at, source };
-    this.drafts.set(id, next);
-    this.emit('draft', { sessionId: id, ...next });
+    const nextDraft = { text: nextText, at, source };
+    this.drafts.set(id, nextDraft);
+    this.emit('draft', { sessionId: id, ...nextDraft, force: Boolean(force) });
 
     if (meta.kind === 'desktop' && meta.desktopThreadId && typeof this.cursor.syncComposerDraft === 'function') {
       const runtime = this.live.get(id) || {};
       runtime.draftWanted = nextText;
-      runtime.draftWriteUntil = Date.now() + 2500;
+      runtime.draftForce = Boolean(force);
+      runtime.draftWriteUntil = Date.now() + 1500;
       if (!runtime.draftPump) runtime.draftPump = this.#pumpDraft(id);
       this.live.set(id, runtime);
-      // Drain until this snapshot or a newer one has been written.
       for (;;) {
         const r = this.live.get(id);
         if (r?.draftPump) await r.draftPump;

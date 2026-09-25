@@ -436,6 +436,7 @@ const OPS = {
     const result = await sessions.setDraft(id, msg.text ?? '', {
       at: Number(msg.at) || Date.now(),
       source: 'phone',
+      force: Boolean(msg.force),
     });
     send(ws, { type: 'draft.set', sessionId: id, ...result });
   },

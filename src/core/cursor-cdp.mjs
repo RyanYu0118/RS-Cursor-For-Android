@@ -746,8 +746,13 @@ const LIVE_COMPOSER_DRAFTS = `(() => {
  * Cursor stores plain text and a ProseMirror document. Updating both and
  * firing ShouldForceText is what makes the open editor show them.
  */
-function syncComposerDraftExpression({ threadId, text }) {
-  const req = JSON.stringify({ threadId, text: String(text ?? ''), richText: richTextFromPlain(text) });
+function syncComposerDraftExpression({ threadId, text, force = false }) {
+  const req = JSON.stringify({
+    threadId,
+    text: String(text ?? ''),
+    richText: richTextFromPlain(text),
+    force: Boolean(force),
+  });
   return `(async () => {
     const req = ${req};
     const chat = globalThis.__autoChat;
@@ -761,7 +766,7 @@ function syncComposerDraftExpression({ threadId, text }) {
     if (!handle) return { status: 'unknown-thread', reason: 'chat is not loaded' };
     const before = String(dataSvc.getComposerDataIfLoaded(req.threadId)?.text ?? '');
     const richText = req.text ? req.richText : ${JSON.stringify(richTextFromPlain(''))};
-    if (before !== req.text) {
+    if (before !== req.text || req.force) {
       dataSvc.updateComposerData(handle, { text: req.text, richText });
     }
     events?.fireShouldForceText?.({ composerId: req.threadId });
@@ -1240,10 +1245,12 @@ export class CursorCdp {
    *
    * @returns {Promise<{ status: 'ok'|'unknown-thread'|'no-cdp'|'error', text?: string, reason?: string }>}
    */
-  async syncComposerDraft({ threadId, text }) {
+  async syncComposerDraft({ threadId, text, force = false }) {
     if (!threadId) return { status: 'error', reason: 'no chat was named' };
     return this.#withComposer((window) =>
-      window.evaluate(syncComposerDraftExpression({ threadId, text: String(text ?? '') })),
+      window.evaluate(
+        syncComposerDraftExpression({ threadId, text: String(text ?? ''), force: Boolean(force) }),
+      ),
     );
   }
 

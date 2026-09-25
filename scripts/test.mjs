@@ -3606,10 +3606,11 @@ if (existsSync(SRC)) {
   }
   if (
     !sessionsJs.includes('setDraft(') ||
-    !sessionsJs.includes('#pullComposerDrafts') ||
+    !sessionsJs.includes('#forceSyncDrafts') ||
     !sessionsJs.includes('#pumpDraft') ||
     !sessionsJs.includes('syncComposerDraft') ||
     !js.includes('function applyRemoteDraft') ||
+    !js.includes('function pushDraft') ||
     !js.includes("op: 'session.draft'")
   ) {
     fail('the phone and Cursor must share the unsent words in the chat box');

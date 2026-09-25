@@ -192,7 +192,9 @@ const state = {
   drafts: new Map(),
   /** When we last changed the box locally — remote drafts older than this lose. */
   draftAt: 0,
+  draftLastLocal: 0,
   draftTimer: null,
+  draftForceTimer: null,
   draftApplying: false,
   /** a send drawn immediately: credits that swallow the host record (and a stray echo) */
   pendingEchoes: [],
@@ -1465,20 +1467,37 @@ function saveDraft(sessionId = state.sessionId) {
   }
   if (sessionId !== state.sessionId || state.draftApplying) return;
   state.draftAt = Date.now();
+  state.draftLastLocal = Date.now();
   clearTimeout(state.draftTimer);
-  // Short pause so a fast burst becomes one write; the host still coalesces
-  // overlapping writes if another keystroke lands before CDP finishes.
   state.draftTimer = setTimeout(() => {
     if (state.sessionId !== sessionId) return;
-    const at = Date.now();
-    state.draftAt = Math.max(state.draftAt, at);
-    sendOp({
-      op: 'session.draft',
-      sessionId,
-      text: els.box.value,
-      at,
-    });
+    pushDraft({ force: false });
   }, 120);
+}
+
+/** Send the full box to the host. A forced tick always re-asserts last-writer. */
+function pushDraft({ force = false } = {}) {
+  if (!state.sessionId || state.draftApplying) return;
+  const at = Date.now();
+  if (force) state.draftAt = Math.max(state.draftAt, at);
+  else state.draftAt = Math.max(state.draftAt, at);
+  sendOp({
+    op: 'session.draft',
+    sessionId: state.sessionId,
+    text: els.box.value,
+    at,
+    force: Boolean(force),
+  });
+}
+
+/** Every second: if this box was last typed, push its full text to the other side. */
+if (!state.draftForceTimer) {
+  state.draftForceTimer = setInterval(() => {
+    if (!state.sessionId || state.draftApplying) return;
+    // Only the last typing device keeps asserting — idle focus does not count.
+    if (Date.now() - (state.draftLastLocal || 0) >= 5000) return;
+    pushDraft({ force: true });
+  }, 1000);
 }
 
 function loadDraft(sessionId) {
@@ -1498,13 +1517,14 @@ function applyRemoteDraft(draft) {
   if (!draft || draft.sessionId !== state.sessionId) return;
   const text = String(draft.text ?? '');
   const at = Number(draft.at) || 0;
-  if (at && at < state.draftAt) return;
-  // While this box is being typed into, a lagging computer echo must not
-  // yank the caret back to an older prefix.
+  const forced = Boolean(draft.force);
+  if (at && at < state.draftAt && !forced) return;
+  // Local typing wins for a moment; a forced computer push still waits until
+  // this box is idle so a mid-keystroke yank cannot happen.
   if (
     draft.source !== 'clear' &&
     document.activeElement === els.box &&
-    Date.now() - state.draftAt < 2000
+    Date.now() - (state.draftLastLocal || state.draftAt) < 1000
   ) {
     return;
   }
