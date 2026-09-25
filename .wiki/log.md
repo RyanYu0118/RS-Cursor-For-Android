@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-25
+* **Fix**: Home Screen icons were scaled 1.28× and reused as maskable, so Android cropped the mark. `any` is 1.0 again; maskable PNGs use 0.8 safe padding. See [Web](concepts/web.md).
 * **Fix**: Editing either chat box takes push rights immediately; the other side loses them at once, so a computer keystroke is no longer overwritten by the pad a second later. See [Cursor window](concepts/cursor-window.md).
 * **Update**: Unsent drafts force-sync every second from the last side that typed, so fast typing cannot leave the boxes apart. See [Cursor window](concepts/cursor-window.md).
 * **Fix**: Fast typing no longer leaves the two chat boxes on different text — draft writes are coalesced in order, and a lagging computer echo is ignored while the phone box is being typed into. See [Cursor window](concepts/cursor-window.md).

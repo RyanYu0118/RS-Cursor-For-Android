@@ -3171,7 +3171,13 @@ if (existsSync(SRC)) {
     fail('tab favicon (icon.svg) must be a tight transparent crop — no opaque tile or MARK_SCALE pad');
     failed = true;
   }
-  const pngFiles = ['apple-touch-icon.png', 'icon-192.png', 'icon-512.png'];
+  const pngFiles = [
+    'apple-touch-icon.png',
+    'icon-192.png',
+    'icon-512.png',
+    'icon-192-maskable.png',
+    'icon-512-maskable.png',
+  ];
   const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
   for (const name of pngFiles) {
     const p = join(ROOT, 'src/web', name);
@@ -3185,6 +3191,23 @@ if (existsSync(SRC)) {
       fail(`${name} is not a PNG`);
       failed = true;
     }
+  }
+  const maskablePngs = pngs.filter((i) => i.purpose === 'maskable');
+  if (
+    !maskablePngs.some((i) => i.src.includes('maskable') && i.sizes === '192x192') ||
+    !maskablePngs.some((i) => i.src.includes('maskable') && i.sizes === '512x512')
+  ) {
+    fail('maskable icons must be padded PNGs, not the tight any/SVG crop');
+    failed = true;
+  }
+  if ((manifest.icons || []).some((i) => i.purpose === 'maskable' && i.type === 'image/svg+xml')) {
+    fail('maskable must not use the cropped SVG favicon — Android zooms and crops it');
+    failed = true;
+  }
+  const rasterSrc = readFileSync(join(ROOT, 'scripts/raster-icon.mjs'), 'utf8');
+  if (!rasterSrc.includes('MARK_SCALE = 1.0') || !rasterSrc.includes('MASKABLE_SCALE = 0.8')) {
+    fail('home-screen mark must stay at 1.0 (any) and 0.8 (maskable) — larger looks zoomed-in');
+    failed = true;
   }
   const icoPath = join(ROOT, 'src/web/favicon.ico');
   if (!existsSync(icoPath)) {

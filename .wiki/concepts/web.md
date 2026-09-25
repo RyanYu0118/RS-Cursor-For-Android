@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-25T15:20:00Z }
+generated: { by: agent, at: 2026-09-25T15:50:00Z }
 ---
 
 # Web app
@@ -65,10 +65,11 @@ same id from the browser. Telegram `/switch` does not steal the tab.
 
 Open `http://<tailscale-ip>:4331/`. It is a PWA: `display: standalone`, an
 SVG tab icon (transparent glyph, cropped tight so it fills a PC tab), and PNG
-icons (180 / 192 / 512) so a phone can put it on the Home Screen. The A is
-scaled up inside a full-bleed dark tile on those PNGs so the mark fills more
-of the preview; the tab favicon and `favicon.ico` stay clear of any matte so
-they sit on the browser chrome.
+icons (180 / 192 / 512) so a phone can put it on the Home Screen. Home-screen
+`any` rasters keep the mark at natural size on a full-bleed dark tile;
+`maskable` rasters use a smaller mark (safe padding) so Android adaptive
+masks do not crop the feet or tip. The tab favicon and `favicon.ico` stay
+clear of any matte so they sit on the browser chrome.
 
 Three icon tags, and that is deliberate: `favicon.ico` for browsers that do
 not take an SVG, `icon.svg` for modern tabs, `apple-touch-icon.png` for iOS.

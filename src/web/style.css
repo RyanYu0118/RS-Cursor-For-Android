@@ -319,7 +319,7 @@ html[data-standalone] .rail-head {
   flex: 0 0 auto;
   align-self: center;
   border-radius: 7px;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 #session-list {

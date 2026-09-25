@@ -31,11 +31,17 @@ export const DOT_R = 32;
 export const FILLET_OVERLAP = 2;
 export const SRC = 512;
 /**
- * Scale the A around the tile centre on home-screen / PWA PNGs.
- * 1.0 keeps the old ~80% maskable inset; a bit over 1 fills more of the
- * preview without leaving the maskable safe zone (still clear of the outer 10%).
+ * Scale the A around the tile centre on home-screen / PWA PNGs (`purpose: any`).
+ * 1.0 matches the mark's natural margins on the 512 tile. Larger values look
+ * zoomed-in on Android launchers and lose the feet / tip under the mask.
  */
-export const MARK_SCALE = 1.28;
+export const MARK_SCALE = 1.0;
+/**
+ * Maskable / adaptive icons keep key content inside the centre ~80%. A
+ * slightly smaller mark leaves safe padding so the launcher mask does not
+ * crop the A.
+ */
+export const MASKABLE_SCALE = 0.8;
 /**
  * Tab favicon.ico is transparent and has no chrome to fill — scale higher so
  * the mark reads at 16–32px. Clips would start above ~1.58 on a 32px canvas.
@@ -288,17 +294,19 @@ function encodeIco(png, size) {
   return Buffer.concat([dir, png]);
 }
 
-/** 180 for iOS, 192/512 for the Android manifest, 32 inside favicon.ico. */
+/** 180 for iOS, 192/512 for Android any + maskable, 32 inside favicon.ico. */
 const targets = [
-  { file: 'apple-touch-icon.png', size: 180 },
-  { file: 'icon-192.png', size: 192 },
-  { file: 'icon-512.png', size: 512 },
+  { file: 'apple-touch-icon.png', size: 180, scale: MARK_SCALE },
+  { file: 'icon-192.png', size: 192, scale: MARK_SCALE },
+  { file: 'icon-512.png', size: 512, scale: MARK_SCALE },
+  { file: 'icon-192-maskable.png', size: 192, scale: MASKABLE_SCALE },
+  { file: 'icon-512-maskable.png', size: 512, scale: MASKABLE_SCALE },
 ];
 
 for (const t of targets) {
-  const buf = encodePng(t.size, t.size, raster(t.size));
+  const buf = encodePng(t.size, t.size, raster(t.size, { scale: t.scale }));
   writeFileSync(join(WEB, t.file), buf);
-  console.log(`wrote src/web/${t.file} (${t.size}×${t.size}, ${buf.length} bytes)`);
+  console.log(`wrote src/web/${t.file} (${t.size}×${t.size} ×${t.scale}, ${buf.length} bytes)`);
 }
 
 const ico = encodeIco(encodePng(32, 32, raster(32, { transparent: true, scale: FAVICON_SCALE })), 32);
