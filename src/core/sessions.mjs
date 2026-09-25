@@ -31,7 +31,8 @@ import { TerminalRegistry } from './terminals.mjs';
 import { sendMessage } from './desktop-bridge.mjs';
 import { CursorCdp } from './cursor-cdp.mjs';
 import { DesktopOutbox } from './desktop-outbox.mjs';
-import { ThreadWatcher, readThread, readContextUsage, realTitle, UNTITLED_THREAD, SETTLE_LOOKS, isHarnessPrompt } from './desktop-threads.mjs';
+import { ThreadWatcher, readThread, readDisplayHints, readContextUsage, readModelControls, realTitle, UNTITLED_THREAD, SETTLE_LOOKS, isHarnessPrompt } from './desktop-threads.mjs';
+import { controlsFor, storedParameterValue } from '../web/model-parameters.js';
 import { accountUsage } from './cursor-usage.mjs';
 import { labelsForAnswer, indexesForAnswer } from './questions.mjs';
 import { classifyTool } from './desktop-tool-ui.mjs';
@@ -161,6 +162,84 @@ export function cursorNameFor(wanted, models = []) {
   return extra.length ? `${base} ${extra.join(' ')}` : base;
 }
 
+/**
+ * The modelConfig Cursor stores for a phone selection.
+ *
+ * `default[]` is Auto (`modelName: "default"`). A catalog id such as
+ * `grok-4.7[context=256k,reasoning_effort=medium,fast=true]` becomes that
+ * model plus those parameters. Knobs changed afterwards on the phone overlay
+ * the ones baked into the id.
+ */
+export function composerConfig(modelId, extra = {}) {
+  const raw = String(modelId || '');
+  if (!raw || raw === 'default[]' || raw === 'default') {
+    return { modelName: 'default', parameters: [] };
+  }
+  const modelName = raw.replace(/\[.*$/, '');
+  const inner = raw.match(/\[([^\]]*)\]$/)?.[1] || '';
+  const parameters = [];
+  for (const part of inner.split(',')) {
+    const eq = part.indexOf('=');
+    if (eq <= 0) continue;
+    parameters.push({ id: part.slice(0, eq).trim(), value: part.slice(eq + 1).trim() });
+  }
+  for (const [id, shown] of Object.entries(extra || {})) {
+    if (shown === undefined) continue;
+    const value = String(storedParameterValue(raw, id, shown));
+    const at = parameters.findIndex((item) => item.id === id);
+    if (at >= 0) parameters[at] = { id, value };
+    else parameters.push({ id, value });
+  }
+  return { modelName, parameters };
+}
+
+/** Display values for the phone sheet, from the parameters Cursor stored. */
+export function shownParameters(modelId, parameters = []) {
+  const controls = controlsFor(modelId);
+  const shown = {};
+  for (const item of parameters || []) {
+    const parameter = controls.parameters.find((row) => row.id === item.id);
+    if (!parameter) {
+      shown[item.id] = item.value;
+      continue;
+    }
+    if (parameter.type === 'toggle') {
+      shown[item.id] = item.value === true || item.value === 'true';
+      continue;
+    }
+    const label = Object.entries(parameter.stored || {}).find(([, value]) => value === String(item.value))?.[0];
+    shown[item.id] = label || item.value;
+  }
+  return shown;
+}
+
+/** Catalog id closest to a model Cursor is actually using. */
+export function catalogModelId(modelName, parameters, models = []) {
+  if (!modelName || modelName === 'default') return 'default[]';
+  const same = (models || []).filter((model) => String(model.modelId || '').replace(/\[.*$/, '') === modelName);
+  if (!same.length) {
+    const inner = (parameters || []).map((item) => `${item.id}=${item.value}`).join(',');
+    return inner ? `${modelName}[${inner}]` : modelName;
+  }
+  const want = new Map((parameters || []).map((item) => [item.id, String(item.value)]));
+  let best = same[0];
+  let bestScore = -1;
+  for (const model of same) {
+    const inner = String(model.modelId).match(/\[([^\]]*)\]$/)?.[1] || '';
+    let score = 0;
+    for (const part of inner.split(',')) {
+      const eq = part.indexOf('=');
+      if (eq <= 0) continue;
+      if (want.get(part.slice(0, eq)) === part.slice(eq + 1)) score += 1;
+    }
+    if (score > bestScore) {
+      best = model;
+      bestScore = score;
+    }
+  }
+  return best.modelId;
+}
+
 export const STATUS = {
   idle: 'idle',
   busy: 'busy',
@@ -248,7 +327,13 @@ export class SessionManager extends EventEmitter {
    * @param {string} opts.defaultFolder folder for new sessions
    * @param {'cursor'|'opencode'} [opts.defaultAgent] agent new sessions use
    */
-  constructor({ stateDir, defaultFolder, defaultPolicy = POLICY.auto, defaultAgent = 'cursor' }) {
+  constructor({
+    stateDir,
+    defaultFolder,
+    defaultPolicy = POLICY.auto,
+    defaultAgent = 'cursor',
+    syncModels = false,
+  }) {
     super();
     this.stateDir = stateDir;
     this.statePath = join(stateDir, 'sessions.json');
@@ -258,6 +343,8 @@ export class SessionManager extends EventEmitter {
       : POLICY.auto;
     /** Which agent a new session drives. A session records its own choice. */
     this.defaultAgent = isAgentName(defaultAgent) ? defaultAgent : 'cursor';
+    /** The host follows the computer's model. Tests leave this off. */
+    this.syncModels = Boolean(syncModels);
     this.transcripts = new TranscriptStore(join(stateDir, 'transcripts'));
     this.permissions = new PermissionBroker();
     this.terminals = new TerminalRegistry();
@@ -271,6 +358,13 @@ export class SessionManager extends EventEmitter {
     this.meta = new Map();
     /** @type {Map<string, object>} live runtime state, keyed by session id */
     this.live = new Map();
+    /**
+     * Unsent words shared between the phone and Cursor's chat box.
+     * Memory only — Cursor keeps them across a host restart, and the poll
+     * picks them up.
+     * @type {Map<string, { text: string, at: number, source: string }>}
+     */
+    this.drafts = new Map();
     this.activeId = null;
     /**
      * Modes and models are account-wide, but only arrive when a session goes
@@ -334,12 +428,18 @@ export class SessionManager extends EventEmitter {
           // Sessions the user never gave an explicit policy follow the
           // configured default, so changing it in .env applies everywhere
           // rather than only to new sessions.
+          const agent = isAgentName(s.agent) ? s.agent : 'cursor';
           this.meta.set(s.id, {
             ...s,
             // Sessions from before agents existed were all Cursor's.
-            agent: isAgentName(s.agent) ? s.agent : 'cursor',
+            agent,
             status: s.status === STATUS.archived ? STATUS.archived : STATUS.idle,
             policy: s.policyLocked ? s.policy : this.defaultPolicy,
+            // A Cursor chat that never reached the IDE should try again on the
+            // next message. Adopted CLI sessions stay headless.
+            preferWindow:
+              s.preferWindow ||
+              (agent === 'cursor' && s.kind !== 'desktop' && !s.adopted && !s.desktopThreadId),
           });
         }
         this.activeId = raw.activeId || null;
@@ -361,6 +461,7 @@ export class SessionManager extends EventEmitter {
     if (!this.activeId || !this.meta.has(this.activeId)) {
       this.activeId = [...this.meta.keys()][0];
     }
+    if (this.syncModels) this.#watchComposerModels();
     return this;
   }
 
@@ -470,10 +571,7 @@ export class SessionManager extends EventEmitter {
       return this.#startAgentOnly({ folder: dir, title, policy, mode, agent: who, model });
     }
 
-    let opened = await this.cursor.newChat({ folder: dir }).catch((err) => ({
-      status: 'error',
-      reason: err.message,
-    }));
+    const { opened, ready } = await this.#openCursorChat(dir);
     if (opened.status === 'created' && opened.threadId) {
       const meta = await this.attachDesktopThread({
         threadId: opened.threadId,
@@ -485,40 +583,13 @@ export class SessionManager extends EventEmitter {
       return meta;
     }
 
-    let ready = null;
-    if (
-      typeof this.cursor.ensureWindow === 'function' &&
-      (opened.status === 'no-window' || opened.status === 'no-cdp')
-    ) {
-      ready = await this.cursor.ensureWindow({ folder: dir }).catch((err) => ({
-        status: 'error',
-        reason: err.message,
-      }));
-      if (['showing', 'opened', 'started', 'restarted'].includes(ready.status)) {
-        opened = await this.cursor.newChat({ folder: dir }).catch((err) => ({
-          status: 'error',
-          reason: err.message,
-        }));
-        if (opened.status === 'created' && opened.threadId) {
-          const meta = await this.attachDesktopThread({
-            threadId: opened.threadId,
-            folder: dir,
-            title,
-            fresh: true,
-          });
-          await this.#preferredOrAutoSelect(meta.id, model);
-          return meta;
-        }
-      }
-    }
-
     const meta = this.create({ folder: dir, title, policy, mode });
     this.setActive(meta.id);
     await this.transcripts.get(meta.id);
     // A remembered model, else Auto-select, is applied once the process starts
     // (see ensureLive) — a fresh Cursor chat would otherwise inherit the last.
     const first = model && model !== 'default[]' ? model : 'default[]';
-    this.#update(meta.id, { model: first, modelName: this.modelName(first) });
+    this.#update(meta.id, { model: first, modelName: this.modelName(first), preferWindow: true });
     this.#record(meta.id, KIND.notice, { text: this.#whyNotInIde(dir, opened, ready) });
     this.emit('log', `started Auto-only session "${meta.title}" (${opened.status})`);
     return meta;
@@ -549,6 +620,78 @@ export class SessionManager extends EventEmitter {
       this.emit('log', `[${meta.title}] could not start ${agent}: ${err.message}`),
     );
     return meta;
+  }
+
+  /**
+   * Open a new chat in the Cursor window for this folder, launching the
+   * window first when none is showing it.
+   *
+   * @returns {Promise<{ opened: object, ready: object|null }>}
+   */
+  async #openCursorChat(folder) {
+    let opened = await this.cursor.newChat({ folder }).catch((err) => ({
+      status: 'error',
+      reason: err.message,
+    }));
+    if (opened.status === 'created' && opened.threadId) return { opened, ready: null };
+
+    let ready = null;
+    if (
+      typeof this.cursor.ensureWindow === 'function' &&
+      (opened.status === 'no-window' || opened.status === 'no-cdp')
+    ) {
+      ready = await this.cursor.ensureWindow({ folder }).catch((err) => ({
+        status: 'error',
+        reason: err.message,
+      }));
+      if (['showing', 'opened', 'started', 'restarted'].includes(ready.status)) {
+        opened = await this.cursor.newChat({ folder }).catch((err) => ({
+          status: 'error',
+          reason: err.message,
+        }));
+      }
+    }
+    return { opened, ready };
+  }
+
+  /**
+   * A Cursor session that never reached the IDE (the window could not be
+   * opened) still belongs there. The next message tries again, and if a chat
+   * opens, that message is typed into it so the computer calls the model.
+   * Sessions adopted from the CLI stay where they are.
+   *
+   * @returns {Promise<boolean>}
+   */
+  async #moveIntoIde(id) {
+    const meta = this.meta.get(id);
+    if (!meta?.preferWindow || meta.kind === 'desktop' || meta.adopted || meta.agent !== 'cursor') return false;
+    if (meta.status === STATUS.busy) return false;
+
+    const { opened } = await this.#openCursorChat(meta.folder);
+    if (!(opened.status === 'created' && opened.threadId)) return false;
+
+    const runtime = this.live.get(id);
+    if (runtime?.client) {
+      try {
+        runtime.client.cancel?.();
+      } catch {
+        // The ACP child is being left behind; a failed cancel must not block the window.
+      }
+    }
+    this.live.delete(id);
+    await this.transcripts.get(id);
+    this.#update(id, {
+      kind: 'desktop',
+      desktopThreadId: opened.threadId,
+      acpSessionId: null,
+      preferWindow: false,
+    });
+    this.#record(id, KIND.notice, {
+      text: 'Opened this chat in Cursor on the computer. The message goes there, and Cursor calls the model.',
+    });
+    this.#watchDesktop(id);
+    await this.#preferredOrAutoSelect(id, meta.model);
+    return true;
   }
 
   /** Why a new session could not be a Cursor chat. */
@@ -980,6 +1123,12 @@ export class SessionManager extends EventEmitter {
       return this.#promptDesktop(id, meta, text, images);
     }
 
+    // A phone session that fell back to ACP is invisible on the computer.
+    // Try the window again before starting another headless turn.
+    if (meta.preferWindow && meta.agent === 'cursor' && !meta.adopted && (await this.#moveIntoIde(id))) {
+      return this.#promptDesktop(id, this.meta.get(id), text, images);
+    }
+
     const runtime = await this.ensureLive(id);
     const content = [];
     if (text?.trim()) content.push({ type: 'text', text });
@@ -1098,9 +1247,10 @@ export class SessionManager extends EventEmitter {
 
     if (meta.kind === 'desktop') {
       const seen = await this.cursor
-        // Somebody asked for this chat's queue, so it is worth bringing the chat
-        // forward to answer — the passive watcher does not.
-        .queue({ threadId: meta.desktopThreadId, bringForward: true })
+        // Reading the queue does not steal the desktop. A background chat has
+        // nothing on screen to read, and bringing it forward just to list what
+        // is waiting is the switch a phone message is not supposed to cause.
+        .queue({ threadId: meta.desktopThreadId, bringForward: false })
         .catch((err) => ({ status: 'error', reason: err.message }));
       if (seen.status !== 'ok') {
         return { waiting: 0, items: [], owner: 'cursor', reason: seen.reason || seen.status };
@@ -1485,7 +1635,7 @@ export class SessionManager extends EventEmitter {
       return `No Cursor window has this chat open, so its ${picker} cannot be reached. Open it in Cursor and try again.`;
     }
     if (result.status === 'no-cdp') {
-      return `Cursor is not listening on its debugging port, so its ${picker} cannot be reached. ${result.reason || ''}`.trim();
+      return `Cursor is not listening on its debugging port, so its ${picker} cannot be reached. Quit Cursor and start it with --remote-debugging-port=9222, then try again. ${result.reason || ''}`.trim();
     }
     if (result.status === 'unchanged') {
       return `Pressed the ${picker} menu but Cursor did not change it — ${result.reason || 'it stayed as it was'}.`;
@@ -1506,7 +1656,13 @@ export class SessionManager extends EventEmitter {
     return this.cursor.choices({ threadId: meta.desktopThreadId, picker });
   }
 
-  /** Auto plus the model-specific controls Cursor currently shows. */
+  /**
+   * Auto plus the model-specific controls Cursor stored for this chat.
+   *
+   * Read from the desktop database and the model catalog. Opening the sheet
+   * does not press anything in the window, and it works while Cursor is in
+   * the background.
+   */
   async modelControls(id) {
     const meta = this.meta.get(id);
     if (meta?.kind !== 'desktop') {
@@ -1517,33 +1673,204 @@ export class SessionManager extends EventEmitter {
         parameters: [],
       };
     }
-    return this.cursor.modelControls({ threadId: meta.desktopThreadId });
+    if (meta.model) {
+      const controls = controlsFor(meta.model);
+      const saved = meta.modelParameters || {};
+      controls.parameters = (controls.parameters || []).map((parameter) =>
+        saved[parameter.id] === undefined ? parameter : { ...parameter, value: saved[parameter.id] },
+      );
+      return controls;
+    }
+    return (
+      readModelControls(meta.desktopThreadId) || {
+        status: 'error',
+        reason: 'Cursor has no desktop database to read',
+      }
+    );
   }
 
-  /** Change Fast / Context / Reasoning / Effort through Cursor's own menu. */
+  /**
+   * Change Fast / Context / Reasoning / Effort on the chat's stored config.
+   *
+   * The phone already knows the choices. Nothing in the window is pressed.
+   */
   async setModelParameter(id, parameter, value) {
     const meta = this.meta.get(id);
     if (meta?.kind !== 'desktop') {
       return { status: 'error', reason: 'model parameters belong to Cursor desktop chats' };
     }
-    const result = await this.cursor.setModelParameter({
-      threadId: meta.desktopThreadId,
-      parameter,
-      value,
-    });
-    if (result.status === 'set' || result.status === 'already') {
-      this.#record(id, KIND.notice, {
-        text:
-          result.status === 'already'
-            ? `${result.parameter} was already ${String(result.value)}.`
-            : `Cursor's ${result.parameter} for this chat is now ${String(result.value)}.`,
-      });
-      return true;
+    if (!meta.model || meta.model === 'default[]') return false;
+    const previous = meta.modelParameters || {};
+    const modelParameters = { ...previous, [parameter]: value };
+    this.#update(id, { modelParameters });
+    const confirmed = await this.#confirmDesktopModel(this.meta.get(id));
+    if (!confirmed.ok) {
+      this.#update(id, { modelParameters: previous });
+      this.emit('log', `did not change a model parameter on "${meta.title}": ${confirmed.reason || confirmed.actual || 'not confirmed'}`);
+      return false;
     }
-    this.#record(id, KIND.notice, {
-      text: `Could not set Cursor's ${parameter}: ${result.reason || result.status}.`,
-    });
-    return false;
+    return true;
+  }
+
+  /** Follow the model and the unsent words the open Cursor window is using. */
+  #watchComposerModels() {
+    const timer = setInterval(() => {
+      this.#pullComposerModels().catch((err) => this.emit('log', `model sync: ${err.message}`));
+      this.#pullComposerDrafts().catch((err) => this.emit('log', `draft sync: ${err.message}`));
+    }, 750);
+    timer.unref?.();
+    this.#pullComposerModels().catch(() => {});
+    this.#pullComposerDrafts().catch(() => {});
+  }
+
+  /**
+   * Computer → phone. The loaded composer's text is what Cursor will send.
+   * A write we just made is left alone for a moment so the two don't chase.
+   */
+  async #pullComposerDrafts() {
+    if (typeof this.cursor.liveComposerDrafts !== 'function') return;
+    const live = await this.cursor.liveComposerDrafts();
+    if (!Array.isArray(live)) return;
+    const byThread = new Map(live.map((row) => [row.threadId, row]));
+    for (const meta of this.meta.values()) {
+      if (meta.kind !== 'desktop' || meta.status === STATUS.archived) continue;
+      const row = byThread.get(meta.desktopThreadId);
+      if (!row) continue;
+      const text = String(row.text ?? '');
+      const runtime = this.live.get(meta.id);
+      if (runtime?.draftWriteUntil > Date.now()) continue;
+      const current = this.drafts.get(meta.id);
+      if ((current?.text ?? '') === text) continue;
+      const next = { text, at: Date.now(), source: 'computer' };
+      this.drafts.set(meta.id, next);
+      this.emit('draft', { sessionId: meta.id, ...next });
+    }
+  }
+
+  /**
+   * Phone → computer. The words wait in both boxes until they are sent.
+   *
+   * @returns {Promise<{ ok: boolean, text: string, at: number, reason?: string }>}
+   */
+  async setDraft(id, text, { at = Date.now(), source = 'phone' } = {}) {
+    const meta = this.meta.get(id);
+    if (!meta) return { ok: false, text: '', at, reason: 'no such chat' };
+    const nextText = String(text ?? '');
+    const current = this.drafts.get(id);
+    if (current && at < current.at) {
+      return { ok: true, text: current.text, at: current.at, stale: true };
+    }
+    if ((current?.text ?? '') === nextText) {
+      return { ok: true, text: nextText, at: current?.at || at };
+    }
+    const next = { text: nextText, at, source };
+    this.drafts.set(id, next);
+    this.emit('draft', { sessionId: id, ...next });
+
+    if (meta.kind === 'desktop' && meta.desktopThreadId && typeof this.cursor.syncComposerDraft === 'function') {
+      const runtime = this.live.get(id) || {};
+      runtime.draftWriteUntil = Date.now() + 2000;
+      this.live.set(id, runtime);
+      const result = await this.cursor
+        .syncComposerDraft({ threadId: meta.desktopThreadId, text: nextText })
+        .catch((err) => ({ status: 'error', reason: err.message }));
+      if (result.status !== 'ok') {
+        return { ok: false, text: nextText, at, reason: result.reason || result.status };
+      }
+    }
+    return { ok: true, text: nextText, at };
+  }
+
+  /** What is waiting in the chat box for this session. */
+  draft(id) {
+    return this.drafts.get(id) || { text: '', at: 0, source: null };
+  }
+
+  /** Forget the shared draft. Both boxes are cleared, including when one was already empty. */
+  clearDraft(id) {
+    const at = Date.now();
+    this.drafts.set(id, { text: '', at, source: 'clear' });
+    this.emit('draft', { sessionId: id, text: '', at, source: 'clear' });
+    const meta = this.meta.get(id);
+    if (meta?.kind === 'desktop' && meta.desktopThreadId && typeof this.cursor.syncComposerDraft === 'function') {
+      const runtime = this.live.get(id) || {};
+      runtime.draftWriteUntil = at + 2000;
+      this.live.set(id, runtime);
+      this.cursor.syncComposerDraft({ threadId: meta.desktopThreadId, text: '' }).catch(() => {});
+    }
+  }
+
+  /**
+   * Computer → phone. The loaded composer's modelConfig is the selection.
+   * A write we just made is left alone for a moment so the two don't chase.
+   */
+  async #pullComposerModels() {
+    if (typeof this.cursor.liveComposerModels !== 'function') return;
+    const live = await this.cursor.liveComposerModels();
+    if (!Array.isArray(live)) return;
+    const byThread = new Map(live.map((row) => [row.threadId, row]));
+    for (const meta of this.meta.values()) {
+      if (meta.kind !== 'desktop' || meta.status === STATUS.archived) continue;
+      const row = byThread.get(meta.desktopThreadId);
+      if (!row?.modelName) continue;
+      const runtime = this.live.get(meta.id);
+      if (runtime?.modelWriteUntil > Date.now()) continue;
+      const modelId = catalogModelId(row.modelName, row.parameters, this.catalogFor('cursor').models);
+      const modelParameters = shownParameters(modelId, row.parameters);
+      const same =
+        meta.model === modelId &&
+        JSON.stringify(meta.modelParameters || {}) === JSON.stringify(modelParameters);
+      if (same) continue;
+      this.#update(meta.id, {
+        model: modelId,
+        modelName: this.modelName(modelId),
+        modelParameters,
+      });
+      this.emit('model', { sessionId: meta.id, ...(await this.modelControls(meta.id)) });
+      this.emit('log', `"${meta.title}" is now ${this.modelName(modelId)} on the computer`);
+    }
+  }
+
+  /**
+   * Put the phone's model onto the loaded chat and read it back.
+   *
+   * The send waits on this. A message does not go out while Cursor is still
+   * on a different model.
+   */
+  async #confirmDesktopModel(meta) {
+    if (!meta?.desktopThreadId || !meta.model) return { ok: true };
+    // Test doubles type into a fake window and have no Cursor model service.
+    if (typeof this.cursor.syncComposerModel !== 'function') return { ok: true };
+    const wanted = composerConfig(meta.model, meta.modelParameters);
+    const runtime = this.live.get(meta.id) || {};
+    runtime.modelWriteUntil = Date.now() + 3000;
+    this.live.set(meta.id, runtime);
+    const result = await this.cursor
+      .syncComposerModel({
+        threadId: meta.desktopThreadId,
+        modelName: wanted.modelName,
+        parameters: wanted.parameters,
+      })
+      .catch((err) => ({ status: 'error', reason: err.message }));
+    if (result.status !== 'ok') {
+      return { ok: false, wanted: wanted.modelName, reason: result.reason || result.status };
+    }
+    const actual = result.modelName || null;
+    if (actual !== wanted.modelName) {
+      return { ok: false, wanted: wanted.modelName, actual, reason: `Cursor stayed on ${actual}` };
+    }
+    const got = new Map((result.parameters || []).map((item) => [item.id, String(item.value)]));
+    for (const item of wanted.parameters) {
+      if (got.get(item.id) !== String(item.value)) {
+        return {
+          ok: false,
+          wanted: wanted.modelName,
+          actual,
+          reason: `${item.id} is ${got.get(item.id) ?? 'unset'}, not ${item.value}`,
+        };
+      }
+    }
+    return { ok: true, actual };
   }
 
   /** What a desktop chat is set to, from the desktop's own records. */
@@ -1760,11 +2087,19 @@ export class SessionManager extends EventEmitter {
     }
     if (message.kind === 'thinking') {
       const words = this.#newWordsOf(id, message);
+      const durationMs = Number(message.durationMs) || 0;
       if (words.text) {
         this.#record(id, KIND.agentThought, {
           text: words.text,
           desktopBubbleId: message.id,
+          ...(durationMs ? { durationMs } : {}),
           ...(words.replace ? { replace: true } : {}),
+        });
+      } else if (durationMs) {
+        this.#record(id, KIND.agentThought, {
+          text: '',
+          desktopBubbleId: message.id,
+          durationMs,
         });
       }
       return;
@@ -1788,11 +2123,13 @@ export class SessionManager extends EventEmitter {
         const better =
           message.name && message.name !== runtime.toolNames.get(message.id) ? message.name : null;
         if (better) runtime.toolNames.set(message.id, better);
+        const described = message.input?.commandDescription;
         this.#record(id, KIND.toolUpdate, {
           toolCallId: message.id,
           status: message.status || 'completed',
           rawOutput: desktopOutput(message),
           ...(better ? { title: better } : {}),
+          ...(described ? { rawInput: { commandDescription: described } } : {}),
           ...(message.content ? { content: message.content } : {}),
           ...(message.plan?.asked
             ? {
@@ -2068,7 +2405,12 @@ export class SessionManager extends EventEmitter {
       // Our own message comes back to us: it was written into the transcript
       // when we sent it, and the desktop stores it as a bubble like any
       // other. Show it once.
-      if (message.role === 'user' && this.#shouldSkipDesktopUser(id, message)) return;
+      if (message.role === 'user') {
+        if (this.#shouldSkipDesktopUser(id, message)) return;
+        // The computer pressed send. Its words already went; drop the other
+        // box instead of pushing the phone's copy back in.
+        this.clearDraft(id);
+      }
       this.#recordDesktopMessage(id, message);
     });
     watcher.on('running', (running) => {
@@ -2091,7 +2433,43 @@ export class SessionManager extends EventEmitter {
     watcher.on('error', (err) => this.emit('log', `[${meta.title}] watching: ${err.message}`));
 
     watcher.start();
+    this.#noteCursorWording(id);
     return watcher;
+  }
+
+  /**
+   * Older transcripts stored the shell command and not Cursor's "Ran …" line,
+   * and a thought without how long it took. One pass copies those labels onto
+   * the transcript so a refresh matches the IDE.
+   */
+  #noteCursorWording(id) {
+    const meta = this.meta.get(id);
+    if (!meta?.desktopThreadId || meta.displayCursor === 1) return;
+    let hints = [];
+    try {
+      hints = readDisplayHints(meta.desktopThreadId) || [];
+    } catch (err) {
+      this.emit('log', `[${meta.title}] wording: ${err.message}`);
+      return;
+    }
+    for (const hint of hints) {
+      if (hint.kind === 'tool' && (hint.commandDescription || hint.added != null || hint.targetFile)) {
+        this.#record(id, KIND.toolUpdate, {
+          toolCallId: hint.id,
+          rawInput: {
+            ...(hint.commandDescription ? { commandDescription: hint.commandDescription } : {}),
+            ...(hint.added != null ? { added: hint.added, removed: hint.removed || 0 } : {}),
+            ...(hint.targetFile ? { targetFile: hint.targetFile } : {}),
+          },
+        });
+      } else if (hint.kind === 'thought' && hint.durationMs) {
+        this.#record(id, KIND.thoughtTime, {
+          desktopBubbleId: hint.id,
+          durationMs: hint.durationMs,
+        });
+      }
+    }
+    this.#update(id, { displayCursor: 1 });
   }
 
   /**
@@ -2367,26 +2745,90 @@ export class SessionManager extends EventEmitter {
   /**
    * Hand one message to the desktop. The only place that talks to the IDE.
    *
-   * Two ways in, tried in order of how easily they can be shut. Typing into
-   * the window over Cursor's debug port answers to no feature switch, so it
-   * goes first; the bridge, which a window can refuse for as long as it lives,
-   * catches the case where Cursor was started without the port.
+   * The phone and the computer share one model. Before the words go out, that
+   * model is written onto the loaded chat through Cursor's model service —
+   * the menu is not opened — and read back. The send waits until they match.
+   *
+   * Words for a chat that is not on screen go through
+   * the desktop bridge when that chat is not on screen. Typing over the debug
+   * port is for the chat already in front, for pictures, and for when the
+   * bridge refuses — that last path does bring the chat forward, because
+   * otherwise the words have nowhere to land.
    */
   async #deliverDesktop(id, text, images = []) {
     const meta = this.meta.get(id);
     if (!meta?.desktopThreadId) return { status: 'error', message: 'Not a desktop chat' };
 
-    // Expect before the window write: Cursor can store the bubble while
-    // sendText is still awaiting, and the watcher would otherwise publish it
-    // before we mark it as ours.
+    if (meta.model) {
+      const confirmed = await this.#confirmDesktopModel(meta);
+      if (!confirmed.ok) {
+        const label = meta.model === 'default[]' || meta.model === 'default' ? 'Auto' : this.modelName(meta.model);
+        this.emit(
+          'log',
+          `did not send "${meta.title}": wanted ${label}` +
+            `${confirmed.actual ? `, Cursor is on ${confirmed.actual}` : ''}` +
+            `${confirmed.reason ? ` (${confirmed.reason})` : ''}`,
+        );
+        return { status: 'model-mismatch', message: confirmed.reason || `Cursor is not on ${label}` };
+      }
+    }
+
+    // Expect before either write: Cursor can store the bubble while the send
+    // is still awaiting, and the watcher would otherwise publish it before we
+    // mark it as ours.
     this.#expectEcho(id, text);
 
-    const typed = await this.cursor
-      // A chat in a background tab is still this chat: bring it forward rather
-      // than making someone open it in Cursor before their message will go.
-      .sendText({ threadId: meta.desktopThreadId, text, images, bringForward: true })
-      .catch((err) => ({ status: 'error', reason: err.message }));
-    if (typed.status === 'submitted' || typed.status === 'queued') {
+    const accepted = (result) => result.status === 'submitted' || result.status === 'queued';
+    const typeIn = (bringForward) =>
+      this.cursor
+        .sendText({ threadId: meta.desktopThreadId, text, images, bringForward })
+        .catch((err) => ({ status: 'error', reason: err.message }));
+
+    // Words for a chat that is not on screen go through Cursor's bridge. That
+    // submit skips focusing the chat, so a phone message does not pull the
+    // desktop off whatever it is showing. Typing still wins when this chat is
+    // already the one in front — nothing to switch — and when a picture has
+    // to be pasted, which the bridge cannot do.
+    if (!images.length) {
+      const already = await typeIn(false);
+      if (accepted(already)) {
+        this.emit('log', `typed a message into Cursor's window for "${meta.title}"`);
+        return { status: already.status, via: 'cdp', attached: 0, ofImages: 0 };
+      }
+
+      const silent = await sendMessage({ threadId: meta.desktopThreadId, text }).catch((err) => ({
+        status: 'error',
+        message: err.message,
+      }));
+      if (accepted(silent)) {
+        this.emit('log', `sent a message into Cursor without switching windows for "${meta.title}"`);
+        return { ...silent, via: 'bridge' };
+      }
+      this.emit(
+        'log',
+        `Cursor's bridge would not take a message (${silent.status}` +
+          `${silent.reason || silent.message ? `: ${silent.reason || silent.message}` : ''}); bringing the chat forward`,
+      );
+    }
+
+    let typed = await typeIn(true);
+    // No window is showing this folder, or the debug port is down. Open one
+    // and type again — holding the words in the outbox leaves the computer
+    // looking idle while the phone already sent.
+    if (
+      (typed.status === 'unknown-thread' || typed.status === 'no-cdp') &&
+      meta.folder &&
+      typeof this.cursor.ensureWindow === 'function'
+    ) {
+      const ready = await this.cursor.ensureWindow({ folder: meta.folder }).catch((err) => ({
+        status: 'error',
+        reason: err.message,
+      }));
+      if (['showing', 'opened', 'started', 'restarted'].includes(ready.status)) {
+        typed = await typeIn(true);
+      }
+    }
+    if (accepted(typed)) {
       this.emit('log', `typed a message into Cursor's window for "${meta.title}"`);
       return {
         status: typed.status,
@@ -2396,20 +2838,7 @@ export class SessionManager extends EventEmitter {
         attachFailed: typed.attachFailed || null,
       };
     }
-    // Say why the better way in was not taken. A silent fallback cost an
-    // afternoon of guessing at which of the two transports had refused.
-    this.emit(
-      'log',
-      `Cursor's window would not take a message (${typed.status}` +
-        `${typed.reason ? `: ${typed.reason}` : ''}); trying the bridge`,
-    );
-
-    const sent = await sendMessage({ threadId: meta.desktopThreadId, text }).catch((err) => ({
-      status: 'error',
-      message: err.message,
-    }));
-    if (sent.status === 'submitted' || sent.status === 'queued') return { ...sent, via: 'bridge' };
-    return { ...sent, cdp: typed.reason || typed.status };
+    return { status: typed.status || 'error', message: typed.reason || typed.status, cdp: typed.reason || typed.status };
   }
 
   /**
@@ -2424,10 +2853,19 @@ export class SessionManager extends EventEmitter {
   async #promptDesktop(id, meta, text, images = []) {
     const result = await this.#deliverDesktop(id, text, images);
 
+    if (result.status === 'model-mismatch') {
+      // The words never reached Cursor, so they are not waiting in its queue.
+      this.#record(id, KIND.notice, {
+        text: `Not sent. The model on the computer is not the one selected here yet${result.message ? ` (${result.message})` : ''}.`,
+      });
+      return result;
+    }
+
     if (result.status === 'queued') {
       // Cursor is holding it. The stream waits until the turn actually takes
       // it; the queue on screen is where it can be seen until then.
       // deliverDesktop already #expectEcho'd before the write.
+      this.clearDraft(id);
       this.#update(id, { status: STATUS.busy });
       this.#watchDesktop(id);
       const seen = await this.queued(id);
@@ -2438,6 +2876,7 @@ export class SessionManager extends EventEmitter {
     if (result.status === 'submitted') {
       // deliverDesktop already #expectEcho'd. The watcher may have seen the
       // bubble first — do not write a second user_message if it did.
+      this.clearDraft(id);
       if (!this.#recentUserEcho(id, text)) {
         this.#record(id, KIND.userMessage, this.#userMessageFields(text, images));
       }
@@ -2518,11 +2957,28 @@ export class SessionManager extends EventEmitter {
     if (result.status === 'unknown-thread') {
       return `No Cursor window has this chat open. ${waiting} — open ${meta.folder} in Cursor and it goes in by itself.`;
     }
-    return `Cursor would not take this${reason ? `: ${reason}` : ''}. ${waiting} and will keep trying.`;
+    const windowSaid = result.cdp ? ` The window refused first (${result.cdp}).` : '';
+    return `Cursor would not take this${reason ? `: ${reason}` : ''}. ${waiting} and will keep trying.${windowSaid}`;
   }
 
   async setModel(id, modelId) {
-    if (this.meta.get(id)?.kind === 'desktop') return this.#chooseInCursor(id, 'model', modelId);
+    const meta = this.meta.get(id);
+    if (meta?.kind === 'desktop') {
+      const previous = {
+        model: meta.model,
+        modelName: meta.modelName,
+        modelParameters: meta.modelParameters || {},
+      };
+      this.#update(id, { model: modelId, modelName: this.modelName(modelId), modelParameters: {} });
+      const confirmed = await this.#confirmDesktopModel(this.meta.get(id));
+      if (!confirmed.ok) {
+        this.#update(id, previous);
+        this.emit('log', `did not switch "${meta.title}" to ${this.modelName(modelId)}: ${confirmed.reason || 'not confirmed'}`);
+        return false;
+      }
+      this.emit('model', { sessionId: id, ...(await this.modelControls(id)) });
+      return true;
+    }
     const runtime = await this.ensureLive(id);
     if (runtime.client.agent !== 'cursor') {
       const res = await runtime.client.setConfigOption({
@@ -2542,12 +2998,8 @@ export class SessionManager extends EventEmitter {
   }
 
   /**
-   * Leave Auto-select.
-   *
-   * Cursor has no switch for this: Auto is a row in the model list, and the
-   * only thing that turns it off is choosing a model instead. So "Auto off"
-   * from a phone means picking one — Cursor's own first suggestion, which is
-   * the row it puts at the top — and the picker then says which.
+   * Leave Auto-select by choosing the first named model in the catalog.
+   * The phone already has that list, so this does not open Cursor's menu.
    */
   async disableAutoSelect(id) {
     const meta = this.meta.get(id);
@@ -2558,14 +3010,9 @@ export class SessionManager extends EventEmitter {
       return this.setModel(id, named.modelId);
     }
 
-    const listed = await this.cursor.namedModels({ threadId: meta.desktopThreadId });
-    if (listed.status !== 'ok') {
-      this.#record(id, KIND.notice, {
-        text: `Could not read Cursor's model list to leave Auto: ${listed.reason || listed.status}.`,
-      });
-      return false;
-    }
-    return this.#chooseInCursor(id, 'model', listed.models[0]);
+    const named = (this.catalogFor('cursor').models || []).find((model) => model.modelId !== 'default[]');
+    if (!named) return false;
+    return this.setModel(id, named.modelId);
   }
 
   /** Auto-select is a model choice in Cursor, so both directions are one. */

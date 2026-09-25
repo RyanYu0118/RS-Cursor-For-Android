@@ -166,7 +166,9 @@ export function renderTurn({
           .map((t) => {
             const line = `${ICON[t.status] || '▸'} <i>${said(t)}</i>`;
             // One word, on the same line: a phone has better uses for its rows.
-            return t.failure ? `${line} — ${esc(t.failure)}` : line;
+            const head = t.failure ? `${line} — ${esc(t.failure)}` : line;
+            const steps = (t.steps || []).map((s) => `  ${esc(s)}`).join('\n');
+            return steps ? `${head}\n${steps}` : head;
           })
           .join('\n');
   const clock = running && elapsedMs >= 1000 ? `⌛ <b>${durationText(elapsedMs)}</b>` : '';
@@ -1379,6 +1381,10 @@ export class TelegramBridge extends EventEmitter {
   }
 
   async #askPermission(rec) {
+    const opts = rec.options || [];
+    if (opts.length && opts.every((opt) => /^no repo$/i.test(String(opt.name || opt.optionId || '').trim()))) {
+      return;
+    }
     const title = rec.toolCall?.title || rec.toolCall?.kind || 'this action';
     const buttons = (rec.options || []).map((opt) => [
       {

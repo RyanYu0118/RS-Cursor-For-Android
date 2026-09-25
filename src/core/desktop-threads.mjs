@@ -124,7 +124,12 @@ function toolDetail(tool) {
   const command = blob?.command || params.command;
   if (command) {
     const cwd = blob?.cwd || params.cwd;
-    input = { command, ...(cwd ? { cwd } : {}) };
+    const commandDescription = blob?.commandDescription || params.commandDescription;
+    input = {
+      command,
+      ...(cwd ? { cwd } : {}),
+      ...(commandDescription ? { commandDescription: String(commandDescription) } : {}),
+    };
   } else if (Object.keys(params).length) {
     const { parsingResult, ...rest } = params;
     input = rest;
@@ -369,6 +374,19 @@ function messageOf(bubble, { generating = false, grouping = null } = {}) {
     if (path && !input.relativeWorkspacePath && !input.targetFile && !input.path) input.path = path;
     if (grouping?.editLinesAdded != null) input.added = grouping.editLinesAdded;
     if (grouping?.editLinesRemoved != null) input.removed = grouping.editLinesRemoved;
+    if (input.added == null && input.removed == null && Array.isArray(detail.diff?.lines)) {
+      let added = 0;
+      let removed = 0;
+      for (const line of detail.diff.lines) {
+        const kind = String(line?.type || '').toLowerCase();
+        if (kind === 'added' || kind === 'add') added += 1;
+        else if (kind === 'deleted' || kind === 'removed' || kind === 'del') removed += 1;
+      }
+      if (added || removed) {
+        input.added = added;
+        input.removed = removed;
+      }
+    }
     if (plan?.asked) {
       if (plan.name) input.name = plan.name;
       if (plan.overview) input.overview = plan.overview;
@@ -426,7 +444,10 @@ function messageOf(bubble, { generating = false, grouping = null } = {}) {
   }
 
   const thinking = String(bubble.thinking?.text || '').trim();
-  if (thinking) return { role, kind: 'thinking', text: thinking, pending: growing };
+  if (thinking) {
+    const durationMs = Number(bubble.thinkingDurationMs) || 0;
+    return { role, kind: 'thinking', text: thinking, pending: growing, ...(durationMs ? { durationMs } : {}) };
+  }
 
   return null;
 }
@@ -498,6 +519,74 @@ export function readThread(threadId, { seen, tail } = {}) {
       visited,
       total: headers.length,
     };
+  });
+}
+
+/**
+ * Labels Cursor already computed, for bubbles the transcript drew before it
+ * kept them: a shell's "Ran …" description, and how long a thought took.
+ *
+ * @param {string} threadId
+ * @param {number} [limit]
+ * @returns {{ kind: 'tool'|'thought', id: string, commandDescription?: string, durationMs?: number }[]}
+ */
+export function readDisplayHints(threadId, limit = 250) {
+  return withDb((db) => {
+    const get = db.prepare('SELECT value, typeof(value) value_t FROM cursorDiskKV WHERE key = ?');
+    const row = get.get(`composerData:${threadId}`);
+    if (!row) return [];
+    let data;
+    try {
+      data = JSON.parse(textOf(row));
+    } catch {
+      return [];
+    }
+    const headers = data.fullConversationHeadersOnly || [];
+    const slice = headers.slice(Math.max(0, headers.length - limit));
+    const hints = [];
+    for (const header of slice) {
+      const bubbleId = header?.bubbleId;
+      if (!bubbleId) continue;
+      const bubbleRow = get.get(`bubbleId:${threadId}:${bubbleId}`);
+      if (!bubbleRow) continue;
+      let bubble;
+      try {
+        bubble = JSON.parse(textOf(bubbleRow));
+      } catch {
+        continue;
+      }
+      const durationMs = Number(bubble.thinkingDurationMs) || 0;
+      if (durationMs && String(bubble.thinking?.text || '').trim()) {
+        hints.push({ kind: 'thought', id: bubbleId, durationMs });
+      }
+      const tool = bubble.toolFormerData;
+      if (!tool) continue;
+      const params = parse(tool.params) || parse(tool.rawArgs) || {};
+      const commandDescription = params.commandDescription;
+      const targetFile = params.targetFile || params.relativeWorkspacePath || params.path;
+      const lines = tool.additionalData?.precomputedDiff?.lines;
+      let added = null;
+      let removed = null;
+      if (Array.isArray(lines)) {
+        added = 0;
+        removed = 0;
+        for (const line of lines) {
+          const kind = String(line?.type || '').toLowerCase();
+          if (kind === 'added' || kind === 'add') added += 1;
+          else if (kind === 'deleted' || kind === 'removed' || kind === 'del') removed += 1;
+        }
+      }
+      if (commandDescription || added != null || targetFile) {
+        hints.push({
+          kind: 'tool',
+          id: bubbleId,
+          ...(commandDescription ? { commandDescription: String(commandDescription) } : {}),
+          ...(added != null ? { added, removed } : {}),
+          ...(targetFile ? { targetFile: String(targetFile) } : {}),
+        });
+      }
+    }
+    return hints;
   });
 }
 
@@ -582,8 +671,10 @@ function contextFillFrom(data) {
  * What a chat is set to: which mode, which model, and how hard it is thinking.
  *
  * The desktop writes all of this beside the thread itself, so what a chat will
- * do next can be answered without touching the window at all. Changing it is
- * another matter entirely — that is a menu, and menus are `cursor-cdp.mjs`.
+ * do next can be answered without touching the window at all. The parameter
+ * sheet (Fast, Context, Effort) is the same record plus the model catalog in
+ * application storage — see `readModelControls`. Changing a value is still a
+ * menu, and menus are `cursor-cdp.mjs`.
  *
  * The knobs under a model are Cursor's own names for them: `effort` and
  * `thinking` on the models that have them, `context` for the window size, and
@@ -621,6 +712,170 @@ export function readSettings(threadId) {
       contextUsagePercent: fill.contextUsagePercent,
       costCents: fill.costCents,
     };
+  });
+}
+
+/** Cursor's account-wide model catalog, including each model's parameter sheet. */
+const USER_STORAGE_KEY =
+  'src.vs.platform.reactivestorage.browser.reactiveStorageServiceImpl.persistentStorage.applicationUser';
+
+/**
+ * The controls a phone can show for one chat, taken from Cursor's own records.
+ *
+ * `composerData.modelConfig` is what this chat is set to. The choices beside
+ * each knob live on the catalog (`availableDefaultModels2`), not in the
+ * window, so this works while Cursor is in the background and without
+ * pressing anything.
+ *
+ * @param {object|null} data  parsed `composerData`
+ * @param {object[]} [catalog]  `availableDefaultModels2`
+ */
+export function modelControlsFrom(data, catalog = []) {
+  if (!data) return { status: 'unknown-thread', reason: 'no such chat in the desktop' };
+  const config = data.modelConfig || {};
+  const chosen = config.selectedModels?.[0] || {};
+  const modelId = chosen.modelId || config.modelName || 'default';
+  const auto = modelId === 'default';
+  const entry = (catalog || []).find((model) => model?.name === modelId);
+  const knobs = new Map((chosen.parameters || []).map((item) => [item.id, String(item.value)]));
+  const parameters = (entry?.parameterDefinitions || []).map((def) =>
+    parameterControl(def, knobs.get(def.id)),
+  );
+  return {
+    status: 'ok',
+    auto,
+    model: auto ? 'Auto' : entry?.clientDisplayName || entry?.name || modelId,
+    parameters,
+  };
+}
+
+function parameterControl(def, raw) {
+  const label = def.name || def.id;
+  const bool = def.parameterType?.booleanParameter;
+  if (bool) {
+    return { id: def.id, label, type: 'toggle', value: raw === 'true' };
+  }
+  const values = def.parameterType?.enumParameter?.values || [];
+  const options = values.map((item) => item.displayName || item.value);
+  const current = values.find((item) => item.value === raw);
+  return {
+    id: def.id,
+    label,
+    type: 'select',
+    value: current?.displayName || current?.value || raw || options[0] || '',
+    options,
+  };
+}
+
+/** Fast / Context / Effort for a desktop chat, without opening its window. */
+export function readModelControls(threadId) {
+  return withDb((db) => {
+    const row = db
+      .prepare('SELECT value, typeof(value) value_t FROM cursorDiskKV WHERE key = ?')
+      .get(`composerData:${threadId}`);
+    if (!row) return { status: 'unknown-thread', reason: 'no such chat in the desktop' };
+    let data;
+    try {
+      data = JSON.parse(textOf(row));
+    } catch {
+      return { status: 'error', reason: 'Cursor stored this chat in a form that could not be read' };
+    }
+    let catalog = [];
+    const stored = db
+      .prepare('SELECT value, typeof(value) value_t FROM ItemTable WHERE key = ?')
+      .get(USER_STORAGE_KEY);
+    if (stored) {
+      try {
+        catalog = JSON.parse(textOf(stored))?.availableDefaultModels2 || [];
+      } catch {
+        catalog = [];
+      }
+    }
+    return modelControlsFrom(data, catalog);
+  });
+}
+
+function withWriteDb(fn) {
+  if (!existsSync(IDE_DB)) return null;
+  let lastErr = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    let db = null;
+    try {
+      db = new DatabaseSync(IDE_DB, { timeout: 1500 });
+      return fn(db);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 3 || !/locked|busy/i.test(String(err?.message || ''))) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    } finally {
+      db?.close();
+    }
+  }
+  throw lastErr;
+}
+
+function saveComposer(db, threadId, row, data) {
+  const payload = JSON.stringify(data);
+  const value = row?.value_t === 'blob' || Buffer.isBuffer(row?.value) ? Buffer.from(payload) : payload;
+  db.prepare('UPDATE cursorDiskKV SET value = ? WHERE key = ?').run(value, `composerData:${threadId}`);
+}
+
+/**
+ * Record a model choice on the chat itself.
+ *
+ * This is the same `modelConfig` Cursor stores. It does not open a menu or
+ * move the window. A chat that is already open keeps the copy it loaded; the
+ * record is what a later open of that chat reads.
+ */
+export function writeComposerModel(threadId, modelName, parameters = []) {
+  if (!threadId) return { status: 'error', reason: 'no chat was named' };
+  return withWriteDb((db) => {
+    const row = db
+      .prepare('SELECT value, typeof(value) value_t FROM cursorDiskKV WHERE key = ?')
+      .get(`composerData:${threadId}`);
+    if (!row) return { status: 'unknown-thread', reason: 'no such chat in the desktop' };
+    let data;
+    try {
+      data = JSON.parse(textOf(row));
+    } catch {
+      return { status: 'error', reason: 'Cursor stored this chat in a form that could not be read' };
+    }
+    const name = modelName || 'default';
+    data.modelConfig = {
+      ...(data.modelConfig || {}),
+      modelName: name,
+      selectedModels: [{ modelId: name, parameters: name === 'default' ? [] : parameters }],
+    };
+    saveComposer(db, threadId, row, data);
+    return { status: 'ok' };
+  });
+}
+
+/** Change one stored knob, leaving the model choice as it is. */
+export function writeComposerParameter(threadId, parameterId, value) {
+  if (!threadId) return { status: 'error', reason: 'no chat was named' };
+  return withWriteDb((db) => {
+    const row = db
+      .prepare('SELECT value, typeof(value) value_t FROM cursorDiskKV WHERE key = ?')
+      .get(`composerData:${threadId}`);
+    if (!row) return { status: 'unknown-thread', reason: 'no such chat in the desktop' };
+    let data;
+    try {
+      data = JSON.parse(textOf(row));
+    } catch {
+      return { status: 'error', reason: 'Cursor stored this chat in a form that could not be read' };
+    }
+    const config = data.modelConfig || {};
+    const chosen = { ...(config.selectedModels?.[0] || { modelId: config.modelName || 'default' }) };
+    const parameters = [...(chosen.parameters || [])];
+    const next = String(value);
+    const at = parameters.findIndex((item) => item.id === parameterId);
+    if (at >= 0) parameters[at] = { ...parameters[at], value: next };
+    else parameters.push({ id: parameterId, value: next });
+    chosen.parameters = parameters;
+    data.modelConfig = { ...config, selectedModels: [chosen] };
+    saveComposer(db, threadId, row, data);
+    return { status: 'ok', parameter: parameterId, value: next };
   });
 }
 

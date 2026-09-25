@@ -11,7 +11,7 @@ sources:
   - id: dom
     resource: /src/core/cursor-dom.mjs
     title: Cursor queue selectors
-generated: { by: agent, at: 2026-08-15T09:36:00Z }
+generated: { by: agent, at: 2026-09-25T12:50:00Z }
 ---
 
 # Queue
@@ -45,9 +45,11 @@ waiting, the reworded one moves to the back.
 
 ## When the list is read
 
-Reading Cursor's queue needs the chat on screen. An explicit ask brings the
-tab forward. The poll that runs through a turn does not: seizing someone's
-window every two seconds to look at a list is worse than not showing it.
+Reading Cursor's queue needs the chat on screen. Asking for the list does
+not bring a background chat forward — an empty list is better than pulling
+the desktop onto that chat. Pressing a row (reword, send now, delete) does
+bring it forward, because those buttons only exist on the chat that is
+showing. The poll that runs through a turn does not either.
 
 ## Related
 

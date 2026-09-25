@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-20T00:00:00Z }
+generated: { by: agent, at: 2026-09-25T15:20:00Z }
 ---
 
 # Web app
@@ -170,15 +170,14 @@ is the way to start somewhere Cursor has never opened — see
 - While a long transcript replays with nothing cached, the chat pane shows
   the Auto A mark (same glyph as the rail) and "Loading conversation…", not
   a blank. A cache hit paints first and skips that overlay.
-- The session rail as one accordion per **repo** — a folder and every chat
-  and session inside it, newest activity first. There is no Chats/Projects
+- The session rail follows Cursor's Agents sidebar: New Chat, Search,
+  Automations, Customize, then **Projects** (New Project, pinned projects,
+  More) and **Repositories** (a folder, its chats, a relative time, More).
+  There is no Chats/Projects
   split and no date headings any more: a conversation always lives
   somewhere, so grouping by where beats grouping by when. A row shows only
-  the session title; the repo is its accordion parent. Each row leads with
-  the driving agent's mark where the status dot used to be — Cursor's cube
-  or opencode's square, tinted by colour so the mark still carries the
-  session's state (idle, busy, error, or a resting Cursor chat Auto has not
-  opened). Which repos were open is remembered per folder in the browser;
+  the session title, a small dot, and a relative time; the repo is its parent.
+  Which repos were open is remembered per folder in the browser;
   attaching a session opens its repo. Rebuilding the list (sessions update,
   opening the drawer) must not treat the teardown `toggle` as a collapse —
   that used to write "neither" and always reopen shut. A **+** on a repo
@@ -203,9 +202,12 @@ is the way to start somewhere Cursor has never opened — see
   address both. User bubbles too. Images you attach show as thumbnails in
   the bubble (and inside the composer before send); tap one for a full-screen
   viewer you can pinch / scroll to zoom.
-- A turn still going says **Working… 00:12** at the bottom of the stream, the
-  counter ticking once a second so waiting is legible. When it ends, that
-  line becomes **Worked for 07:03** or **Thought for 00:01** above the answer,
+- A turn still going shows Cursor's summary at the bottom — **Editing N files,
+  explored …, N browser actions, ran …** — with a chevron. Under it, **Thinking**
+  and **Planning next moves** are one line until tapped, then the text scrolls.
+  Before any step the line itself is Thinking or Planning next moves. When it
+  ends, a separate line becomes **Worked for 07:03** or **Thought for 00:01**
+  above the answer,
   the way Cursor labels a finished turn. Times are `mm:ss`, or `hh:mm:ss` past
   an hour. A finished job always says what it did: the quiet tally rides the
   line, and at other levels it is added when the agent left no answer. Commands
@@ -307,8 +309,13 @@ clears the `/…` text, and a space closes the palette so a message can still
 begin with `/`.
 
 Each session keeps its own unsent draft: switching chats parks what you
-were typing and restores it when you come back. An idle send appears in
-the stream at once — it used to wait until Cursor's window had taken it.
+were typing and restores it when you come back. For a desktop chat the
+draft is shared with Cursor's box — type on the phone or the computer and
+the other side shows the same words within about a second, and emptying
+either box empties the other. If the two disagree, send uses the box on
+the side that pressed send. An idle send
+appears in the stream at once — it used to wait until Cursor's window had
+taken it.
 
 Mode and the model summary are chips under the text: a slight background and
 rounded edges so a thumb can see where each starts. Their base font is

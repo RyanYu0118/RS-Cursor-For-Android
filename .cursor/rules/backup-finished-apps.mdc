@@ -1,0 +1,15 @@
+---
+description: After an app is ready, back it up under R:\RYAN STUDIO\软件 in a versioned folder
+alwaysApply: true
+---
+
+# Finished app backup
+
+When an application is built and ready to use, copy the deliverable (APK, installer, or release archive) to:
+
+`R:\RYAN STUDIO\软件\<应用名> <版本号>\`
+
+- The folder name is the app name plus its version, for example `RS Cursor 1.0`.
+- Put the built file inside that folder. Do not leave a new release as a loose file in `软件`.
+- Use the version already in the project (`versionName`, package version). Do not invent a new number.
+- Do this in the same turn the app is finished, without waiting to be asked again.

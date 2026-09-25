@@ -70,5 +70,8 @@ did not start — usually missing credentials.
   `npm run dev` (port 4340, `--no-telegram`) for a parallel instance.
 - **Do not host Auto inside an agent background shell** — those get killed
   and take Auto down with them. Use the scheduled task.
+- **Do not start it in a visible terminal.** `npm run supervise` in a window
+  the user can close takes RS Cursor down with that window. Start and
+  restart through `AutoSupervise` (`Start-ScheduledTask -TaskName AutoSupervise`).
 - Restarting drops live agent sessions' processes, but not their history:
   transcripts are on disk and sessions resume on next use.

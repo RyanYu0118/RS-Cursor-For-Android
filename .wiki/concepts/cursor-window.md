@@ -17,7 +17,7 @@ sources:
   - id: clipboard
     resource: /src/core/clipboard.mjs
     title: Image paste via clipboard
-generated: { by: agent, at: 2026-08-23T16:26:00Z }
+generated: { by: agent, at: 2026-09-25T15:20:00Z }
 ---
 
 # The Cursor window
@@ -27,6 +27,12 @@ pages. Auto puts the caret in the chat box, types, and presses Enter — the
 crudest transport and the most dependable, because it is what a person at
 the keyboard does. The desktop bridge can refuse for the rest of a window's
 life; the debug port answers to no feature switch.
+
+The Agents window's box is `.ui-prompt-input-editor__input`. It is not the
+older `aislash-editor-input`, and it does not sit inside `[data-composer-id]`.
+Missing it makes a chat that is already on screen look like it has no box,
+and the message is held for a bridge that is not running. A sidebar row that
+ignores a dispatched click is pressed with a real mouse, like New Agent.
 
 Reading history is still the database's job. The window only holds what it
 has scrolled into view.
@@ -47,10 +53,13 @@ has scrolled into view.
 
 ## Pressing, not just typing
 
-The same port stops a turn, brings a background tab to the front, and
-presses a control **by the words on it**. Cursor's class names are
-generated. What a conversation says is excluded, or a message beginning
-"Run this…" reads as a Run button.
+The same port stops a turn, brings a background tab to the front when a
+control on it has to be pressed, and presses a control **by the words on
+it**. A text message from the phone does not do that: if this chat is not
+the one on screen, the [bridge](desktop-bridge.md) submits it and leaves
+the desktop where it is. Cursor's class names are generated. What a
+conversation says is excluded, or a message beginning "Run this…" reads as
+a Run button.
 
 Queue icon buttons carry no words — those alone are found by `codicon`
 name (VS Code's icon vocabulary).
@@ -122,6 +131,27 @@ where Model opens a searchable list and the model-specific parameters are
 labelled rows. Auto is not offered inside that sheet; it is the switch
 outside it.
 
+The phone paints that sheet from `src/web/model-parameters.js`, a snapshot of
+the knobs Cursor offered (Fast, Context, Effort, and the rest). Opening it
+does not press the window. The phone and the computer share the loaded
+chat's model. A change on the phone is written with Cursor's model-config
+service (`setModelConfigForComposer`) — the menu is not opened — and read
+back before anything is sent. A change on the computer is read from that
+same loaded config and shown on the phone. Auto is `default`. A desktop
+chat that has no model stored on the session is shown from that record —
+an empty choice is not Auto. When Cursor changes those knobs, replace the
+snapshot.
+
+Unsent words in the chat box are shared the same way. Typing on the phone
+writes Cursor's composer `text` / `richText` through the chat service and
+fires `ShouldForceText` — the box updates without focusing the window.
+Typing on the computer is read from the open editor when that chat is
+showing, otherwise from the loaded composer, and shown on the phone.
+Clearing either box clears the other, including an empty ProseMirror
+document. When the two boxes disagree, the side that presses send is the
+message that goes: a phone send replaces the computer box, and a computer
+send leaves that text and clears the phone.
+
 Modes are the @-mention popover. A model row is named from
 `model-item-*` minus Edit and the badges, because "Composer" and "2.5"
 live in separate children. Mode items are still own-text, never the
@@ -168,6 +198,12 @@ the folder over and exits — so the only fix is quit+relaunch, which closes
 every window. Auto refuses that by default and falls back to ACP with a
 notice. Set `AUTO_ALLOW_CURSOR_RESTART=1` only when you mean to force the
 kill.
+
+The executable is the usual install path, or `CURSOR_PATH`, or the path of
+the Cursor process that is already running. A copy under something like
+`D:\app\cursor` is still launched. Missing that path used to report "not
+installed" and leave the phone session only in Auto, so the computer window
+never showed the chat and never called the model.
 
 ## Related
 

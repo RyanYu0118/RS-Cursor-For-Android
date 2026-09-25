@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: Desktop bridge
-description: Named-pipe send into Cursor when the debug port cannot type — gated, fragile, and re-asserted by the host.
+description: Named-pipe send that submits a background chat without focusing it. Gated, and re-asserted by the host.
 tags: [desktop, bridge, gate, outbox]
 status: stable
 sources:
@@ -17,16 +17,18 @@ sources:
   - id: script
     resource: /scripts/desktop-bridge.mjs
     title: bridge status / enable CLI
-generated: { by: agent, at: 2026-08-16T06:35:00Z }
+generated: { by: agent, at: 2026-09-25T12:50:00Z }
 ---
 
 # Desktop bridge
 
 The bridge hands a message to the same code that runs when you press Enter
-in Cursor's composer, over a named pipe. It has no way to report what comes
-back — replies are [desktop threads](desktop-threads.md). Prefer the
-[Cursor window](cursor-window.md) over the debug port when it answers;
-the bridge can shut itself mid-session.
+in Cursor's composer, over a named pipe, and tells that submit to skip
+focusing the chat. A text message from the phone uses it when the chat is
+not the one on screen, so the desktop stays where it is. Replies are
+[desktop threads](desktop-threads.md). The [window](cursor-window.md) is
+still how a picture is pasted, and how words get in when the bridge refuses.
+The bridge can shut itself mid-session.
 
 ## Gate
 

@@ -22,16 +22,65 @@ export const DEFAULT_CURSOR_PORT = 9222;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Where Cursor is installed on this machine, if anywhere we know. */
-export function findCursorExe() {
-  if (process.env.CURSOR_PATH && existsSync(process.env.CURSOR_PATH)) return process.env.CURSOR_PATH;
-  const local = process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local');
+/** A path we already learned from a running Cursor, so the next launch does not ask again. */
+let cachedRunningExe = null;
+
+/**
+ * Where the running Cursor.exe actually lives.
+ *
+ * A custom install (this machine uses `D:\app\cursor`) is not in Program Files
+ * or LocalAppData. Without this, opening a folder throws "not installed" and
+ * the phone session falls back to ACP — the computer window never sees it.
+ */
+export function runningCursorExe({ execFile = execFileSync, exists = existsSync } = {}) {
+  if (cachedRunningExe && exists(cachedRunningExe)) return cachedRunningExe;
+  if (process.platform !== 'win32') return null;
+  try {
+    const out = execFile(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "(Get-CimInstance Win32_Process -Filter \"Name = 'Cursor.exe'\" | Select-Object -First 1 -ExpandProperty ExecutablePath)",
+      ],
+      { encoding: 'utf8', timeout: 8000, windowsHide: true },
+    );
+    const path = String(out || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean);
+    if (path && exists(path)) {
+      cachedRunningExe = path;
+      return path;
+    }
+  } catch {
+    // Cursor is not running, or the process list could not be read.
+  }
+  return null;
+}
+
+/**
+ * Where Cursor is installed on this machine, if anywhere we know.
+ *
+ * @param {object} [opts]
+ * @param {NodeJS.ProcessEnv} [opts.env]
+ * @param {(path: string) => boolean} [opts.exists]
+ * @param {() => string|null} [opts.running]  path of a live Cursor.exe
+ */
+export function findCursorExe({
+  env = process.env,
+  exists = existsSync,
+  running = () => runningCursorExe({ exists }),
+} = {}) {
+  if (env.CURSOR_PATH && exists(env.CURSOR_PATH)) return env.CURSOR_PATH;
+  const local = env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local');
   const candidates = [
     join(local, 'Programs', 'cursor', 'Cursor.exe'),
     join(local, 'Programs', 'Cursor', 'Cursor.exe'),
-    join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Cursor', 'Cursor.exe'),
+    join(env.PROGRAMFILES || 'C:\\Program Files', 'Cursor', 'Cursor.exe'),
   ];
-  return candidates.find((p) => existsSync(p)) || null;
+  return candidates.find((p) => exists(p)) || running() || null;
 }
 
 export function cursorRunning() {

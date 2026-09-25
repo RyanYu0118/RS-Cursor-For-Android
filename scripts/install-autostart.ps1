@@ -27,8 +27,15 @@ if (-not (Test-Path $Supervise)) {
 
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-$arg = "`"$Supervise`""
-$action = New-ScheduledTaskAction -Execute $Node -Argument $arg -WorkingDirectory $Root
+# node.exe is a console program. Running it directly opens a window, and
+# closing that window kills the supervisor (exit 0xC000013A, Ctrl+C).
+# wscript is a GUI host and supervise-hidden.vbs starts node hidden.
+$Launcher = Join-Path $Root "scripts\supervise-hidden.vbs"
+if (-not (Test-Path $Launcher)) {
+  throw "Missing $Launcher"
+}
+$Wscript = Join-Path $env:SystemRoot "System32\wscript.exe"
+$action = New-ScheduledTaskAction -Execute $Wscript -Argument "//B //Nologo `"$Launcher`"" -WorkingDirectory $Root
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet `
   -AllowStartIfOnBatteries `

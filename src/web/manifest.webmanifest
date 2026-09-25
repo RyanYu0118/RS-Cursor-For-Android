@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Auto",
-  "short_name": "Auto",
+  "name": "RS Cursor",
+  "short_name": "RS Cursor",
   "description": "Remote control for Cursor agents",
   "start_url": "/",
   "scope": "/",

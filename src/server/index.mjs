@@ -21,6 +21,7 @@ import { BrowserHost } from '../core/browser.mjs';
 import { HostIdentity } from '../core/host-identity.mjs';
 import { TelegramBridge } from '../core/telegram.mjs';
 import { listProjects, workspaceIdFor, foldersByWorkspaceId } from '../core/projects.mjs';
+import { sidebarSnapshot } from '../core/glass-sidebar.mjs';
 import { listDirectories } from '../core/fs-browse.mjs';
 import { desktopChats, recentDesktopChats } from '../core/desktop-chats.mjs';
 import {
@@ -67,6 +68,7 @@ const sessions = new SessionManager({
   defaultFolder: DEFAULT_FOLDER,
   defaultPolicy: process.env.AUTO_POLICY || POLICY.auto,
   defaultAgent: process.env.AUTO_AGENT || 'cursor',
+  syncModels: true,
 }).init();
 
 console.log(`[auto] approvals default to "${sessions.defaultPolicy}"`);
@@ -168,6 +170,12 @@ sessions.on('queue', ({ sessionId, ...queue }) =>
   broadcast({ type: 'queue', sessionId, ...queue }, sessionId),
 );
 sessions.on('catalog', (payload) => broadcast({ type: 'catalog', ...payload }));
+sessions.on('model', ({ sessionId, ...controls }) =>
+  broadcast({ type: 'model.controls', sessionId, ...controls }, sessionId),
+);
+sessions.on('draft', ({ sessionId, ...draft }) =>
+  broadcast({ type: 'draft', sessionId, ...draft }, sessionId),
+);
 
 // Terminal output reaches clients as transcript records; these only announce
 // the widget's existence so the UI knows to open or close a pane.
@@ -221,10 +229,13 @@ const OPS = {
     // first message (and its scrub landmark) because only the newest records
     // travelled. The gap between them is counted as `earlier`.
     const window = await sessions.replay(id, fromSeq, REPLAY_LIMIT);
+    const meta = sessions.get(id);
+    const modelControls = meta?.kind === 'desktop' ? await sessions.modelControls(id) : null;
     send(ws, {
       type: 'attached',
       sessionId: id,
-      meta: sessions.get(id),
+      meta,
+      modelControls,
       records: window.records,
       head: window.head,
       // Whether this payload replaces what the client has or adds to it.
@@ -241,7 +252,9 @@ const OPS = {
       terminalsAvailable: sessions.terminals.available,
       catalog: sessions.catalogFor(sessions.get(id)?.agent),
       projects: projectList(),
+      sidebar: sidebarSnapshot(),
       chats: recentChats(),
+      draft: sessions.draft(id),
     });
 
     // The model list only exists once an agent has started. Warm it in the
@@ -347,7 +360,7 @@ const OPS = {
   },
 
   'projects.list'(ws) {
-    send(ws, { type: 'projects', projects: projectList() });
+    send(ws, { type: 'projects', projects: projectList(), sidebar: sidebarSnapshot() });
   },
 
   /** Folders on this machine, for starting a session somewhere new. */
@@ -416,6 +429,15 @@ const OPS = {
     const set = await sessions.setModelParameter(id, msg.parameter, msg.value);
     send(ws, { type: 'model.parameter', sessionId: id, set });
     send(ws, { type: 'model.controls', sessionId: id, ...(await sessions.modelControls(id)) });
+  },
+
+  async 'session.draft'(ws, state, msg) {
+    const id = msg.sessionId || state.sessionId;
+    const result = await sessions.setDraft(id, msg.text ?? '', {
+      at: Number(msg.at) || Date.now(),
+      source: 'phone',
+    });
+    send(ws, { type: 'draft.set', sessionId: id, ...result });
   },
 
   'session.policy'(_ws, state, msg) {

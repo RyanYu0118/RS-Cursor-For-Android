@@ -1,5 +1,27 @@
 # Directory Update Log
 
+## 2026-09-25
+* **Fix**: Clearing the chat box on either side clears the other. If the two drafts disagree, the message is whatever the side that pressed send had written. See [Cursor window](concepts/cursor-window.md) and [Web](concepts/web.md).
+* **Update**: Unsent words in the chat box are shared between the tablet and Cursor. Typing on either side updates the other without focusing the window. See [Cursor window](concepts/cursor-window.md) and [Web](concepts/web.md).
+* **Update**: The tablet and the computer share one model. A tablet change is written through Cursor's model-config service, not by opening the menu, and a send waits until that model reads back. A computer change is shown on the tablet. See [Cursor window](concepts/cursor-window.md).
+* **Fix**: Passing the tablet's model waited for the whole Cursor turn, timed out, and the message was then typed in on the computer's model. The send now returns once Cursor claims the generation. A submit that does not answer is not typed in again. See [Cursor window](concepts/cursor-window.md).
+* **Update**: A model chosen on the tablet is sent as `modelOverride` (Auto is `default`). Cursor's picker and the chat's stored model stay on whatever the computer already had selected. See [Cursor window](concepts/cursor-window.md).
+* **Fix**: The tablet showed Auto for a desktop chat that had never stored a model. The send used the chat's own model (whatever the computer had loaded). The tablet now shows that record, and choosing Auto does not press the computer's model button. See [Cursor window](concepts/cursor-window.md).
+* **Update**: A text message from the phone goes through the desktop bridge when that chat is not on screen, so Cursor is not switched to it. Typing still brings the chat forward for pictures and when the bridge refuses. Listing the queue no longer brings the chat forward. See [Desktop bridge](concepts/desktop-bridge.md), [Cursor window](concepts/cursor-window.md), and [Queue](concepts/queue.md).
+* **Fix**: `AutoSupervise` starts through `scripts/supervise-hidden.vbs`, so the supervisor has no console to close. A direct `node.exe` task was showing a window and dying on Ctrl+C. See [Supervise](concepts/supervise.md).
+* **Fix**: The Agents window chat box is `.ui-prompt-input-editor__input`. Auto was treating that window as having no box and holding the phone's message for a bridge that is not running. See [Cursor window](concepts/cursor-window.md).
+* **Fix**: A phone session that could not find Cursor (a custom install such as `D:\app\cursor`) no longer stays headless. Auto reads the running `Cursor.exe`, and the next message opens a computer chat and submits there so Cursor calls the model. See [Cursor window](concepts/cursor-window.md) and [Desktop chats](concepts/desktop-chats.md).
+* **Update**: The web rail follows Cursor's Agents sidebar: pinned projects, then repositories and their chats with relative times. See [Web](concepts/web.md).
+* **Fix**: "No Repo" is no longer a permission card. It is Cursor's empty-workspace mark; only a button that says exactly Yes or No is treated as that answer. See [Approvals](concepts/approvals.md).
+* **Fix**: "N Files Changed" hides rows after the first four. `display: flex` was overriding the `hidden` attribute, so "Show N more" sat under a list that was already complete. See [Tool lanes](concepts/tool-lanes.md).
+
+## 2026-09-24
+* **Update**: A live turn on the web uses Cursor's summary line ("Editing N files, explored …, N browser actions, ran …") with a chevron, instead of only "Working…". Thinking and Planning next moves sit under it, one line until tapped, then they scroll. See [Tool lanes](concepts/tool-lanes.md).
+* **Update**: A finished turn on the web ends with Cursor's "N Files Changed" card (language, name, +/−, Show more). Review only reveals the rest of the list. Keep / Undo stay off the phone. See [Tool lanes](concepts/tool-lanes.md).
+* **Update**: The tablet transcript uses Cursor's one work fold: "Edited N files, explored M files, ran K commands", with "Used …", "Ran …", "Thought 5s" / "Thought briefly", and "Edited file +N" inside. Shell rows use `commandDescription`. See [Tool lanes](concepts/tool-lanes.md).
+* **Update**: The web rail brand is RS Cursor with the studio mark (`src/web/rs-logo.png`). The tablet app draws edge to edge and pads the header and composer by the status and navigation bars.
+* **Update**: The model sheet is a snapshot in `src/web/model-parameters.js`. Choosing Auto, a model, or Fast / Context / Effort no longer presses Cursor's menus or waits on the window. The choice is written onto the chat's `modelConfig`. See [Cursor window](concepts/cursor-window.md).
+
 ## 2026-09-20
 * **Update**: Turn times are clocks now: `mm:ss` under an hour, `hh:mm:ss` past it — "Working… 00:12", "Worked for 07:03", "Thought for 00:01", tool durations too. `durationBits` (s/m phrasing) became `durationText`, shared by web and Telegram. See [Display settings](concepts/settings.md).
 * **Update**: Under `quiet`, every spell of reasoning in a turn folds into a single **Thinking** block, its summary the total time spent thinking — not one block per pause. See [Web](concepts/web.md).

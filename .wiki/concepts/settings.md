@@ -17,7 +17,7 @@ sources:
   - id: telegram
     resource: /src/core/telegram.mjs
     title: /verbosity and quiet summary
-generated: { by: agent, at: 2026-09-20T00:00:00Z }
+generated: { by: agent, at: 2026-09-24T15:10:00Z }
 ---
 
 # Display settings
@@ -38,7 +38,7 @@ persists the choice, so it survives a restart.
 | Level | What a chat shows |
 | --- | --- |
 | `quiet` | One summary line per turn — what it did and how long — and no per-tool rows; every spell of reasoning in the turn folds into a single Thinking block |
-| `normal` (default) | [Tool lanes](tool-lanes.md): activity lines, `Edited file +N −M`, command cards with their output |
+| `normal` (default) | [Tool lanes](tool-lanes.md): one work fold ("Edited N files, explored M files, ran K commands"), with Ran / Used / Thought / Edited rows inside |
 | `verbose` | On the web: everything, plus the tool's structured input, the raw `{output, metadata}` envelope when there is no readable text, and the tools Cursor deliberately hides. On Telegram: the hidden tools too, though command bodies stay on the web |
 
 `quiet` is a summary rather than a filter: reads, edits, and commands are
@@ -55,9 +55,10 @@ IDE's, not a verbosity choice, so it only returns when explicitly asked for.
 ## The turn clock
 
 Times are clocks, not prose: `mm:ss` while under an hour (`07:03`, `00:08`),
-`hh:mm:ss` past it (`01:07:03`). While a turn runs its line reads
-**Working… 00:12**, ticking once a second; when it ends it becomes
-**Worked for 07:03** / **Thought for 00:01**. A finished turn always carries
+`hh:mm:ss` past it (`01:07:03`). While a turn runs, the web shows the work
+summary (Editing / explored / browser actions / ran), not a lone Working…
+clock. When it ends the line becomes **Worked for 07:03** / **Thought for
+00:01**. A finished turn always carries
 a description of what it did: the quiet tally is appended to the line, and at
 `normal`/`verbose` the agent's own answer carries it — the tally is added only
 when the turn produced no answer. Telegram shows the same clock on the edited

@@ -58,21 +58,32 @@ value as setup documentation is fine.
   cache the last stretch for a fast paint, but the host remains authoritative.
   If you add a new kind of event, record it —
   a record we cannot render yet beats one we threw away.
-- **Two ways into the IDE.** A desktop chat is driven by typing into Cursor's
-  own window over its debugging port, and only failing that through the desktop
-  bridge, then a persistent outbox. Typing answers to no feature switch; the
-  bridge can shut itself mid-session. So Cursor wants starting with
-  `--remote-debugging-port=9222` — `node scripts/desktop-bridge.mjs status`
-  says whether it was.
+- **Two ways into the IDE.** A text message for a chat that is not the one on
+  screen goes through the desktop bridge, which submits without focusing that
+  chat. Typing over the debugging port is for the chat already in front, for
+  pictures, and for when the bridge refuses — that last path does bring the
+  chat forward. After both refuse, the words wait in a persistent outbox.
+  Typing answers to no feature switch; the bridge can shut itself mid-session.
+  So Cursor wants starting with `--remote-debugging-port=9222` —
+  `node scripts/desktop-bridge.mjs status` says whether the bridge is up.
 - **The window can be pressed, not just typed into.** Over the same port Auto
-  stops a turn, brings a chat in a background tab to the front, and presses a
-  control by the words on it. Every one of those first proves the window is
-  showing the chat it was asked about, so acting on the wrong conversation is
-  not possible; `force` exists only for putting a window back where it was.
+  stops a turn, brings a chat in a background tab to the front when a control
+  on it has to be pressed, and presses a control by the words on it. A text
+  message does not bring the chat forward. Every press first proves the window
+  is showing the chat it was asked about, so acting on the wrong conversation
+  is not possible; `force` exists only for putting a window back where it was.
   Controls are found by what they say, never by class name — Cursor's are
   generated — and what a conversation says is excluded, or a message beginning
   "Run this…" reads as a Run button. It did once.
-- **A chat's model and mode can be set from the phone.** The pickers beside
+- **A chat's model and mode can be set from the phone.** The phone and the
+  computer share that chat's model. Changing it on the phone writes Cursor's
+  model config from the back end — the model menu is not opened — and the
+  send waits until the loaded chat reads back the same model. A change on the
+  computer shows up on the phone the same way. Unsent words in the chat box
+  are shared the same way — type or clear on either side and the other
+  follows. If the two boxes disagree, the side that presses send is the
+  message that goes.
+  The pickers beside
   Cursor's chat box are the one part of the window that ignores a dispatched
   click — they open only on input the window believes came from a mouse — so
   they are pressed *where they are* over the debug port. The menus disagree with

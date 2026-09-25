@@ -27,6 +27,8 @@ export const KIND = {
   userMessage: 'user_message',
   agentDelta: 'agent_delta',
   agentThought: 'agent_thought',
+  /** How long a desktop thought took, so a replay can say "Thought 5s". */
+  thoughtTime: 'thought_time',
   toolCall: 'tool_call',
   toolUpdate: 'tool_update',
   diff: 'diff',

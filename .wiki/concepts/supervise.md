@@ -11,14 +11,16 @@ sources:
   - id: autostart
     resource: /scripts/install-autostart.ps1
     title: Scheduled task install
-generated: { by: agent, at: 2026-08-17T10:40:00Z }
+generated: { by: agent, at: 2026-09-25T10:05:00Z }
 ---
 
 # Supervise and autostart
 
-The `AutoSupervise` scheduled task runs `scripts/supervise.mjs`, which
-keeps the [host](host.md) alive across crashes, hung health checks, and
-machine reboots.
+The `AutoSupervise` scheduled task runs `scripts/supervise.mjs` through
+`scripts/supervise-hidden.vbs` (`wscript.exe`, no console). It keeps the
+[host](host.md) alive across crashes, hung health checks, and machine
+reboots. Pointing the task at `node.exe` directly opens a window; closing
+that window stops the supervisor (`0xC000013A`, Ctrl+C).
 
 ```powershell
 npm run supervise          # foreground watchdog
@@ -37,8 +39,8 @@ Start-ScheduledTask -TaskName AutoSupervise
 - Spawns `src/server/index.mjs` and restarts it when the process exits.
 - Polls `GET /api/health` on a timer (default ~15s). After enough consecutive
   failures it force-restarts the child.
-- Writes `supervise.log` and `host.log` (the scheduled-task console is
-  invisible; without these, poll errors vanish).
+- Writes `supervise.log` and `host.log`. The task has no window; these
+  files are where poll errors show up.
 
 ## What must not host Auto
 

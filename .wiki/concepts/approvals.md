@@ -20,7 +20,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Desktop approval watcher
-generated: { by: agent, at: 2026-08-22T20:54:00Z }
+generated: { by: agent, at: 2026-09-24T16:50:00Z }
 ---
 
 # Approvals, questions, and plans
@@ -65,6 +65,10 @@ are navigation, not approvals, and must never be offered as one. Skip is a
 rejection choice; Switch is an allow choice. Cursor remains the owner of the
 actual transition.
 
+**Yes** and **No** count only when they are the whole label. "No Repo" is the
+window's mark for an empty workspace, not a question, and is not sent to the
+phone.
+
 Skip and Continue **inside a chat message bubble** are not approvals: they
 belong to Cursor's `ask_question` card. Offering Skip from that card as
 "Permission needed" was the first wild miss — the card is drawn before its
@@ -78,8 +82,10 @@ has unreviewed edits. Offering them as approvals meant offering to throw work
 away by accident. They are excluded from the approval vocabulary.
 
 Auto does **not** mirror that bar on web or Telegram. Cursor only exposes
-global Keep / Undo / Redo — not per-edit "roll back to here" — so a card at
-the bottom of the chat was misleading. Review changes in the IDE. Only short
+global Keep / Undo / Redo — not per-edit "roll back to here" — so those
+buttons are not offered on the phone. The **N Files Changed** list under a
+finished answer is separate: it shows which files the turn edited. Review
+changes in the IDE. Only short
 exact button labels are recognised when filtering approvals — a chat titled
 "Undo and redo…" is not Undo. "Review next file" is IDE navigation. ACP
 sessions have no review bar.

@@ -20,20 +20,24 @@ import { lineDiff, collapseContext, diffStats } from './diff.js';
 import { renderMarkdown, linkify } from './markdown.js';
 import { enrichMarkdown } from './enrich.js';
 import { modelPrice } from './model-pricing.js';
+import { controlsFor } from './model-parameters.js';
 import { initBrowser, onFrame, onStatus, syncBrowserTheme } from './browser.js';
 import { initWorkspace, isOpen as workspaceIsOpen, showChat, onViewsChange, restoreViews } from './workspace.js';
 import {
   activityCopy,
+  changedFiles,
   classifyTool,
   displayLabel,
   durationText,
-  editCopy,
   fileStats,
-  groupTally,
   isCreatedPlan,
   planFields,
+  isBrowserTool,
+  stepShown,
+  thoughtLabel,
   toolOutputText,
   turnCopy,
+  workCopy,
 } from './desktop-tool-ui.js';
 import {
   appendLive,
@@ -116,6 +120,8 @@ const state = {
   sessionId: null,
   sessions: [],
   projects: [],
+  /** Cursor's Agents sidebar: pinned projects and repository groups. */
+  sidebar: null,
   /** agents the host can drive: {name, available, default, reason} */
   agents: [],
   /** agent the New session sheet will start, when there is a choice */
@@ -184,6 +190,10 @@ const state = {
   dismissedChats: new Set(),
   /** unsent composer text (and images) kept per session across switches */
   drafts: new Map(),
+  /** When we last changed the box locally — remote drafts older than this lose. */
+  draftAt: 0,
+  draftTimer: null,
+  draftApplying: false,
   /** a send drawn immediately: credits that swallow the host record (and a stray echo) */
   pendingEchoes: [],
   /** latest usage snapshot for the dial / dialog */
@@ -273,8 +283,10 @@ function resetChatUi() {
   state.streamBody = null;
   state.thinking = null;
   state.quietThinking = null;
+  state.liveFold = null;
   state.statusEl = null;
   state.turn = null;
+  state.fileHomes = new Map();
   stopTurnClock();
   resetTerminals();
 }
@@ -1007,15 +1019,15 @@ function markScrubDirty() {
  */
 function closeThinking() {
   if (!state.thinking) return;
+  const given = Number(state.thinking.dataset.duration || 0);
   const started = Number(state.thinking.dataset.started || 0);
   const at = state.now || Date.now();
-  const ms = started ? at - started : 0;
-  if (ms >= 500) {
-    const sum = state.thinking.querySelector('summary');
-    if (sum) paintParts(sum, turnCopy({ durationMs: ms, worked: false }).parts);
-  }
+  const ms = given > 0 ? given : started ? at - started : 0;
+  const sum = state.thinking.querySelector('summary');
+  if (sum) sum.textContent = thoughtLabel(ms);
   state.thinking.open = false;
   state.thinking = null;
+  syncPhase();
 }
 
 function nSpan(n) {
@@ -1046,6 +1058,12 @@ function turnStatsParts(stats) {
   if (stats.files || stats.searches) {
     groups.push(activityCopy({ files: stats.files, searches: stats.searches, running: false }).parts);
   }
+  if (stats.browsers) {
+    groups.push([
+      { n: stats.browsers },
+      { t: stats.browsers === 1 ? ' browser action' : ' browser actions' },
+    ]);
+  }
   if (stats.edits) {
     groups.push([{ t: 'Edited ' }, { n: stats.edits }, { t: stats.edits === 1 ? ' file' : ' files' }]);
   }
@@ -1063,61 +1081,167 @@ function turnStatsParts(stats) {
   return out;
 }
 
-/** "Working… 12s" — and, in quiet, what the turn has done so far. */
-function liveStatusParts() {
-  const started = state.turn?.started || Date.now();
-  const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
-  const parts = [{ t: 'Working…' }];
-  if (secs >= 1) parts.push({ t: ` ${durationText(secs * 1000)}` });
-  if (state.verbosity === 'quiet') {
-    const extra = turnStatsParts(state.turn?.stats);
-    if (extra.length) parts.push({ t: ' · ' }, ...extra);
-  }
-  return parts;
-}
-
-/** Tick the live turn's elapsed time once a second, so waiting is legible. */
-function startTurnClock() {
-  if (state.turnClock) return;
-  state.turnClock = setInterval(() => {
-    if (state.turn && state.statusEl?.isConnected && !state.replaying) {
-      paintParts(state.statusEl, liveStatusParts());
-    } else {
-      stopTurnClock();
-    }
-  }, 1000);
-}
-
 function stopTurnClock() {
   if (!state.turnClock) return;
   clearInterval(state.turnClock);
   state.turnClock = null;
 }
 
+/** Quiet has no tool rows, so the live parent is built from the turn tally. */
+function quietLiveParts() {
+  const stats = state.turn?.stats;
+  if (!stats) return [];
+  const fake = [];
+  for (let i = 0; i < (stats.edits || 0); i += 1) fake.push({ title: 'edit_file_v2', status: 'completed' });
+  for (let i = 0; i < (stats.files || 0); i += 1) fake.push({ title: 'read_file_v2', status: 'completed' });
+  for (let i = 0; i < (stats.searches || 0); i += 1) {
+    fake.push({ title: 'ripgrep_raw_search', status: 'completed' });
+  }
+  for (let i = 0; i < (stats.browsers || 0); i += 1) fake.push({ title: 'browser_navigate', status: 'completed' });
+  for (let i = 0; i < (stats.commands || 0); i += 1) {
+    fake.push({ title: 'run_terminal_command_v2', rawInput: { command: 'x' }, status: 'completed' });
+  }
+  if (!fake.length) return [];
+  return workCopy(fake, { live: true }).parts;
+}
+
+/** The one line at the bottom while a turn has not started a work fold yet. */
+function liveSummaryParts() {
+  if (state.verbosity === 'quiet') {
+    const extra = quietLiveParts();
+    if (extra.length) return extra;
+  }
+  if (state.thinking) return [{ t: 'Thinking' }];
+  return [{ t: 'Planning next moves' }];
+}
+
+function phaseList() {
+  if (state.bundle?.card?.isConnected) return state.bundle.card.querySelector('.bundle-list');
+  if (state.liveFold?.isConnected) return state.liveFold.querySelector('.beats');
+  return null;
+}
+
 /**
- * The line that says the turn is still going, or how long it took.
+ * Thinking and Planning next moves sit under the work summary. Each is one
+ * line until it is opened. Planning shows between steps; a running tool or
+ * a live thought takes its place.
+ */
+function syncPhase() {
+  if (state.replaying || !state.turn || state.bundle?.settled) return;
+  const list = phaseList();
+  if (!list) return;
+  const busy = state.bundle?.items?.some((it) => {
+    const s = it.rec?.status || 'completed';
+    return s === 'in_progress' || s === 'pending';
+  });
+  const show = !state.thinking && !busy;
+  let plan = list.querySelector(':scope > .beat.planning');
+  if (!show) {
+    plan?.remove();
+    return;
+  }
+  if (!plan) {
+    plan = document.createElement('details');
+    plan.className = 'beat planning';
+    plan.innerHTML = '<summary><span class="line">Planning next moves</span></summary><div class="body"></div>';
+    list.append(plan);
+  } else {
+    list.append(plan);
+  }
+}
+
+function ensureLiveFold() {
+  if (state.bundle?.card?.isConnected) return null;
+  if (state.liveFold?.isConnected) return state.liveFold;
+  const el = document.createElement('details');
+  el.className = 'turn-live live';
+  el.innerHTML = '<summary><span class="label"></span></summary><div class="beats"></div>';
+  state.liveFold = el;
+  state.statusEl = el;
+  return el;
+}
+
+/** While the turn runs, keep the summary at the bottom. The anchor is where it rests once the turn ends. */
+function parkBundle(bundle) {
+  if (!bundle?.card?.isConnected || state.replaying || !state.turn || bundle.settled) return;
+  if (!bundle.anchor) {
+    const anchor = document.createElement('span');
+    anchor.className = 'bundle-anchor';
+    bundle.card.after(anchor);
+    bundle.anchor = anchor;
+  }
+  els.transcript.appendChild(bundle.card);
+}
+
+function unparkBundle(bundle) {
+  if (!bundle?.anchor?.isConnected || !bundle.card) return;
+  bundle.anchor.replaceWith(bundle.card);
+  bundle.anchor = null;
+}
+
+function pinLive() {
+  if (state.replaying || !state.turn) return;
+  if (state.bundle?.card?.isConnected && !state.bundle.settled) {
+    parkBundle(state.bundle);
+    return;
+  }
+  if (state.liveFold?.isConnected) els.transcript.appendChild(state.liveFold);
+}
+
+function retireLiveFold() {
+  const el = state.liveFold;
+  state.liveFold = null;
+  if (state.statusEl === el) state.statusEl = null;
+  if (!el?.isConnected) return;
+  const beats = el.querySelector('.beats');
+  if (beats) {
+    for (const child of [...beats.children]) {
+      if (child.classList.contains('planning')) child.remove();
+      else el.before(child);
+    }
+  }
+  el.remove();
+}
+
+/**
+ * The line that says the turn is still going.
  *
  * Cursor writes "Worked for 7m 3s" / "Thought for 1s" above the answer. While
- * the turn is live the same slot says "Working… 12s" and stays at the bottom
- * of the stream, so a finished-looking command cannot be mistaken for the end.
+ * the turn is live the bottom line is the work summary ("Editing 9 files, …")
+ * with a chevron, or "Thinking" / "Planning next moves" before any step.
  */
 function paintLiveStatus() {
-  if (state.replaying) return;
-  const el = state.statusEl && state.statusEl.isConnected ? state.statusEl : div('turn-status live');
-  el.className = 'turn-status live';
-  el.setAttribute('aria-live', 'polite');
-  paintParts(el, liveStatusParts());
-  state.statusEl = el;
+  if (state.replaying || !state.turn) return;
+  if (state.bundle?.card?.isConnected) {
+    paintBundle(state.bundle);
+    syncPhase();
+    parkBundle(state.bundle);
+    retireLiveFold();
+    scrollDown();
+    return;
+  }
+  const el = ensureLiveFold();
+  paintParts(el.querySelector('.label'), liveSummaryParts());
+  syncPhase();
   els.transcript.appendChild(el);
-  startTurnClock();
   scrollDown();
 }
 
 function dropLiveStatus() {
-  if (!state.statusEl?.classList.contains('live')) return;
-  state.statusEl.remove();
-  state.statusEl = null;
   stopTurnClock();
+  if (state.bundle?.card && !state.replaying) {
+    state.bundle.card.querySelectorAll('.beat.planning').forEach((n) => n.remove());
+    if (!state.bundle.settled) {
+      state.bundle.settled = true;
+      paintBundle(state.bundle);
+    }
+    unparkBundle(state.bundle);
+  }
+  retireLiveFold();
+  if (state.statusEl?.classList.contains('live')) {
+    state.statusEl.remove();
+    state.statusEl = null;
+  }
 }
 
 function beginTurn(rec) {
@@ -1125,10 +1249,11 @@ function beginTurn(rec) {
     started: rec.ts || state.now || Date.now(),
     worked: false,
     answer: null,
-    stats: { files: 0, searches: 0, edits: 0, commands: 0, other: 0 },
+    stats: { files: 0, searches: 0, edits: 0, commands: 0, browsers: 0, other: 0 },
   };
   // Quiet folds a whole turn's reasoning into one block; a new turn gets its own.
   state.quietThinking = null;
+  state.liveFold = null;
   paintLiveStatus();
 }
 
@@ -1145,15 +1270,14 @@ function endTurn(rec) {
   }
   settleRunningTools();
   closeThinking();
+  dropLiveStatus();
   if (state.streamBody) state.streamBody.style.minHeight = '';
   if (state.stream?.classList?.contains('agent')) syncAgentMdCopy(state.stream);
   const started = state.turn?.started || rec.ts;
   const durationMs =
     rec.durationMs > 0 ? rec.durationMs : rec.ts && started ? rec.ts - started : 0;
   const worked = Boolean(state.turn?.worked);
-  const el = state.statusEl && state.statusEl.isConnected ? state.statusEl : div('turn-status');
-  el.className = 'turn-status';
-  el.removeAttribute('aria-live');
+  const el = div('turn-status');
   const parts = turnCopy({ durationMs, worked }).parts;
   // A finished job always says what it did. Quiet hides the tool rows, so the
   // tally is the only description there; at other levels the agent's own answer
@@ -1166,6 +1290,10 @@ function endTurn(rec) {
   const answer = state.turn?.answer;
   if (answer?.isConnected) answer.before(el);
   else if (!el.isConnected) add(el, { keepStream: true });
+  const recs = state.turn?.fileRecs || [];
+  // A cache paint settles an unfinished turn without a real turn_end. The
+  // file list belongs to the finished turn, so wait for that record.
+  if (recs.length && rec?.kind === 'turn_end') publishFiles(recs);
   state.statusEl = null;
   state.turn = null;
   decorate(els.transcript);
@@ -1186,6 +1314,7 @@ function settleRunningTools() {
   }
   if (!state.bundle) return;
   for (const it of state.bundle.items) {
+    if (!it.row) continue;
     const s = it.rec.status;
     if (s === 'in_progress' || s === 'pending') {
       it.rec.status = 'cancelled';
@@ -1208,12 +1337,9 @@ function add(node, { keepStream = false } = {}) {
   }
   const stick = nearBottom();
   els.transcript.appendChild(node);
-  // A live "Working…" line belongs at the bottom of the stream, after
-  // whatever just arrived — otherwise the last thing you see is a finished
-  // command and there is no way to tell the turn is still going.
-  if (state.statusEl?.classList.contains('live')) {
-    els.transcript.appendChild(state.statusEl);
-  }
+  // The live summary stays at the bottom of the stream, after whatever just
+  // arrived — otherwise the last thing you see is a finished command.
+  pinLive();
   decorate(node);
   scrollDown(stick);
   syncToBottom();
@@ -1323,35 +1449,122 @@ function takePendingEcho(rec) {
 
 /**
  * Keep what you were typing with the chat it belongs to. Switching used to
- * carry the same words into the next box.
+ * carry the same words into the next box. The host also holds the draft so
+ * the computer and the phone can share it.
  */
 function saveDraft(sessionId = state.sessionId) {
   if (!sessionId) return;
   const text = els.box.value;
   if (!text && !state.attachments.length) {
     state.drafts.delete(sessionId);
-    return;
+  } else {
+    state.drafts.set(sessionId, {
+      text,
+      attachments: state.attachments.slice(),
+    });
   }
-  state.drafts.set(sessionId, {
-    text,
-    attachments: state.attachments.slice(),
-  });
+  if (sessionId !== state.sessionId || state.draftApplying) return;
+  state.draftAt = Date.now();
+  clearTimeout(state.draftTimer);
+  state.draftTimer = setTimeout(() => {
+    if (state.sessionId !== sessionId) return;
+    sendOp({
+      op: 'session.draft',
+      sessionId,
+      text: els.box.value,
+      at: state.draftAt,
+    });
+  }, 250);
 }
 
 function loadDraft(sessionId) {
+  clearTimeout(state.draftTimer);
   const draft = sessionId ? state.drafts.get(sessionId) : null;
+  state.draftApplying = true;
   els.box.value = draft?.text || '';
   state.attachments = draft?.attachments ? draft.attachments.slice() : [];
+  state.draftAt = Date.now();
+  state.draftApplying = false;
   renderAttachments();
   autosize();
 }
 
+/** Words waiting in Cursor's box, or typed on another phone. */
+function applyRemoteDraft(draft) {
+  if (!draft || draft.sessionId !== state.sessionId) return;
+  const text = String(draft.text ?? '');
+  const at = Number(draft.at) || 0;
+  if (at && at < state.draftAt) return;
+  if (els.box.value === text) {
+    state.draftAt = Math.max(state.draftAt, at);
+    return;
+  }
+  // Keep the caret where it was when the remote change is only a longer
+  // prefix — otherwise every sync yank the cursor to the end.
+  const was = els.box.value;
+  const start = els.box.selectionStart;
+  const end = els.box.selectionEnd;
+  state.draftApplying = true;
+  els.box.value = text;
+  state.draftAt = Math.max(at, Date.now());
+  state.draftApplying = false;
+  if (document.activeElement === els.box) {
+    const stillPrefix = text.startsWith(was) || was.startsWith(text);
+    if (stillPrefix) {
+      const next = Math.min(start, text.length);
+      const nextEnd = Math.min(end, text.length);
+      try {
+        els.box.setSelectionRange(next, nextEnd);
+      } catch {
+        /* some browsers refuse on empty */
+      }
+    } else {
+      const tip = text.length;
+      try {
+        els.box.setSelectionRange(tip, tip);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  if (state.sessionId) {
+    if (!text && !state.attachments.length) state.drafts.delete(state.sessionId);
+    else {
+      state.drafts.set(state.sessionId, {
+        text,
+        attachments: state.attachments.slice(),
+      });
+    }
+  }
+  autosize();
+  els.send.disabled = !(els.box.value.trim() || state.attachments.length);
+}
+
 function clearDraft(sessionId = state.sessionId) {
   if (sessionId) state.drafts.delete(sessionId);
+  if (sessionId === state.sessionId) state.draftAt = Date.now();
 }
 
 function renderStreaming(rec) {
   const isThought = rec.kind === 'agent_thought';
+  if (isThought && rec.durationMs && state.thinking) {
+    state.thinking.dataset.duration = String(rec.durationMs);
+  }
+  if (isThought && !rec.text && rec.durationMs) {
+    const el =
+      state.thinking ||
+      (rec.desktopBubbleId
+        ? els.transcript.querySelector(`details.think[data-bubble="${CSS.escape(rec.desktopBubbleId)}"]`)
+        : null);
+    if (el) {
+      el.dataset.duration = String(rec.durationMs);
+      if (el !== state.thinking) {
+        const sum = el.querySelector('summary');
+        if (sum) sum.textContent = thoughtLabel(rec.durationMs);
+      }
+    }
+    return;
+  }
   if (!state.stream || state.streamKind !== rec.kind) {
     state.streamKind = rec.kind;
     if (isThought) {
@@ -1363,21 +1576,36 @@ function renderStreaming(rec) {
         const d = state.quietThinking;
         // A fresh run: time this spell from here, and keep the earlier total.
         d.dataset.started = String(rec.ts || Date.now());
-        d.open = true;
+        if (rec.desktopBubbleId) d.dataset.bubble = rec.desktopBubbleId;
+        if (rec.durationMs) d.dataset.duration = String(rec.durationMs);
+        const sum = d.querySelector('summary');
+        if (sum) sum.textContent = 'Thinking';
+        d.open = d.dataset.userOpen === '1';
         state.thinking = d;
         state.stream = d.querySelector('.body');
         state.streamBody = null;
+        syncPhase();
       } else {
         const d = document.createElement('details');
-        d.className = 'think';
-        d.innerHTML = '<summary>Thinking</summary><div class="body"></div>';
-        // Open while it runs: on a phone this is the only sign of life between a
-        // prompt and the first words of an answer.
-        d.open = true;
+        d.className = 'think beat';
+        d.innerHTML = '<summary><span class="line">Thinking</span></summary><div class="body"></div>';
+        // One line until tapped. The parent summary is the sign of life.
+        d.open = false;
         d.dataset.started = String(rec.ts || Date.now());
-        add(d, { keepStream: true });
+        if (rec.desktopBubbleId) d.dataset.bubble = rec.desktopBubbleId;
+        if (rec.durationMs) d.dataset.duration = String(rec.durationMs);
+        d.querySelector('summary').addEventListener('click', () => {
+          d.dataset.userOpen = '1';
+        });
         state.thinking = d;
         if (state.verbosity === 'quiet') state.quietThinking = d;
+        // Once this turn has a work fold, later thoughts sit inside it,
+        // the way Cursor tucks "Thought 5s" between the Ran and Edited rows.
+        if (!state.bundle && state.turn && !state.replaying) paintLiveStatus();
+        const list = phaseList();
+        if (list) list.appendChild(d);
+        else add(d, { keepStream: true });
+        syncPhase();
         state.stream = d.querySelector('.body');
         state.streamBody = null;
         state.stream.dataset.raw = '';
@@ -1414,6 +1642,16 @@ function renderStreaming(rec) {
     body.innerHTML = markdown(state.stream.dataset.raw);
     body.style.minHeight = `${Math.max(floor, body.offsetHeight)}px`;
     enrichMarkdown(body);
+  }
+  // The first sentence of the answer stays above the work fold. Later
+  // sentences stay below it, and later steps keep joining the same fold.
+  if (!isThought && state.bundle && !state.bundle.placed && state.stream) {
+    state.stream.after(state.bundle.card);
+    state.bundle.placed = true;
+    if (state.bundle.anchor?.isConnected) state.bundle.card.after(state.bundle.anchor);
+  }
+  if (!isThought && state.bundle && state.turn && !state.replaying && !state.bundle.settled) {
+    parkBundle(state.bundle);
   }
   scrollDown(stick);
 }
@@ -1539,7 +1777,15 @@ function paintItemStatus(row, status, failed) {
   row.classList.toggle('failed', Boolean(failed) || status === 'failed');
   row.classList.toggle('done', status === 'completed' && !failed);
   const stateEl = row.querySelector('.state');
-  if (stateEl) stateEl.textContent = statusWord(status, failed);
+  if (stateEl) stateEl.textContent = status === 'completed' && !failed ? '' : statusWord(status, failed);
+}
+
+function statHtml(stats) {
+  if (!stats) return '';
+  const bits = [];
+  if (stats.added) bits.push(`<span class="plus">+${stats.added}</span>`);
+  if (stats.removed) bits.push(`<span class="minus">−${stats.removed}</span>`);
+  return bits.join(' ');
 }
 
 /** A file change shows its diff and nothing else; other lanes keep every block. */
@@ -1551,26 +1797,24 @@ function visibleBlocks(ui, blocks) {
 
 function bundleSummary(bundle) {
   const items = bundle.items;
-  const running = items.some((it) => {
-    const s = it.rec.status;
-    return s === 'in_progress' || s === 'pending';
-  });
-  if (bundle.lane === 'fileChange') {
-    const one = items.length === 1 ? displayLabel(items[0].rec) : '';
-    let added = 0;
-    let removed = 0;
-    let saw = false;
-    for (const it of items) {
-      const s = fileStats(it.rec);
-      if (!s) continue;
-      added += s.added;
-      removed += s.removed;
-      saw = true;
-    }
-    return { kind: 'edit', ...editCopy(items.length, one), stats: saw ? { added, removed } : null };
+  let added = 0;
+  let removed = 0;
+  let saw = false;
+  for (const it of items) {
+    const s = fileStats(it.rec);
+    if (!s) continue;
+    added += s.added;
+    removed += s.removed;
+    saw = true;
   }
-  const { files, searches } = groupTally(items);
-  return { kind: 'read', ...activityCopy({ files, searches, running }) };
+  const live = Boolean(state.turn) && !state.replaying && !bundle.settled;
+  return {
+    ...workCopy(
+      items.map((it) => ({ rec: it.rec, status: it.rec.status, ui: it.ui })),
+      { live },
+    ),
+    stats: saw ? { added, removed } : null,
+  };
 }
 
 function paintBundle(bundle) {
@@ -1578,11 +1822,7 @@ function paintBundle(bundle) {
   const { label, parts, stats } = bundleSummary(bundle);
   paintParts(card.querySelector('summary .label'), parts || [{ t: label }]);
   const statEl = card.querySelector('summary .stat');
-  if (statEl) {
-    statEl.innerHTML = stats
-      ? `<span class="plus">+${stats.added}</span> <span class="minus">−${stats.removed}</span>`
-      : '';
-  }
+  if (statEl) statEl.innerHTML = statHtml(stats);
   let status = 'completed';
   let failed = false;
   for (const it of bundle.items) {
@@ -1596,14 +1836,26 @@ function paintBundle(bundle) {
     card.classList.remove('done', 'failed');
   } else {
     card.classList.remove('running');
-    card.classList.toggle('failed', failed);
+    card.classList.remove('failed');
     card.classList.toggle('done', !failed);
     if (!failed && !card.dataset.opened) card.open = false;
   }
-  const stateEl = card.querySelector('summary .state');
-  if (stateEl) {
-    stateEl.textContent = statusWord(failed ? 'failed' : status, failed);
+  const items = bundle.items;
+  const mixed = items.some((it) => {
+    const ui = it.ui || classifyTool(it.rec);
+    return (
+      ui.lane === 'fileChange' ||
+      (ui.toolKind === 'execute' && ui.lane !== 'group') ||
+      isBrowserTool(it.rec)
+    );
+  });
+  for (const it of items) {
+    if (!it.row) continue;
+    it.row.hidden = mixed && it.row.classList.contains('explore');
   }
+  const stateEl = card.querySelector('summary .state');
+  if (stateEl) stateEl.textContent = status === 'in_progress' ? 'running…' : '';
+  syncPhase();
 }
 
 function flushBundle() {
@@ -1612,7 +1864,7 @@ function flushBundle() {
 
 function startBundle(lane) {
   const card = document.createElement('details');
-  card.className = `tool bundle ${lane === 'fileChange' ? 'files' : 'activity'}`;
+  card.className = 'tool bundle work';
   card.innerHTML = `
     <summary>
       <span class="row">
@@ -1626,33 +1878,53 @@ function startBundle(lane) {
   card.querySelector('summary').addEventListener('click', () => {
     card.dataset.opened = '1';
   });
-  add(card);
+  const list = card.querySelector('.bundle-list');
+  const fold = state.liveFold;
+  if (fold?.isConnected) {
+    for (const child of [...fold.querySelectorAll('.beats > *')]) {
+      if (!child.classList.contains('planning')) list.appendChild(child);
+    }
+    fold.replaceWith(card);
+    if (state.statusEl === fold) state.statusEl = null;
+    state.liveFold = null;
+  } else {
+    add(card);
+  }
   state.bundle = { lane, card, items: [] };
+  if (state.turn && !state.replaying) parkBundle(state.bundle);
   return state.bundle;
 }
 
+function asWork(ui, rec) {
+  return (
+    ui.lane === 'fileChange' ||
+    ui.lane === 'group' ||
+    ui.toolKind === 'execute' ||
+    isBrowserTool(rec)
+  );
+}
+
 function addBundleItem(rec, ui) {
-  if (state.bundle?.lane !== ui.lane) {
+  if (state.bundle?.lane !== 'work') {
     flushBundle();
-    startBundle(ui.lane);
+    startBundle('work');
   }
   const { card } = state.bundle;
   const row = document.createElement('div');
-  row.className = 'bundle-row';
+  row.className = `bundle-row shut${stepShown(rec) ? '' : ' explore'}`;
   row.innerHTML = `
     <span class="row">
-      <span class="kind">${esc(ui.toolKind)}</span>
+      <span class="kind"></span>
       <span class="name"></span>
       <span class="stat"></span>
       <span class="state">running…</span>
     </span>
     <div class="item-body"></div>`;
   row.querySelector('.name').textContent = displayLabel(rec);
-  const stats = fileStats(rec);
-  if (stats) {
-    row.querySelector('.stat').innerHTML =
-      `<span class="plus">+${stats.added}</span> <span class="minus">−${stats.removed}</span>`;
-  }
+  row.querySelector('.stat').innerHTML = statHtml(fileStats(rec));
+  row.querySelector('.row').addEventListener('click', () => {
+    row.classList.toggle('shut');
+  });
   const body = row.querySelector('.item-body');
   // A file change is its diff; the agent's "Edit applied successfully." text
   // would just be a line of noise above it.
@@ -1667,17 +1939,146 @@ function addBundleItem(rec, ui) {
 }
 
 /** Tally a quiet turn's work so its one-line summary can say what happened. */
-function quietCountTool(ui) {
+function quietCountTool(ui, rec) {
   const stats = state.turn?.stats;
   if (!stats) return;
   if (ui.lane === 'fileChange') stats.edits += 1;
+  else if (isBrowserTool(rec)) stats.browsers = (stats.browsers || 0) + 1;
   else if (ui.toolKind === 'search') stats.searches += 1;
   else if (ui.toolKind === 'read' || ui.lane === 'group') stats.files += 1;
   else if (ui.toolKind === 'execute') stats.commands += 1;
   else stats.other += 1;
 }
 
+/** Remember an edit so the turn can end with Cursor's "N Files Changed" card. */
+function noteFileEdit(rec) {
+  const id = rec.toolCallId;
+  if (!id) return;
+  // A path that arrives after the turn ended belongs on that turn's card,
+  // even if a newer turn is already open.
+  const home = state.fileHomes?.get(id);
+  if (home) {
+    const prev = home.recs.find((row) => row.toolCallId === id);
+    if (prev) {
+      if (rec.title) prev.title = rec.title;
+      if (rec.toolKind) prev.toolKind = rec.toolKind;
+      if (rec.rawInput) prev.rawInput = { ...prev.rawInput, ...rec.rawInput };
+      if (rec.content) prev.content = rec.content;
+      paintFilesHome(home);
+    }
+    return;
+  }
+  if (!state.turn) {
+    // The replay window can start after turn_start. Still collect the edits
+    // so the finished turn gets its file list.
+    state.turn = {
+      started: state.now || Date.now(),
+      worked: true,
+      answer: null,
+      stats: { files: 0, searches: 0, edits: 0, commands: 0, other: 0 },
+      fileRecs: [],
+    };
+  }
+  const list = state.turn.fileRecs || (state.turn.fileRecs = []);
+  const prev = list.find((row) => row.toolCallId === id);
+  if (prev) {
+    if (rec.title) prev.title = rec.title;
+    if (rec.toolKind) prev.toolKind = rec.toolKind;
+    if (rec.rawInput) prev.rawInput = { ...prev.rawInput, ...rec.rawInput };
+    if (rec.content) prev.content = rec.content;
+  } else if (classifyTool(rec).lane === 'fileChange') {
+    list.push({
+      kind: 'tool_call',
+      toolCallId: id,
+      title: rec.title,
+      toolKind: rec.toolKind,
+      rawInput: rec.rawInput,
+      content: rec.content,
+    });
+  } else {
+    return;
+  }
+}
+
+function publishFiles(recs) {
+  if (!recs?.length) return;
+  const files = changedFiles(recs);
+  const home = { recs, anchor: null, card: null };
+  if (!state.fileHomes) state.fileHomes = new Map();
+  for (const row of recs) if (row.toolCallId) state.fileHomes.set(row.toolCallId, home);
+  if (files.length) {
+    home.card = renderFilesChanged(files);
+    add(home.card, { keepStream: true });
+  } else {
+    home.anchor = document.createElement('div');
+    home.anchor.className = 'files-anchor';
+    add(home.anchor, { keepStream: true });
+  }
+}
+
+function paintFilesHome(home) {
+  const files = changedFiles(home.recs);
+  if (!files.length) return;
+  const next = renderFilesChanged(files);
+  if (home.card?.isConnected) home.card.replaceWith(next);
+  else if (home.anchor?.isConnected) home.anchor.replaceWith(next);
+  else add(next, { keepStream: true });
+  home.card = next;
+  home.anchor = null;
+}
+
+const FILES_PREVIEW = 4;
+
+/** The card under a finished answer: how many files changed, and by how much. */
+function renderFilesChanged(files) {
+  const card = div('files-changed');
+  const n = files.length;
+  const head = div('files-head');
+  const count = document.createElement('span');
+  count.className = 'count';
+  count.textContent = `${n} ${n === 1 ? 'File' : 'Files'} Changed`;
+  const review = document.createElement('button');
+  review.type = 'button';
+  review.className = 'review';
+  review.textContent = 'Review';
+  head.append(count, review);
+  const list = div('files-list');
+  for (const [i, file] of files.entries()) {
+    const row = div(i >= FILES_PREVIEW ? 'file-row extra' : 'file-row');
+    const lang = document.createElement('span');
+    lang.className = 'lang';
+    lang.textContent = file.lang || '';
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = file.name;
+    const stat = document.createElement('span');
+    stat.className = 'stat';
+    stat.innerHTML = statHtml(file);
+    row.append(lang, name, stat);
+    if (i >= FILES_PREVIEW) row.hidden = true;
+    list.append(row);
+  }
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'more';
+  const reveal = () => {
+    list.querySelectorAll('.file-row.extra').forEach((row) => {
+      row.hidden = false;
+    });
+    more.remove();
+  };
+  if (n > FILES_PREVIEW) {
+    more.textContent = `Show ${n - FILES_PREVIEW} more`;
+    more.onclick = reveal;
+    list.append(more);
+  }
+  review.onclick = reveal;
+  card.append(head, list);
+  return card;
+}
+
 function renderToolCall(rec) {
+  noteFileEdit(rec);
   const ui = classifyTool(rec);
   const level = state.verbosity;
   // Cursor hides a handful of internal bubbles; only verbose brings them back.
@@ -1697,12 +2098,18 @@ function renderToolCall(rec) {
   // Quiet is a summary: the turn's status line carries the tally, not the tool.
   if (level === 'quiet') {
     flushBundle();
-    quietCountTool(ui);
+    quietCountTool(ui, rec);
     if (rec.toolCallId) state.toolCards.set(rec.toolCallId, { hidden: true });
+    if (state.turn && !state.replaying) paintLiveStatus();
     return;
   }
 
-  if (ui.lane === 'fileChange' || ui.lane === 'group') {
+  closeThinking();
+  state.stream = null;
+  state.streamKind = null;
+  state.streamBody = null;
+
+  if (asWork(ui, rec)) {
     addBundleItem(rec, ui);
     return;
   }
@@ -1757,6 +2164,7 @@ function renderToolCall(rec) {
 }
 
 function renderToolUpdate(rec) {
+  noteFileEdit(rec);
   const card = rec.toolCallId ? state.toolCards.get(rec.toolCallId) : null;
   if (!card || card.hidden) return;
 
@@ -1777,20 +2185,19 @@ function renderToolUpdate(rec) {
     if (rec.rawInput) item.rec = { ...item.rec, rawInput: { ...item.rec.rawInput, ...rec.rawInput } };
     if (rec.rawOutput) item.rec = { ...item.rec, rawOutput: rec.rawOutput };
     if (rec.content) item.rec = { ...item.rec, content: rec.content };
-    if (rec.title) item.row.querySelector('.name').textContent = displayLabel(item.rec);
-    const stats = fileStats(item.rec);
-    if (stats) {
-      item.row.querySelector('.stat').innerHTML =
-        `<span class="plus">+${stats.added}</span> <span class="minus">−${stats.removed}</span>`;
-    }
-    const failed = rec.status === 'failed';
-    if (rec.status) paintItemStatus(item.row, rec.status, failed);
-    const blocks = rec.content || [];
-    const seen = Number(item.row.dataset.contentCount || 0);
-    if (blocks.length > seen) {
-      const fresh = blocks.slice(seen).filter((b) => item.ui?.lane !== 'fileChange' || b?.type === 'diff');
-      renderContent(item.row.querySelector('.item-body'), fresh, null);
-      item.row.dataset.contentCount = String(blocks.length);
+    if (item.row) {
+      item.row.classList.toggle('explore', !stepShown(item.rec));
+      item.row.querySelector('.name').textContent = displayLabel(item.rec);
+      item.row.querySelector('.stat').innerHTML = statHtml(fileStats(item.rec));
+      const failed = rec.status === 'failed';
+      if (rec.status) paintItemStatus(item.row, rec.status, failed);
+      const blocks = rec.content || [];
+      const seen = Number(item.row.dataset.contentCount || 0);
+      if (blocks.length > seen) {
+        const fresh = blocks.slice(seen).filter((b) => item.ui?.lane !== 'fileChange' || b?.type === 'diff');
+        renderContent(item.row.querySelector('.item-body'), fresh, null);
+        item.row.dataset.contentCount = String(blocks.length);
+      }
     }
     paintBundle(group);
     return;
@@ -1882,7 +2289,14 @@ function showOutput(card, out, failed) {
   scrollDown(stick);
 }
 
+/** "No Repo" is Cursor's empty-workspace mark, not a question. */
+function isWorkspaceMark(rec) {
+  const opts = rec?.options || [];
+  return opts.length > 0 && opts.every((opt) => /^no repo$/i.test(String(opt.name || opt.optionId || '').trim()));
+}
+
 function renderPermission(rec) {
+  if (isWorkspaceMark(rec)) return;
   const card = div('perm');
   const title = rec.toolCall?.title || rec.toolCall?.kind || 'this action';
   card.innerHTML = `
@@ -2301,10 +2715,28 @@ function applyPendingRestore() {
 function render(rec) {
   if (typeof rec.seq === 'number') state.lastSeq = Math.max(state.lastSeq, rec.seq);
   state.now = rec.ts || Date.now();
-  if (rec.kind !== 'tool_call' && rec.kind !== 'tool_update') flushBundle();
+  // Prose, approvals and notices do not split the work fold. Cursor keeps
+  // every step of the turn in one group; the first sentence sits above it.
+  if (
+    rec.kind !== 'tool_call' &&
+    rec.kind !== 'tool_update' &&
+    rec.kind !== 'agent_thought' &&
+    rec.kind !== 'agent_delta' &&
+    rec.kind !== 'permission_request' &&
+    rec.kind !== 'permission_resolved' &&
+    rec.kind !== 'notice'
+  ) {
+    flushBundle();
+  }
 
   switch (rec.kind) {
     case 'user_message':
+      // The previous turn's marker may have been trimmed off the replay.
+      // Put its file list down before this new message.
+      if (state.turn?.fileRecs?.length) {
+        publishFiles(state.turn.fileRecs);
+        state.turn.fileRecs = [];
+      }
       // A later real send means the restored draft from an older interrupt
       // should not land in the box after replay finishes.
       if (state.replaying && !rec.echoed && !rec.waiting) state.pendingRestore = null;
@@ -2314,6 +2746,18 @@ function render(rec) {
     case 'agent_thought':
       renderStreaming(rec);
       break;
+    case 'thought_time': {
+      const el = rec.desktopBubbleId
+        ? els.transcript.querySelector(`details.think[data-bubble="${CSS.escape(rec.desktopBubbleId)}"]`)
+        : null;
+      if (el && rec.durationMs) {
+        el.dataset.duration = String(rec.durationMs);
+        const sum = el.querySelector('summary');
+        if (sum && !el.open) sum.textContent = thoughtLabel(rec.durationMs);
+        else if (sum && el !== state.thinking) sum.textContent = thoughtLabel(rec.durationMs);
+      }
+      break;
+    }
     case 'tool_call':
       renderToolCall(rec);
       break;
@@ -2459,8 +2903,20 @@ function agentMark(item) {
  * tapping either one puts you in that conversation. The repo is not repeated
  * here: rows live inside the repo's accordion, so the title is enough.
  */
+function relTime(at) {
+  const ms = typeof at === 'number' && at > 1e11 ? at : Date.parse(at || '') || 0;
+  if (!ms) return '';
+  const min = Math.max(1, Math.round((Date.now() - ms) / 60000));
+  if (min < 60) return `${min}m`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h`;
+  return `${Math.round(hr / 24)}d`;
+}
+
 function sessionRow(item) {
   const row = div('session' + (item.id && item.id === state.sessionId ? ' active' : ''));
+  const dot = document.createElement('span');
+  dot.className = 'rail-dot';
   const meta = div('meta');
 
   const name = document.createElement('span');
@@ -2468,7 +2924,15 @@ function sessionRow(item) {
   name.textContent = item.title || 'session';
   meta.append(name);
 
-  row.append(agentMark(item), meta);
+  const env = document.createElement('span');
+  env.className = 'rail-env';
+  env.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 18h10a4 4 0 0 0 0-8 5 5 0 0 0-9.6-1.5A3.5 3.5 0 0 0 7 18z"/></svg>';
+  const age = document.createElement('span');
+  age.className = 'age';
+  age.textContent = relTime(item.at);
+
+  row.append(dot, meta, env, age);
 
   // Only Auto's own list can be tidied; a chat belongs to the IDE.
   if (item.session) {
@@ -2624,7 +3088,11 @@ function repoSection(repo, stored, activeKey) {
   const details = document.createElement('details');
   details.className = 'repo';
   details.dataset.folder = repo.folder;
-  details.open = stored ? stored.has(key) : Boolean(activeKey && key === activeKey);
+  details.open = stored
+    ? stored.has(key)
+    : repo.collapsed != null
+      ? !repo.collapsed
+      : Boolean(activeKey && key === activeKey);
 
   const summary = document.createElement('summary');
   summary.className = 'repo-head';
@@ -2635,8 +3103,9 @@ function repoSection(repo, stored, activeKey) {
   caret.className = 'repo-caret';
   caret.setAttribute('aria-hidden', 'true');
   caret.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-    'stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+    repo.kind === 'home'
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H10l2 2h7.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>';
   summary.append(caret);
 
   const name = document.createElement('span');
@@ -2670,13 +3139,33 @@ function repoSection(repo, stored, activeKey) {
   summary.append(add);
 
   const body = div('repo-body');
+  const preview = 5;
   if (!repo.items.length) {
     body.append(said('rail-empty', 'No chats yet.'));
   } else {
-    for (const item of repo.items) body.append(sessionRow(item));
+    repo.items.forEach((item, i) => {
+      const row = sessionRow(item);
+      if (i >= preview) row.hidden = true;
+      body.append(row);
+    });
+    if (repo.items.length > preview) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'rail-more';
+      more.textContent = 'More';
+      more.onclick = () => {
+        body.querySelectorAll('.session').forEach((row) => {
+          row.hidden = false;
+        });
+        more.remove();
+      };
+      body.append(more);
+    }
   }
-  const desktop = desktopChatsBlock(repo);
-  if (desktop) body.append(desktop);
+  if (!repo.fromSidebar) {
+    const desktop = desktopChatsBlock(repo);
+    if (desktop) body.append(desktop);
+  }
 
   details.append(summary, body);
   details.addEventListener('toggle', () => {
@@ -2696,10 +3185,172 @@ function repoSection(repo, stored, activeKey) {
  * Chats/Projects rows and their date headings: a conversation always lives
  * somewhere, so grouping by where beats grouping by when.
  */
+function pinColor(name) {
+  const known = {
+    green: '#3dd68c',
+    blue: '#6ea8fe',
+    orange: '#e6a15c',
+    purple: '#c084fc',
+    red: '#f07178',
+    yellow: '#e6c15c',
+  };
+  if (known[name]) return known[name];
+  let n = 0;
+  for (const ch of String(name || '')) n = (n * 33 + ch.charCodeAt(0)) >>> 0;
+  return `hsl(${n % 360} 62% 58%)`;
+}
+
+function sessionItem(s) {
+  return {
+    session: true,
+    id: s.id,
+    chatId: s.desktopThreadId || null,
+    title: s.title || folderName(s.folder) || 'session',
+    folder: s.folder,
+    project: folderName(s.folder),
+    agent: s.agent || 'cursor',
+    at: Date.parse(s.updatedAt || s.createdAt || '') || 0,
+  };
+}
+
+function reposFromSidebar(sidebar) {
+  const byThread = new Map(
+    state.sessions.filter((s) => s.desktopThreadId).map((s) => [s.desktopThreadId, s]),
+  );
+  const repos = (sidebar.repos || []).map((repo) => ({
+    folder: repo.folder || '',
+    name: repo.name,
+    kind: repo.kind,
+    collapsed: repo.collapsed,
+    fromSidebar: true,
+    inCursor: false,
+    items: (repo.chats || []).map((chat) => {
+      const known = byThread.get(chat.id);
+      if (known) return sessionItem(known);
+      return {
+        session: false,
+        id: null,
+        chatId: chat.id,
+        title: chat.title,
+        folder: chat.folder || repo.folder,
+        at: chat.at || 0,
+      };
+    }),
+  }));
+  const seen = new Set(repos.flatMap((repo) => repo.items.map((item) => item.id).filter(Boolean)));
+  for (const s of state.sessions) {
+    if (seen.has(s.id)) continue;
+    const key = folderKey(s.folder);
+    let repo = repos.find((row) => folderKey(row.folder) === key);
+    if (!repo) {
+      repo = {
+        folder: s.folder || '',
+        name: folderName(s.folder) || 'No Repo',
+        kind: s.folder ? 'folder' : 'home',
+        collapsed: false,
+        fromSidebar: true,
+        inCursor: false,
+        items: [],
+      };
+      repos.push(repo);
+    }
+    repo.items.push(sessionItem(s));
+    repo.items.sort((a, b) => (b.at || 0) - (a.at || 0));
+  }
+  return repos;
+}
+
+function paintPinned() {
+  const wrap = div('rail-projects');
+  const head = div('rail-section');
+  const label = document.createElement('span');
+  label.textContent = 'Projects';
+  const plus = document.createElement('button');
+  plus.type = 'button';
+  plus.className = 'rail-section-add';
+  plus.textContent = '+';
+  plus.title = 'New Project';
+  plus.setAttribute('aria-label', 'New Project');
+  plus.onclick = () => $('new-session').click();
+  head.append(label, plus);
+  wrap.append(head);
+
+  const fresh = div('rail-link');
+  fresh.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/></svg>';
+  const freshName = document.createElement('span');
+  freshName.textContent = 'New Project';
+  fresh.append(freshName);
+  fresh.onclick = () => $('new-session').click();
+  wrap.append(fresh);
+
+  const sub = div('rail-sub');
+  sub.textContent = 'Pinned';
+  wrap.append(sub);
+
+  const pinned = state.sidebar?.pinned || [];
+  const preview = 5;
+  pinned.forEach((project, i) => {
+    const row = div('session pin');
+    if (i >= preview) row.hidden = true;
+    const dot = document.createElement('span');
+    dot.className = 'rail-dot pin';
+    dot.style.color = pinColor(project.color || project.name);
+    const meta = div('meta');
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = project.name;
+    meta.append(name);
+    const age = document.createElement('span');
+    age.className = 'age';
+    age.textContent = relTime(project.at);
+    if (project.cloud) {
+      const env = document.createElement('span');
+      env.className = 'rail-env';
+      env.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 18h10a4 4 0 0 0 0-8 5 5 0 0 0-9.6-1.5A3.5 3.5 0 0 0 7 18z"/></svg>';
+      row.append(dot, meta, env, age);
+    } else row.append(dot, meta, age);
+    actsAsButton(row, () => {
+      const known = state.sessions.find((s) => s.desktopThreadId === project.id);
+      if (known) return attach(known.id);
+      if (project.id && project.folder) {
+        sendOp({ op: 'desktop.continue', chatId: project.id, folder: project.folder });
+        return undefined;
+      }
+      if (project.folder) createSession(project.folder);
+      else $('new-session').click();
+      return undefined;
+    });
+    wrap.append(row);
+  });
+  if (pinned.length > preview) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'rail-more';
+    more.textContent = 'More';
+    more.onclick = () => {
+      wrap.querySelectorAll('.session.pin').forEach((row) => {
+        row.hidden = false;
+      });
+      more.remove();
+    };
+    wrap.append(more);
+  }
+
+  const reposHead = div('rail-section');
+  const reposLabel = document.createElement('span');
+  reposLabel.textContent = 'Repositories';
+  reposHead.append(reposLabel);
+  wrap.append(reposHead);
+  els.rail.append(wrap);
+}
+
 function renderRail() {
   els.rail.innerHTML = '';
-  const repos = railRepos();
-  if (!repos.length) {
+  paintPinned();
+  const repos = state.sidebar?.repos?.length ? reposFromSidebar(state.sidebar) : railRepos();
+  if (!repos.length && !(state.sidebar?.pinned || []).length) {
     els.rail.append(said('rail-empty', 'No projects yet — start a new session.'));
     return;
   }
@@ -2707,6 +3358,7 @@ function renderRail() {
   const mine = state.sessions.find((s) => s.id === state.sessionId);
   const activeKey = folderKey(mine?.folder);
   for (const repo of repos) els.rail.append(repoSection(repo, stored, activeKey));
+  applyRailFilter();
 }
 
 /**
@@ -2838,14 +3490,35 @@ function renderModels(models) {
  * even though a model was selected. Fall back to the friendly name (and to a
  * label Cursor's menu would show) so an already-wrong stored value still paints.
  */
+function rememberParameter(id, value) {
+  const parameter = state.modelControls?.parameters?.find((item) => item.id === id);
+  if (parameter) parameter.value = value;
+  updateModelPresentation();
+}
+
+function paintBuiltinParameters(modelId) {
+  const next = controlsFor(modelId);
+  const current = state.modelControls;
+  const same =
+    current?.status === 'ok' &&
+    Boolean(current.auto) === Boolean(next.auto) &&
+    current.model === next.model &&
+    current.parameters?.length;
+  if (same) {
+    next.parameters = next.parameters.map((parameter) => {
+      const kept = current.parameters.find((item) => item.id === parameter.id);
+      return kept ? { ...parameter, value: kept.value } : parameter;
+    });
+  }
+  renderModelControls(next);
+}
+
 function selectModel(modelId, modelName) {
+  paintBuiltinParameters(modelId);
   if (!els.model.options.length) return;
   const automatic = modelId === 'default[]';
   els.modelAuto.checked = automatic;
-  if (automatic) {
-    renderModelControls({ status: 'ok', auto: true, model: null, parameters: [] });
-    return;
-  }
+  if (automatic) return;
   const options = [...els.model.options];
   if (modelId && options.some((o) => o.value === modelId)) {
     els.model.value = modelId;
@@ -2867,7 +3540,7 @@ function selectModel(modelId, modelName) {
     .sort((a, b) => b.textContent.length - a.textContent.length)[0];
   if (byPrefix) els.model.value = byPrefix.value;
   renderModelList();
-  updateModelPresentation();
+  paintBuiltinParameters(els.model.value);
 }
 
 function selectedModelLabel() {
@@ -2891,7 +3564,7 @@ function updateModelPresentation() {
   els.modelChoice.disabled = Boolean(state.modelUpdating);
 
   const parameters = state.modelControls?.parameters || [];
-  const thinking = parameters.find((parameter) => /^(reasoning|effort)$/i.test(parameter.id));
+  const thinking = parameters.find((parameter) => /^(reasoning|effort|reasoning_effort)$/i.test(parameter.id));
   const fast = parameters.find((parameter) => parameter.id === 'fast' && parameter.value);
   const parts = [model, thinking?.value, fast ? 'Fast' : null].filter(Boolean);
   els.modelSummary.textContent = parts.join(' · ') || 'Model';
@@ -3005,7 +3678,6 @@ function setModelUpdating(updating, text = 'Updating Cursor…') {
  * starts from the bottom rather than from wherever it was last seen.
  */
 function setModelSheet(open) {
-  if (open && els.modelAuto.checked) return;
   if (!open) {
     if (els.modelSheet.hidden) return;
     // Leave by the same edge it arrived from: the panel falls, the veil
@@ -3029,13 +3701,7 @@ function setModelSheet(open) {
   void els.modelSheet.offsetHeight;
   els.modelSheet.dataset.panel = 'in';
   els.modelSheet.dataset.veil = 'in';
-  const meta = state.sessions.find((session) => session.id === state.sessionId);
-  if (meta?.kind === 'desktop') {
-    setModelUpdating(true, 'Reading Cursor…');
-    sendOp({ op: 'session.modelControls', sessionId: state.sessionId });
-  } else {
-    setModelUpdating(false);
-  }
+  setModelUpdating(false);
 }
 
 /** Paint the same controls Cursor puts in its model settings sheet. */
@@ -3047,13 +3713,14 @@ function renderModelControls(controls) {
   els.modelParametersGroup.hidden = true;
   setModelPage('settings');
   updateModelPresentation();
-  if (!state.modelControls || automatic) {
+  const parameters = state.modelControls?.parameters || [];
+  if (!state.modelControls || (automatic && !parameters.length)) {
     setModelUpdating(false);
     sizeModelRail();
     return;
   }
 
-  for (const parameter of state.modelControls.parameters || []) {
+  for (const parameter of parameters) {
     const row = document.createElement('div');
     row.className = 'model-config-row';
     const copy = document.createElement('span');
@@ -3078,7 +3745,7 @@ function renderModelControls(controls) {
       track.className = 'model-switch-track';
       track.setAttribute('aria-hidden', 'true');
       input.onchange = () => {
-        setModelUpdating(true);
+        rememberParameter(parameter.id, input.checked);
         sendOp({
           op: 'session.modelParameter',
           sessionId: state.sessionId,
@@ -3104,7 +3771,7 @@ function renderModelControls(controls) {
     }
     select.value = parameter.value;
     select.onchange = () => {
-      setModelUpdating(true);
+      rememberParameter(parameter.id, select.value);
       sendOp({
         op: 'session.modelParameter',
         sessionId: state.sessionId,
@@ -3518,24 +4185,18 @@ function connect() {
       renderModels(msg.catalog?.models);
       renderModes(msg.catalog?.modes);
       state.modelControls = null;
+      els.modelAuto.checked = false;
       els.modelParameters.innerHTML = '';
       setModelUpdating(false);
+      if (msg.modelControls?.status === 'ok') renderModelControls(msg.modelControls);
+      else if (msg.meta?.model) paintBuiltinParameters(msg.meta.model);
       if (msg.projects) state.projects = msg.projects;
+      if (msg.sidebar) state.sidebar = msg.sidebar;
       if (msg.chats) state.chats = msg.chats;
       state.replaying = true;
       applyMeta(msg.meta);
       // The chat being opened must be reachable, even in a repo left shut.
       openRepoFor(msg.meta?.folder);
-      if (msg.meta?.kind === 'desktop') {
-        sendOp({ op: 'session.modelControls', sessionId: msg.sessionId });
-      } else {
-        renderModelControls({
-          status: 'ok',
-          auto: msg.meta?.model === 'default[]',
-          model: msg.meta?.modelName || msg.meta?.model || null,
-          parameters: [],
-        });
-      }
       renderRail();
       // Panes first (quiet), so replayed terminal chunks have somewhere to land
       // and the remembered active tab can win after restoreViews.
@@ -3600,6 +4261,7 @@ function connect() {
         state.focusComposer = false;
         focusComposer();
       }
+      if (msg.draft) applyRemoteDraft({ sessionId: msg.sessionId, ...msg.draft });
       return;
     }
 
@@ -3610,6 +4272,7 @@ function connect() {
 
     if (msg.type === 'projects') {
       state.projects = msg.projects || [];
+      if (msg.sidebar) state.sidebar = msg.sidebar;
       renderRail();
       renderNewbie();
       return;
@@ -3656,6 +4319,11 @@ function connect() {
     if (msg.type === 'model.set' || msg.type === 'model.parameter') {
       if (msg.sessionId !== state.sessionId) return;
       if (msg.type === 'model.set' && !msg.set) setModelUpdating(false);
+      return;
+    }
+
+    if (msg.type === 'draft') {
+      applyRemoteDraft(msg);
       return;
     }
 
@@ -4009,7 +4677,7 @@ function slashCommands() {
       name: 'Model',
       hint: 'Choose a model and its parameters',
       run: () => {
-        if (!els.modelAuto.checked) setModelSheet(true);
+        setModelSheet(true);
       },
     },
     { id: 'new', name: 'New session', hint: 'Start in a folder', run: () => $('new-session').click() },
@@ -4244,6 +4912,8 @@ els.stop.onclick = () => sendOp({ op: 'cancel', sessionId: state.sessionId });
 els.box.addEventListener('input', () => {
   autosize();
   slashSync();
+  saveDraft();
+  els.send.disabled = !(els.box.value.trim() || state.attachments.length);
 });
 els.box.addEventListener('keydown', (e) => {
   if (slashKey(e)) return;
@@ -4678,6 +5348,43 @@ $('new-session').onclick = () => {
   setRail(false);
   setNewbie(true);
 };
+
+$('rail-new').onclick = () => $('new-session').click();
+$('rail-search').onclick = () => {
+  const input = $('rail-filter');
+  input.hidden = !input.hidden;
+  if (!input.hidden) input.focus();
+  else {
+    input.value = '';
+    renderRail();
+  }
+};
+$('rail-filter').addEventListener('input', () => {
+  if (!$('rail-filter').value.trim()) renderRail();
+  else applyRailFilter();
+});
+$('rail-customize').onclick = () => $('sheet-open').click();
+
+function applyRailFilter() {
+  const q = ($('rail-filter')?.value || '').trim().toLowerCase();
+  if (!els.rail) return;
+  for (const repo of els.rail.querySelectorAll('.repo')) {
+    let any = !q;
+    for (const row of repo.querySelectorAll('.session')) {
+      const name = row.querySelector('.name')?.textContent?.toLowerCase() || '';
+      const show = !q || name.includes(q);
+      if (q) row.hidden = !show;
+      if (show) any = true;
+    }
+    const title = repo.querySelector('.repo-name')?.textContent?.toLowerCase() || '';
+    repo.hidden = Boolean(q) && !any && !title.includes(q);
+    if (q && (any || title.includes(q))) repo.open = true;
+  }
+  for (const row of els.rail.querySelectorAll('.rail-projects .session')) {
+    const name = row.querySelector('.name')?.textContent?.toLowerCase() || '';
+    if (q) row.hidden = !name.includes(q);
+  }
+}
 $('newbie-close').onclick = () => setNewbie(false);
 $('newbie').onclick = (e) => {
   if (e.target === $('newbie')) setNewbie(false);
@@ -4946,7 +5653,7 @@ function applyHost(host) {
   };
   const el = $('host-label');
   if (el) el.textContent = state.host.label || '…';
-  document.title = state.host.label ? `${state.host.label} · Auto` : 'Auto';
+  document.title = state.host.label ? `${state.host.label} · RS Cursor` : 'RS Cursor';
   if (!els.sheet.hidden) {
     $('host-nick').value = state.host.nick || '';
     $('host-nick').placeholder = state.host.hostname || 'Display name';
@@ -5126,18 +5833,16 @@ els.mode.onchange = () => {
 };
 els.model.onchange = () => {
   els.modelAuto.checked = false;
-  setModelUpdating(true);
-  updateModelPresentation();
+  paintBuiltinParameters(els.model.value);
   rememberModel(sessionAgent(), els.model.value);
   sendOp({ op: 'session.model', sessionId: state.sessionId, modelId: els.model.value });
 };
 els.modelAuto.onchange = () => {
   const automatic = els.modelAuto.checked;
   setModelPage('settings');
-  setModelUpdating(true);
+  paintBuiltinParameters(automatic ? 'default[]' : els.model.value);
   if (automatic) {
     rememberModel(sessionAgent(), 'default[]');
-    setModelSheet(false);
   }
   sendOp({
     op: 'session.auto',
@@ -5146,7 +5851,7 @@ els.modelAuto.onchange = () => {
   });
 };
 els.modelOpen.onclick = () => {
-  if (!els.modelAuto.checked) setModelSheet(true);
+  setModelSheet(true);
 };
 els.modelClose.onclick = () => setModelSheet(false);
 els.modelSheet.onclick = (e) => {

@@ -11,7 +11,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Session attach / catch-up
-generated: { by: agent, at: 2026-08-23T06:55:00Z }
+generated: { by: agent, at: 2026-09-25T14:55:00Z }
 ---
 
 # Continuing Cursor desktop chats
@@ -37,18 +37,22 @@ in that window used. If no window has the folder, Auto asks Cursor for
 port, Auto will not quit it by default — that closes every window — unless
 `AUTO_ALLOW_CURSOR_RESTART=1`. If none of that works, Auto falls back to
 [ACP](acp.md) with the same Auto-select preference and writes a notice.
+The next message from the phone tries the window again. When a chat opens,
+that message is typed into it and Cursor calls the model. A session adopted
+from the CLI is left on ACP. A desktop chat whose window is missing is
+opened the same way before the message is held.
 
 Desktop is the default path, so attaching does not announce that the chat
 lives in Cursor. A catch-up that leaves older history out still notes how
 many recent messages are shown.
 
-Continuing an existing desktop thread does **not** change its model.
+The phone and the computer share the model on a desktop thread. Changing it on either side updates the other. A send waits until the loaded chat is on that model.
 
 ## Into the IDE, and back out
 
 | | Into the IDE | Back out |
 | --- | --- | --- |
-| Mechanism | [Window](cursor-window.md) over the debug port; failing that, [bridge](desktop-bridge.md); failing that, outbox | Polling `state.vscdb` — [threads](desktop-threads.md) |
+| Mechanism | Words: [bridge](desktop-bridge.md) when the chat is not the one on screen, so the desktop is not switched to it. The [window](cursor-window.md) when that chat is already in front, when a picture must be pasted, or when the bridge refuses. Then the outbox. | Polling `state.vscdb` — [threads](desktop-threads.md) |
 | Code | `cursor-cdp.mjs`, `desktop-bridge.mjs`, `desktop-outbox.mjs` | `desktop-threads.mjs` |
 
 ## What the desktop keeps

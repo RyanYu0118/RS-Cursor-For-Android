@@ -813,11 +813,20 @@ if (existsSync(SRC)) {
     result = await machine({ theirs }).sendText({ threadId: THREAD, text: 'hello' });
     if (result.status !== 'unknown-thread') fail(`cdp send should not claim a chat it cannot see: ${result.status}`);
 
-    // A message someone is still writing is theirs; leave it alone.
+    // The phone and Cursor share one draft. A deliberate send replaces
+    // whatever was waiting, rather than refusing and stranding the message.
     const busy = new FakeWindow({ threadId: THREAD, hasComposer: true, composerText: 'half a thou' });
     result = await machine({ busy }).sendText({ threadId: THREAD, text: 'hello' });
-    if (result.status !== 'not-sendable') fail('cdp send should refuse a box with text in it');
-    if (busy.box !== 'half a thou') fail(`cdp send overwrote what was being typed: "${busy.box}"`);
+    if (result.status !== 'submitted') fail(`cdp send should replace a shared draft and submit, got ${JSON.stringify(result)}`);
+    if (busy.sent !== 'hello') fail(`cdp send should have typed the new words, got "${busy.sent}"`);
+    if (busy.box !== '') fail(`cdp send left "${busy.box}" behind after replacing the draft`);
+
+    // Same words already in the box — just submit them.
+    const matching = new FakeWindow({ threadId: THREAD, hasComposer: true, composerText: 'hello' });
+    result = await machine({ matching }).sendText({ threadId: THREAD, text: 'hello' });
+    if (result.status !== 'submitted') fail(`cdp send should submit a matching draft, got ${JSON.stringify(result)}`);
+    if (matching.sent !== null && matching.sent !== 'hello') fail('matching draft should not be typed again');
+    if (matching.box !== '') fail('matching draft should leave the box empty after Enter');
 
     // If Enter will not send, the box must be left as it was found.
     const stuck = new FakeWindow({ threadId: THREAD, hasComposer: true }, { submits: false });
@@ -1346,6 +1355,12 @@ if (existsSync(SRC)) {
     }
     if (isApproval('Copy message') || isApproval('Ran command') || isApproval('Review')) {
       fail('approval vocabulary should not catch ordinary controls');
+    }
+    if (!isApproval('Yes') || !isApproval('No')) {
+      fail('Yes and No on their own are approvals');
+    }
+    if (isApproval('No Repo')) {
+      fail('No Repo is the empty-workspace mark, not an approval');
     }
     // The bar offering to review file changes is not a question, and offering
     // "Undo All" to a phone as if it were one is how work gets thrown away.
@@ -2702,12 +2717,15 @@ if (existsSync(SRC)) {
     failed = true;
   }
   if (
-    !js.includes("op: 'session.modelControls'") ||
+    !js.includes("from './model-parameters.js'") ||
+    !js.includes('controlsFor(') ||
+    !readFileSync(join(ROOT, 'src/web/model-parameters.js'), 'utf8').includes("raw === 'default' || raw === 'default[]'") ||
     !js.includes("op: 'session.modelParameter'") ||
     !js.includes("op: 'session.auto'") ||
+    js.includes('Reading Cursor') ||
     !tg.includes("kind: 'cursorParam'")
   ) {
-    fail('web and Telegram must expose Cursor model parameters');
+    fail('model parameters are built into the page and are not loaded from the window');
     failed = true;
   }
   if (!tg.includes('debug|multitask|ask') && !tg.includes("'debug', 'multitask', 'ask'")) {
@@ -3049,7 +3067,7 @@ if (existsSync(SRC)) {
     fail('the web must apply host identity from hello and host.setNick');
     failed = true;
   }
-  if (!js.includes('document.title') || !js.includes('${state.host.label} · Auto')) {
+  if (!js.includes('document.title') || !js.includes('${state.host.label} · RS Cursor')) {
     fail('the tab title must lead with the host label so which machine is clear');
     failed = true;
   }
@@ -3570,6 +3588,32 @@ if (existsSync(SRC)) {
     fail('a desktop send must #expectEcho before typing into Cursor’s window');
     failed = true;
   }
+  const quietAt = desktopDeliver.indexOf('typeIn(false)');
+  const bridgeAt = desktopDeliver.indexOf('sendMessage(');
+  const loudAt = desktopDeliver.indexOf('typeIn(true)');
+  const syncAt = desktopDeliver.indexOf('#confirmDesktopModel(');
+  if (quietAt < 0 || bridgeAt < quietAt || loudAt < bridgeAt) {
+    fail('a text send must try the silent bridge before switching Cursor to that chat');
+    failed = true;
+  }
+  if (syncAt < 0 || syncAt > echoAt || desktopDeliver.includes('submitWithModel(')) {
+    fail('a desktop send must confirm the shared model before it is typed or bridged');
+    failed = true;
+  }
+  if (!desktopDeliver.includes("status: 'model-mismatch'") || !desktopPrompt.includes("result.status === 'model-mismatch'")) {
+    fail('a send must wait when the computer is not on the selected model');
+    failed = true;
+  }
+  if (
+    !sessionsJs.includes('setDraft(') ||
+    !sessionsJs.includes('#pullComposerDrafts') ||
+    !sessionsJs.includes('syncComposerDraft') ||
+    !js.includes('function applyRemoteDraft') ||
+    !js.includes("op: 'session.draft'")
+  ) {
+    fail('the phone and Cursor must share the unsent words in the chat box');
+    failed = true;
+  }
   if (!desktopPrompt.includes("result.status === 'queued'")) {
     fail('queued desktop sends must still be handled');
     failed = true;
@@ -3661,6 +3705,77 @@ if (existsSync(SRC)) {
     failed = true;
   }
   if (!failed) ok('v2 core: desktop echo matching');
+}
+
+// Model sheet values come from composerData plus the catalog, not a click.
+{
+  const { modelControlsFrom } = await import('../src/core/desktop-threads.mjs');
+  const controls = modelControlsFrom(
+    {
+      modelConfig: {
+        modelName: 'grok-4.7',
+        selectedModels: [
+          {
+            modelId: 'grok-4.7',
+            parameters: [
+              { id: 'context', value: '256k' },
+              { id: 'reasoning_effort', value: 'medium' },
+              { id: 'fast', value: 'true' },
+            ],
+          },
+        ],
+      },
+    },
+    [
+      {
+        name: 'grok-4.7',
+        clientDisplayName: 'Grok 4.7',
+        parameterDefinitions: [
+          {
+            id: 'context',
+            name: 'Context',
+            parameterType: {
+              enumParameter: {
+                values: [
+                  { value: '256k', displayName: '256K' },
+                  { value: '500k', displayName: '500K' },
+                ],
+              },
+            },
+          },
+          {
+            id: 'reasoning_effort',
+            name: 'Effort',
+            parameterType: {
+              enumParameter: {
+                values: [
+                  { value: 'medium', displayName: 'Medium' },
+                  { value: 'high', displayName: 'High' },
+                ],
+              },
+            },
+          },
+          { id: 'fast', name: 'Fast', parameterType: { booleanParameter: {} } },
+        ],
+      },
+    ],
+  );
+  const summary = controls.parameters.map((p) => `${p.id}:${p.value}`).join('|');
+  if (
+    controls.status !== 'ok' ||
+    controls.auto ||
+    controls.model !== 'Grok 4.7' ||
+    summary !== 'context:256K|reasoning_effort:Medium|fast:true' ||
+    controls.parameters[0].options.join(',') !== '256K,500K'
+  ) {
+    fail(`model controls should be read from stored composer data: ${JSON.stringify(controls)}`);
+  } else if (modelControlsFrom(null).status !== 'unknown-thread') {
+    fail('a missing chat must not invent model controls');
+  } else if (!modelControlsFrom({ modelConfig: { modelName: 'default', selectedModels: [{ modelId: 'default', parameters: [] }] } }).auto) {
+    fail('model id default is Auto');
+  } else {
+    ok('model controls read from composer data');
+  }
 }
 
 // Account usage shaping: Cursor Models / Other Models match the dashboard.
@@ -4154,6 +4269,89 @@ if (existsSync(SRC)) {
   }
 }
 
+{
+  try {
+    const { findCursorExe } = await import('../src/core/cursor-launch.mjs');
+    const custom = 'D:\\app\\cursor\\Cursor.exe';
+    const found = findCursorExe({
+      env: {},
+      exists: (p) => p === custom,
+      running: () => custom,
+    });
+    if (found !== custom) fail(`a running custom install should be used, got ${found}`);
+    else ok('v2 core: Cursor.exe is taken from the running process when the usual folders miss it');
+  } catch (e) {
+    fail(`v2 cursor exe: ${e.message}`);
+  }
+}
+
+// A pad session that could not open Cursor stays headless until the next
+// message. That message has to land in a computer chat and be submitted,
+// so the window calls the model instead of another ACP turn.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'auto-pad-ide-'));
+  let sessions;
+  try {
+    const { SessionManager } = await import('../src/core/sessions.mjs');
+    const { KIND } = await import('../src/core/transcript.mjs');
+    let failed = false;
+    sessions = new SessionManager({ stateDir: dir, defaultFolder: ROOT }).init();
+    const meta = sessions.create({ folder: ROOT, title: 'From the pad', agent: 'cursor' });
+    meta.preferWindow = true;
+    const sent = [];
+    sessions.cursor = {
+      newChat: async () => ({ status: 'created', threadId: 'pad-thread' }),
+      ensureWindow: async () => ({ status: 'showing' }),
+      sendText: async (opts) => {
+        sent.push(opts);
+        return { status: 'submitted' };
+      },
+      choose: async () => ({ status: 'already', picker: 'model', was: 'Auto' }),
+    };
+    const result = await sessions.prompt(meta.id, { text: 'hello from the pad' });
+    const after = sessions.get(meta.id);
+    if (after.kind !== 'desktop' || after.desktopThreadId !== 'pad-thread') {
+      fail(`the pad message should open a computer chat, got ${JSON.stringify(after)}`);
+      failed = true;
+    }
+    if (result?.status !== 'submitted' || sent[0]?.text !== 'hello from the pad') {
+      fail(`the message should be typed into that chat, got ${JSON.stringify(result)} ${JSON.stringify(sent)}`);
+      failed = true;
+    }
+    const notice = (await sessions.history(meta.id)).find(
+      (r) => r.kind === KIND.notice && /Opened this chat in Cursor/.test(r.text || ''),
+    );
+    if (!notice) {
+      fail('the transcript should say the chat moved into Cursor');
+      failed = true;
+    }
+    const adopted = sessions.create({ folder: ROOT, title: 'CLI', agent: 'cursor' });
+    sessions.get(adopted.id).adopted = true;
+    let acp = false;
+    sessions.ensureLive = async () => {
+      acp = true;
+      return { client: { prompt: async () => ({ stopReason: 'end_turn' }), agent: 'cursor' }, acpSessionId: 'acp' };
+    };
+    sessions.cursor.newChat = async () => {
+      fail('an adopted CLI session must not be opened in the IDE');
+      failed = true;
+      return { status: 'created', threadId: 'nope' };
+    };
+    await sessions.prompt(adopted.id, { text: 'stay on the cli' }).catch(() => {});
+    if (!acp) {
+      fail('an adopted session should still go to ACP');
+      failed = true;
+    }
+
+    if (!failed) ok('v2 core: a pad message opens a Cursor chat and submits it');
+  } catch (e) {
+    fail(`v2 pad into ide: ${e.message}`);
+  } finally {
+    for (const session of sessions?.list?.() || []) sessions.live.get(session.id)?.watcher?.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 // 1e4b. A turn that ends without a word. Upstream can drop an answer without
 // saying so, and the CLI reports the truncation as an ordinary end_turn — seen
 // as thinking stopping mid-word, then a finished turn and no reply. Recorded as
@@ -4567,7 +4765,7 @@ if (existsSync(SRC)) {
     check(
       'folded labels',
       folded.map((t) => t.label),
-      ['Explored 2 files, 1 search', 'Edited 2 files', 'npm test'],
+      ['Edited 2 files, explored 2 files, 1 search, ran 1 command'],
     );
 
     check(
@@ -4609,6 +4807,87 @@ if (existsSync(SRC)) {
       'thought',
       turnCopy({ durationMs: 1000, worked: false }).label,
       'Thought for 00:01',
+    );
+    const { thoughtLabel, workCopy } = await import('../src/core/desktop-tool-ui.mjs');
+    check('a short thought', thoughtLabel(3), 'Thought briefly');
+    check('two seconds of thought', thoughtLabel(1574), 'Thought 2s');
+    check('five seconds of thought', thoughtLabel(5210), 'Thought 5s');
+    check(
+      'a skill read',
+      displayLabel({
+        title: 'read_file_v2',
+        rawInput: { targetFile: 'C:\\Users\\Ryan Yu\\.cursor\\skills-cursor\\create-rule\\SKILL.md' },
+      }),
+      'Used create-rule',
+    );
+    check(
+      'a shell uses Cursor’s description',
+      displayLabel({
+        title: 'run_terminal_command_v2',
+        rawInput: { command: 'Get-ChildItem', commandDescription: 'See backup folder layout on R:' },
+      }),
+      'Ran See backup folder layout on R:',
+    );
+    const { changedFiles } = await import('../src/core/desktop-tool-ui.mjs');
+    check(
+      'files changed in a turn',
+      changedFiles([
+        {
+          kind: 'tool_call',
+          toolCallId: 'a',
+          title: 'edit_file_v2',
+          rawInput: { relativeWorkspacePath: 'src/web/desktop-tool-ui.js', added: 10, removed: 2 },
+        },
+        {
+          kind: 'tool_update',
+          toolCallId: 'a',
+          title: 'edit_file_v2',
+          rawInput: { relativeWorkspacePath: 'src/web/desktop-tool-ui.js', added: 113, removed: 28 },
+        },
+        {
+          kind: 'tool_call',
+          toolCallId: 'b',
+          title: 'edit_file_v2',
+          rawInput: { relativeWorkspacePath: 'src/web/desktop-tool-ui.mjs', added: 4, removed: 0 },
+        },
+        { kind: 'tool_call', toolCallId: 'c', title: 'read_file_v2', rawInput: { targetFile: 'readme.md' } },
+      ]).map((file) => `${file.lang} ${file.name} +${file.added} −${file.removed}`),
+      ['JS desktop-tool-ui.js +113 −28', 'JS desktop-tool-ui.mjs +4 −0'],
+    );
+    check(
+      'one work fold',
+      workCopy([
+        { title: 'edit_file_v2', status: 'completed' },
+        { title: 'read_file_v2', status: 'completed' },
+        { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+        { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+        { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+        { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+        { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+        { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+        { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+        { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+      ]).label,
+      'Edited 1 file, explored 1 file, ran 8 commands',
+    );
+    check(
+      'a live work fold names browser actions',
+      workCopy(
+        [
+          { title: 'edit_file_v2', status: 'completed' },
+          { title: 'read_file_v2', status: 'completed' },
+          { title: 'ripgrep_raw_search', status: 'completed' },
+          { title: 'mcp-cursor-ide-browser-browser_navigate', status: 'completed' },
+          { title: 'run_terminal_command_v2', rawInput: { command: 'npm test' }, status: 'completed' },
+        ],
+        { live: true },
+      ).label,
+      'Editing 1 file, explored 1 file, 1 search, 1 browser action, ran 1 command',
+    );
+    check(
+      'a browser step',
+      displayLabel({ title: 'mcp-cursor-ide-browser-browser_snapshot' }),
+      'Browser Snapshot',
     );
     check('no clock yet', turnCopy({ durationMs: 0, worked: true }).label, 'Done');
 
@@ -4715,11 +4994,11 @@ if (existsSync(SRC)) {
     const normal = renderTurn({ text: 'hi', tools });
     const quiet = renderTurn({ text: 'hi', tools, verbosity: 'quiet' });
     // Counts are wrapped in <b>…</b>, so match the words around them.
-    if (!normal.includes('Explored ') || !normal.includes('Edited a.css')) {
+    if (!normal.includes('explored') || !normal.includes('Edited a.css')) {
       fail(`normal should list tool lines, got ${normal}`);
     }
-    if ((normal.match(/▸|✓/g) || []).length < 2) fail('normal should draw a line per folded tool');
-    if (!quiet.includes('Explored ') || !quiet.includes('Edited a.css')) {
+    if ((normal.match(/▸|✓/g) || []).length < 1) fail('normal should draw the work fold');
+    if (!quiet.includes('explored') || !quiet.includes('Edited')) {
       fail(`quiet should still summarise, got ${quiet}`);
     }
     if ((quiet.match(/✓/g) || []).length) fail('quiet must not draw per-tool status lines');
@@ -4742,8 +5021,8 @@ if (existsSync(SRC)) {
     if (!js.includes('function quietCountTool') || !js.includes('verboseOutputText')) {
       fail('the web must render quiet summaries and verbose input/output');
     }
-    if (!js.includes('startTurnClock') || !js.includes('liveStatusParts')) {
-      fail('the web must tick the live turn time');
+    if (!js.includes('Planning next moves') || !js.includes('function paintLiveStatus')) {
+      fail('the web must show the live work summary, not only Working');
     }
     if (!js.includes('quietThinking') || !js.includes('reuseQuiet')) {
       fail('quiet must fold the turn’s thinking spells into one block');
@@ -4868,7 +5147,7 @@ if (existsSync(SRC)) {
     const { toolLabel, failureNote } = await import('../src/core/telegram.mjs');
     if (
       toolLabel({ title: 'run_terminal_command_v2', rawInput: { command: 'npm test -- --watch' } }) !==
-      'npm test -- --watch'
+      'Ran npm test -- --watch'
     ) {
       fail('a shell tool should be labelled with its command');
       failed = true;

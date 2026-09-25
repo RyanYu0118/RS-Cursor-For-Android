@@ -12,9 +12,9 @@
   blur — that read as the header being gradually blurred.
 -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-<meta name="apple-mobile-web-app-title" content="Auto" />
+<meta name="apple-mobile-web-app-title" content="RS Cursor" />
 <meta name="auto-build" content="" />
-<title>Auto</title>
+<title>RS Cursor</title>
 <link rel="manifest" href="/manifest.webmanifest" />
 <!-- Three tags cover every browser: .ico for old ones and Safari, the SVG for
      modern tabs, the PNG for iOS. Paths stay clean — `?v=` is for css/js. -->
@@ -86,14 +86,9 @@
 <div id="app">
   <aside id="rail">
     <div class="rail-head">
-      <svg class="brand-mark" viewBox="96 88 320 328" aria-hidden="true">
-        <path d="M140 372 L256 132" fill="none" stroke="currentColor" stroke-width="56" stroke-linecap="round"/>
-        <path d="M372 372 L256 132" fill="none" stroke="currentColor" stroke-width="56" stroke-linecap="round"/>
-        <path d="M230.79 248.5 A28 28 0 0 1 281.21 248.5 L295 155 L217 155 Z" fill="currentColor"/>
-        <circle cx="256" cy="372" r="32" fill="var(--usage-accent)"/>
-      </svg>
+      <img class="brand-mark" src="/rs-logo.png" alt="" />
       <span class="brand">
-        <span class="brand-name">Auto</span>
+        <span class="brand-name">RS Cursor</span>
         <span class="brand-host">
           <span id="conn" class="dot" role="status" aria-live="polite" title="Connecting…" aria-label="Connecting…"></span>
           <span id="host-label">…</span>
@@ -110,6 +105,25 @@
         </svg>
       </button>
     </div>
+    <nav class="rail-nav" aria-label="Sidebar">
+      <button type="button" id="rail-new" class="rail-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        New Chat
+      </button>
+      <button type="button" id="rail-search" class="rail-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        Search
+      </button>
+      <button type="button" id="rail-automations" class="rail-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2"/></svg>
+        Automations
+      </button>
+      <button type="button" id="rail-customize" class="rail-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="8" cy="7" r="1.6" fill="currentColor"/><circle cx="15" cy="12" r="1.6" fill="currentColor"/><circle cx="10" cy="17" r="1.6" fill="currentColor"/></svg>
+        Customize
+      </button>
+    </nav>
+    <input id="rail-filter" class="rail-filter" hidden placeholder="Search" aria-label="Search" />
     <div id="session-list"></div>
     <div class="rail-foot">
       <!-- Browser and terminals are optional panes — open from here, then
@@ -187,12 +201,7 @@
           as the rail — not an <img> of icon.svg — so a manual theme pick
           still matches. -->
       <div id="transcript-loading" class="transcript-loading" role="status" aria-live="polite">
-        <svg class="brand-mark loading-mark" viewBox="96 88 320 328" aria-hidden="true">
-          <path d="M140 372 L256 132" fill="none" stroke="currentColor" stroke-width="56" stroke-linecap="round"/>
-          <path d="M372 372 L256 132" fill="none" stroke="currentColor" stroke-width="56" stroke-linecap="round"/>
-          <path d="M230.79 248.5 A28 28 0 0 1 281.21 248.5 L295 155 L217 155 Z" fill="currentColor"/>
-          <circle cx="256" cy="372" r="32" fill="var(--usage-accent)"/>
-        </svg>
+        <img class="brand-mark loading-mark" src="/rs-logo.png" alt="" />
         <span>Loading conversation…</span>
       </div>
       <div id="transcript" aria-busy="true"></div>

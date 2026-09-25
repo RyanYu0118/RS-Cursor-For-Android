@@ -1,0 +1,19 @@
+---
+description: Start RS Cursor (Auto on port 4331) in the background via the scheduled task, never in a window the user can close
+alwaysApply: true
+---
+
+# Start RS Cursor in the background
+
+RS Cursor is the Auto host on port 4331. When it needs to be started or brought back after a crash, use the `AutoSupervise` scheduled task. The task runs `scripts/supervise-hidden.vbs` through `wscript.exe`, so there is no console window. Closing a terminal does not stop the service. Do not point the task at `node.exe` directly — that opens a window, and closing it kills the supervisor.
+
+```powershell
+Start-ScheduledTask -TaskName AutoSupervise
+```
+
+If the task is missing, install it once with `npm run autostart:install`, then start it the same way.
+
+- Do not run `npm run supervise`, `npm start`, or `node src/server/index.mjs` in a visible terminal.
+- Do not host it in an agent background shell either. Those shells are killed with the agent and take the service down.
+- If you are inside a live Auto session, restart with `POST /api/restart` so the supervisor brings it back. Do not kill the listener.
+- After starting, check `http://127.0.0.1:4331/api/health`.

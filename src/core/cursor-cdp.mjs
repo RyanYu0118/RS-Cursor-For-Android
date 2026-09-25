@@ -29,6 +29,7 @@
  * window only holds the messages it has scrolled into view, so it could never
  * be a source of history.
  */
+import { readFileSync } from 'node:fs';
 import { WebSocket } from 'ws';
 import * as clipboard from './clipboard.mjs';
 import {
@@ -89,6 +90,7 @@ class CdpSocket {
   #ws;
   #id = 0;
   #waiting = new Map();
+  #taps = new Set();
 
   static async open(wsUrl) {
     const socket = new CdpSocket();
@@ -103,12 +105,27 @@ class CdpSocket {
     return socket;
   }
 
+  /** Hear debugger events. Responses to send() are delivered as well as tapped. */
+  tap(fn) {
+    this.#taps.add(fn);
+    return () => this.#taps.delete(fn);
+  }
+
   #receive(raw) {
     let msg;
     try {
       msg = JSON.parse(String(raw));
     } catch {
       return;
+    }
+    if (msg.method) {
+      for (const fn of this.#taps) {
+        try {
+          fn(msg);
+        } catch {
+          /* a tap must not drop the reply it was watching */
+        }
+      }
     }
     const waiting = this.#waiting.get(msg.id);
     if (!waiting) return;
@@ -605,6 +622,196 @@ function isWindow(target) {
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Where `getStates` reads the live composer service.
+ *
+ * That function closes over the service. A breakpoint there is how a page
+ * that never publishes the service can still hand it over, once per window.
+ * The column is computed from the installed bundle so a Cursor update that
+ * only moves the line still works, as long as the marker is still there.
+ */
+const COMPOSER_PROVIDER_MARKER = '__SSG_COMPOSER_PROVIDER__={getStates:()=>this.loadedComposers';
+const breakpointCache = new Map();
+
+function vscodeAppPath(url) {
+  const prefix = 'vscode-file://vscode-app/';
+  if (!String(url || '').startsWith(prefix)) return null;
+  let rest = decodeURIComponent(url.slice(prefix.length));
+  if (/^\/[A-Za-z]:/.test(rest)) rest = rest.slice(1);
+  return rest;
+}
+
+function composerProviderBreakpoint(scriptUrl) {
+  const file = vscodeAppPath(scriptUrl);
+  if (!file) return null;
+  if (breakpointCache.has(file)) return breakpointCache.get(file);
+  let found = null;
+  try {
+    const source = readFileSync(file, 'utf8');
+    const at = source.indexOf(COMPOSER_PROVIDER_MARKER);
+    const inner = at < 0 ? -1 : source.indexOf('this.loadedComposers', at);
+    if (inner >= 0) {
+      const lineStart = source.lastIndexOf('\n', inner) + 1;
+      found = {
+        lineNumber: source.slice(0, inner).split('\n').length - 1,
+        columnNumber: inner - lineStart,
+      };
+    }
+  } catch {
+    found = null;
+  }
+  breakpointCache.set(file, found);
+  return found;
+}
+
+/** Keep the chat service the page already handed us, if this window has it. */
+const HAS_CHAT_SERVICE = `(() => typeof globalThis.__autoChat?.submitChatMaybeAbortCurrent === 'function')()`;
+
+/**
+ * Find the composer chat service from the data service captured at the
+ * breakpoint, and keep it for later sends. The method that takes
+ * `modelOverride` is the one the bridge calls; a bound wrapper still
+ * forwards that options object.
+ */
+const STASH_CHAT_SERVICE = `(() => {
+  const inst = globalThis.__autoData?._instantiationService;
+  const entries = inst?._services?._entries;
+  if (!entries || typeof entries[Symbol.iterator] !== 'function') return false;
+  for (const [, value] of entries) {
+    const obj = value && (value._instance || value.instance || value);
+    if (!obj || typeof obj.submitChatMaybeAbortCurrent !== 'function') continue;
+    if (typeof obj._composerDataService?.getComposerData !== 'function') continue;
+    globalThis.__autoChat = obj;
+    return true;
+  }
+  return false;
+})()`;
+
+/** What each loaded chat is set to, without opening a menu. */
+const LIVE_COMPOSER_MODELS = `(() => {
+  const chat = globalThis.__autoChat;
+  const dataSvc = chat?._composerDataService;
+  if (!dataSvc?.getComposerDataIfLoaded) return null;
+  const ids = dataSvc.loadedComposers?.ids || [];
+  return ids.map((id) => {
+    const data = dataSvc.getComposerDataIfLoaded(id);
+    const config = data?.modelConfig || {};
+    const chosen = config.selectedModels?.[0] || {};
+    return {
+      threadId: id,
+      modelName: config.modelName || chosen.modelId || null,
+      parameters: (chosen.parameters || []).map((item) => ({ id: String(item?.id ?? ''), value: String(item?.value ?? '') })),
+    };
+  });
+})()`;
+
+/** Plain text as Cursor's ProseMirror richText JSON. */
+function richTextFromPlain(text) {
+  const lines = String(text ?? '').split(/\r\n|\r|\n/);
+  while (lines.length > 0 && lines[0] === '') lines.shift();
+  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  if (!lines.length) {
+    return JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [] }] });
+  }
+  return JSON.stringify({
+    type: 'doc',
+    content: lines.map((line) => ({
+      type: 'paragraph',
+      content: line.length > 0 ? [{ type: 'text', text: line }] : [],
+    })),
+  });
+}
+
+/** What each loaded chat has waiting in its box. The open editor wins over disk. */
+const LIVE_COMPOSER_DRAFTS = `(() => {
+  const chat = globalThis.__autoChat;
+  const dataSvc = chat?._composerDataService;
+  if (!dataSvc?.getComposerDataIfLoaded) return null;
+  const ids = dataSvc.loadedComposers?.ids || [];
+  const focused = globalThis.__SSG_COMPOSER_PROVIDER__?.getStates?.().find((row) => row.state === 'focused');
+  const box = document.querySelector('.tiptap.ProseMirror.ui-prompt-input-editor__input');
+  const visible = box ? String(box.innerText || '').replace(/\\n$/, '') : null;
+  return ids.map((id) => {
+    const data = dataSvc.getComposerDataIfLoaded(id);
+    const stored = String(data?.text ?? '');
+    const text = focused?.id === id && visible != null ? visible : stored;
+    return { threadId: id, text };
+  });
+})()`;
+
+/**
+ * Put words into a loaded chat's box without focusing it.
+ *
+ * Cursor stores plain text and a ProseMirror document. Updating both and
+ * firing ShouldForceText is what makes the open editor show them.
+ */
+function syncComposerDraftExpression({ threadId, text }) {
+  const req = JSON.stringify({ threadId, text: String(text ?? ''), richText: richTextFromPlain(text) });
+  return `(async () => {
+    const req = ${req};
+    const chat = globalThis.__autoChat;
+    const dataSvc = chat?._composerDataService;
+    const events = chat?._composerEventService;
+    if (typeof dataSvc?.updateComposerData !== 'function' || typeof dataSvc?.getComposerHandleById !== 'function') {
+      return { status: 'error', reason: 'no composer service' };
+    }
+    let handle = dataSvc.getComposerHandleById(req.threadId);
+    if (handle && typeof handle.then === 'function') handle = await handle;
+    if (!handle) return { status: 'unknown-thread', reason: 'chat is not loaded' };
+    const before = String(dataSvc.getComposerDataIfLoaded(req.threadId)?.text ?? '');
+    const richText = req.text ? req.richText : ${JSON.stringify(richTextFromPlain(''))};
+    if (before !== req.text) {
+      dataSvc.updateComposerData(handle, { text: req.text, richText });
+    }
+    events?.fireShouldForceText?.({ composerId: req.threadId });
+    const focused = globalThis.__SSG_COMPOSER_PROVIDER__?.getStates?.().find((row) => row.state === 'focused');
+    const box = document.querySelector('.tiptap.ProseMirror.ui-prompt-input-editor__input');
+    if (focused?.id === req.threadId && box) {
+      const editor = box.editor || box.pmViewDesc?.editor || box.__editor;
+      if (editor?.commands?.setContent) editor.commands.setContent(req.text || '', false);
+      else if (!req.text) box.textContent = '';
+    }
+    const after = String(dataSvc.getComposerDataIfLoaded(req.threadId)?.text ?? '');
+    return { status: 'ok', text: after };
+  })()`;
+}
+
+/**
+ * Write the chat's model through Cursor's own model-config service.
+ *
+ * That updates the loaded composer. It does not open the model menu. The
+ * value returned is what the composer says afterwards, so a send can wait
+ * until the computer and the phone name the same model.
+ */
+function syncComposerModelExpression({ threadId, modelName, parameters }) {
+  const req = JSON.stringify({ threadId, modelName, parameters });
+  return `(async () => {
+    const req = ${req};
+    const chat = globalThis.__autoChat;
+    const models = chat?._modelConfigService;
+    const dataSvc = chat?._composerDataService;
+    if (typeof models?.setModelConfigForComposer !== 'function' || typeof dataSvc?.getComposerHandleById !== 'function') {
+      return { status: 'error', reason: 'no model service' };
+    }
+    let handle = dataSvc.getComposerHandleById(req.threadId);
+    if (handle && typeof handle.then === 'function') handle = await handle;
+    if (!handle?.setData) return { status: 'unknown-thread', reason: 'chat is not loaded' };
+    models.setModelConfigForComposer(handle, {
+      modelName: req.modelName,
+      maxMode: false,
+      selectedModels: [{ modelId: req.modelName, parameters: req.parameters }],
+    });
+    const data = dataSvc.getComposerDataIfLoaded(req.threadId) || handle.data || handle._cachedData;
+    const config = data?.modelConfig || {};
+    const chosen = config.selectedModels?.[0] || {};
+    return {
+      status: 'ok',
+      modelName: config.modelName || chosen.modelId || null,
+      parameters: (chosen.parameters || []).map((item) => ({ id: String(item?.id ?? ''), value: String(item?.value ?? '') })),
+    };
+  })()`;
+}
 const flatten = (text) => String(text).replace(/\s+/g, ' ').trim();
 /** The same message, allowing for how the window lays its text out. */
 const same = (a, b) => flatten(a) === flatten(b);
@@ -990,6 +1197,177 @@ export class CursorCdp {
   }
 
   /**
+   * Set a loaded chat's model from the back end, then read it back.
+   *
+   * Cursor's model menu is not opened. `modelName` `default` is Auto.
+   *
+   * @returns {Promise<{ status: 'ok'|'unknown-thread'|'no-cdp'|'error', reason?: string,
+   *   modelName?: string, parameters?: Array<{id: string, value: string}> }>}
+   */
+  async syncComposerModel({ threadId, modelName, parameters = [] }) {
+    if (!threadId) return { status: 'error', reason: 'no chat was named' };
+    if (!modelName) return { status: 'error', reason: 'no model was named' };
+    return this.#withComposer((window) =>
+      window.evaluate(syncComposerModelExpression({ threadId, modelName, parameters })),
+    );
+  }
+
+  /**
+   * The model each loaded chat is using right now.
+   *
+   * Disk can still say the model from the last flush. This is the copy the
+   * open window will send with.
+   *
+   * @returns {Promise<Array<{ threadId: string, modelName: string|null, parameters: object[] }>|null>}
+   */
+  async liveComposerModels() {
+    const result = await this.#withComposer((window) => window.evaluate(LIVE_COMPOSER_MODELS));
+    return Array.isArray(result) ? result : null;
+  }
+
+  /**
+   * The unsent words in every loaded chat's box.
+   *
+   * @returns {Promise<Array<{ threadId: string, text: string }>|null>}
+   */
+  async liveComposerDrafts() {
+    const result = await this.#withComposer((window) => window.evaluate(LIVE_COMPOSER_DRAFTS));
+    return Array.isArray(result) ? result : null;
+  }
+
+  /**
+   * Put unsent words into a loaded chat without focusing the window.
+   *
+   * @returns {Promise<{ status: 'ok'|'unknown-thread'|'no-cdp'|'error', text?: string, reason?: string }>}
+   */
+  async syncComposerDraft({ threadId, text }) {
+    if (!threadId) return { status: 'error', reason: 'no chat was named' };
+    return this.#withComposer((window) =>
+      window.evaluate(syncComposerDraftExpression({ threadId, text: String(text ?? '') })),
+    );
+  }
+
+  /** Run something in a window that has handed over its chat service. */
+  async #withComposer(work) {
+    let targets;
+    try {
+      targets = (await this.listTargets()).filter(isWindow);
+    } catch (err) {
+      return { status: 'no-cdp', reason: err.message };
+    }
+    if (!targets.length) {
+      return { status: 'no-cdp', reason: `no Cursor window is listening on port ${this.port}` };
+    }
+
+    let last = { status: 'unknown-thread', reason: 'no window has this chat loaded' };
+    for (const target of targets) {
+      let window;
+      try {
+        window = await this.openWindow(target);
+        const captured = await this.#captureChatService(window);
+        if (captured !== true) {
+          last = { status: 'error', reason: captured || 'Cursor did not hand over its chat service' };
+          continue;
+        }
+        const result = await work(window);
+        if (result?.status === 'unknown-thread') {
+          last = result;
+          continue;
+        }
+        return result ?? last;
+      } catch (err) {
+        last = { status: 'error', reason: err.message };
+      } finally {
+        window?.close();
+      }
+    }
+    return last;
+  }
+
+  /**
+   * One window, once: break inside the composer provider, keep the chat
+   * service, and let the debugger go. Later sends reuse what was kept.
+   */
+  async #captureChatService(window) {
+    if (await window.evaluate(HAS_CHAT_SERVICE)) return true;
+
+    const socket = window.socket;
+    const scripts = [];
+    let paused = null;
+    const stop = socket.tap((msg) => {
+      if (msg.method === 'Debugger.scriptParsed') scripts.push(msg.params);
+      if (msg.method === 'Debugger.paused') paused = msg.params;
+    });
+    let breakpointId = null;
+    let evaluated = Promise.resolve();
+    let failure = 'Cursor did not hand over its chat service';
+    try {
+      await socket.send('Debugger.enable');
+      await wait(200);
+      const script = scripts.find((item) => /workbench\.(glass|desktop)\.main\.js$/.test(item.url || ''));
+      const where = script ? composerProviderBreakpoint(script.url) : null;
+      if (!script) {
+        failure = 'the workbench script was not loaded';
+        return failure;
+      }
+      if (!where) {
+        failure = 'the composer provider was not in the installed workbench';
+        return failure;
+      }
+      const bp = await socket.send('Debugger.setBreakpointByUrl', {
+        urlRegex: 'workbench\\.(glass|desktop)\\.main\\.js',
+        lineNumber: where.lineNumber,
+        columnNumber: where.columnNumber,
+      });
+      breakpointId = bp.breakpointId;
+      if (!bp.locations?.length) {
+        failure = 'the composer breakpoint did not bind';
+        return failure;
+      }
+      evaluated = socket.send('Runtime.evaluate', {
+        expression: 'globalThis.__SSG_COMPOSER_PROVIDER__ && globalThis.__SSG_COMPOSER_PROVIDER__.getStates()',
+        returnByValue: true,
+      });
+      const start = Date.now();
+      while (!paused && Date.now() - start < 4000) await wait(30);
+      if (!paused?.callFrames?.[0]) {
+        failure = 'the composer provider did not run';
+        return failure;
+      }
+      await socket.send('Debugger.evaluateOnCallFrame', {
+        callFrameId: paused.callFrames[0].callFrameId,
+        expression: 'globalThis.__autoData = this, true',
+        returnByValue: true,
+      });
+    } catch (err) {
+      return err.message || failure;
+    } finally {
+      try {
+        await socket.send('Debugger.resume');
+      } catch {
+        /* not paused */
+      }
+      if (breakpointId) {
+        try {
+          await socket.send('Debugger.removeBreakpoint', { breakpointId });
+        } catch {
+          /* already gone */
+        }
+      }
+      try {
+        await socket.send('Debugger.disable');
+      } catch {
+        /* already off */
+      }
+      stop();
+      await evaluated.catch(() => {});
+    }
+
+    const stashed = await window.evaluate(STASH_CHAT_SERVICE);
+    return stashed === true ? true : 'the chat service was not in the composer';
+  }
+
+  /**
    * What a chat is doing, and what it is offering to be pressed.
    *
    * `asking` is approvals Cursor is waiting on (Run, Allow, …). `reviewing` is
@@ -1143,15 +1521,27 @@ export class CursorCdp {
           lastReason = 'there is unsent text in that window';
           continue;
         }
-        if (!(await window.showThread(threadId))) continue;
+        const hit = await window.showThread(threadId);
+        if (!hit) continue;
 
         // Trust the window's own answer, not the click: pressing a tab and
-        // arriving at the chat are different claims.
-        for (let look = 0; look < SHOW_LOOKS; look += 1) {
-          await wait(this.settleMs);
-          const now = await window.facts();
-          if (this.#threadOf(now) === threadId) return { status: 'shown', title: now.title };
+        // arriving at the chat are different claims. A dispatched click on an
+        // Agents sidebar row often does nothing; the coordinates are for a
+        // real mouse press, the same way New Agent is pressed.
+        const arrived = async () => {
+          for (let look = 0; look < SHOW_LOOKS; look += 1) {
+            await wait(this.settleMs);
+            const now = await window.facts();
+            if (this.#threadOf(now) === threadId) return now;
+          }
+          return null;
+        };
+        let now = await arrived();
+        if (!now && hit.at) {
+          await window.mouseAt(hit.at);
+          now = await arrived();
         }
+        if (now) return { status: 'shown', title: now.title };
         lastReason = 'the tab was pressed but the chat did not come forward';
       } catch (err) {
         lastReason = err.message;
@@ -1298,10 +1688,10 @@ export class CursorCdp {
    * Bring a chat to the front if it is open but not the tab on screen.
    * @returns {object|null} a failure to return, or null when the chat is showing
    */
-  async #ensureShown(threadId) {
+  async #ensureShown(threadId, { force = false } = {}) {
     const here = await this.#withThread(threadId, (window) => window.facts());
     if (here?.status === 'unknown-thread') {
-      const shown = await this.showThread({ threadId });
+      const shown = await this.showThread({ threadId, force });
       if (shown.status !== 'showing' && shown.status !== 'shown') {
         return {
           status: shown.status === 'no-tab' ? 'unknown-thread' : 'error',
@@ -1359,15 +1749,12 @@ export class CursorCdp {
     return this.#withThread(threadId, async (window) => {
       const opened = await this.#openModelParameters(window);
       if (opened.status !== 'ok') return opened;
-      // Auto-select's sheet has a Model row too, so it reads as parameters —
-      // but its only control is the word "Auto". It has none to offer.
-      if (plain(opened.at.label) === 'auto' || isAutoSheet(opened.menu.items)) {
-        await this.#closeMenu(window);
-        return { status: 'ok', auto: true, model: null, parameters: [] };
-      }
+      const auto = plain(opened.at.label) === 'auto' || isAutoSheet(opened.menu.items);
+      // Auto-select still has Fast / Context / Effort. Only a sheet with no
+      // rows of its own has nothing to offer.
       if (!opened.parameters) {
         await this.#closeMenu(window);
-        return { status: 'ok', auto: false, model: opened.at.label, parameters: [] };
+        return { status: 'ok', auto, model: auto ? 'Auto' : opened.at.label, parameters: [] };
       }
 
       const parsed = parseParameterMenu(opened.menu.items);
@@ -1381,7 +1768,7 @@ export class CursorCdp {
       await this.#closeMenu(window);
       return {
         status: 'ok',
-        auto: false,
+        auto,
         model: parsed.model,
         parameters: parsed.parameters.map(({ at: _at, ...control }) => control),
       };
@@ -1397,7 +1784,7 @@ export class CursorCdp {
         await this.#closeMenu(window);
         await this.#putBackQueue(window, held);
         return opened.status === 'ok'
-          ? { status: 'no-such-option', reason: 'Auto has no model parameters' }
+          ? { status: 'no-such-option', reason: 'this model sheet has no parameters' }
           : opened;
       }
 
@@ -1800,9 +2187,35 @@ export class CursorCdp {
     if (!facts?.hasComposer) {
       return { status: 'not-sendable', reason: 'that chat has no box to type in', title };
     }
-    // Someone may be part-way through a message of their own. Their words win.
-    if (facts.composerText) {
-      return { status: 'not-sendable', reason: 'there is unsent text in the chat box', title };
+    // Someone may be part-way through a message of their own. If it is the
+    // same words we are about to send, they are already in the box — submit
+    // them. If they differ, this send is from the phone and replaces them:
+    // the shared draft is one box, and a deliberate send wins.
+    if (facts.composerText && !same(facts.composerText, text)) {
+      if (!(await window.focusComposer())) {
+        return { status: 'not-sendable', reason: 'the chat box would not take the caret', title };
+      }
+      await window.clearComposer();
+    } else if (facts.composerText && same(facts.composerText, text)) {
+      if (!(await window.focusComposer())) {
+        return { status: 'not-sendable', reason: 'the chat box would not take the caret', title };
+      }
+      const attached = images.length ? await this.#attach(window, images) : { count: 0 };
+      await window.pressEnter();
+      for (let look = 0; look < SUBMIT_LOOKS; look += 1) {
+        await wait(this.settleMs);
+        if (!(await window.composerText())) {
+          const queue = await window.queue().catch(() => null);
+          const held = Boolean(queue?.items?.some((item) => same(item.text, text)));
+          return {
+            status: held ? 'queued' : 'submitted',
+            title,
+            ...(images.length ? { attached: attached.count, ofImages: images.length } : {}),
+            ...(attached.reason ? { attachFailed: attached.reason } : {}),
+          };
+        }
+      }
+      return { status: 'not-sendable', reason: 'the chat box would not send', title };
     }
     if (!(await window.focusComposer())) {
       return { status: 'not-sendable', reason: 'the chat box would not take the caret', title };

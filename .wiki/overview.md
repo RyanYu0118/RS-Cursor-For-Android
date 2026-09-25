@@ -17,7 +17,7 @@ sources:
   - id: resolve
     resource: /src/acp/resolve.mjs
     title: Agent registry
-generated: { by: agent, at: 2026-09-19T00:00:00Z }
+generated: { by: agent, at: 2026-09-25T15:20:00Z }
 ---
 
 # Auto
@@ -39,9 +39,11 @@ is the truth; clients replay from a sequence number.
 
 ## Kinds of session
 
-- **Desktop** — a chat in Cursor's own window. Auto types into it (debug
-  port first, then the [desktop bridge](concepts/desktop-bridge.md), then an
-  outbox) and reads replies from the desktop database
+- **Desktop** — a chat in Cursor's own window. A text message for a chat that
+  is not on screen goes through the [desktop bridge](concepts/desktop-bridge.md)
+  and does not switch the desktop to it. Typing over the debug port is for the
+  chat already in front, for pictures, and when the bridge refuses; then an
+  outbox. Replies are read from the desktop database
   ([threads](concepts/desktop-threads.md)). See
   [desktop chats](concepts/desktop-chats.md) and
   [the Cursor window](concepts/cursor-window.md).
@@ -87,11 +89,17 @@ default (that would close every window) and falls back to ACP unless
   the New session sheet and `/new` override it. A session cannot change
   agents, because that would be a different conversation. Model and mode
   pickers are per agent: Cursor's list and opencode's never share a catalog.
+- The phone and the computer share a chat's model. The phone writes it
+  through Cursor's model service, and a send waits until the loaded chat
+  reads back the same model. A change on the computer shows on the phone.
+- Unsent words in the chat box are shared too — type or clear on either
+  side and the other follows. If the boxes disagree, the side that presses
+  send is the message that goes.
 - Desktop model controls mirror Cursor on both projections. The web uses one
   dialog / phone bottom sheet with an Auto switch and searchable Model list;
   Telegram uses keyboards. Fast, Context, Reasoning, or Effort appear only
-  when that model exposes them, with choices read from the IDE rather than
-  assumed by Auto. Known model choices on web and Telegram also show a broad
+  when that model exposes them. The choices are a snapshot in the web app
+  (`src/web/model-parameters.js`), so the sheet does not ask the open window. Known model choices on web and Telegram also show a broad
   **$ / $$ / $$$** relative price band from published model API rates;
   unknown models are never guessed.
 

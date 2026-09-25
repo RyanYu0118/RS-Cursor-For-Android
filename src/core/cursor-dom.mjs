@@ -19,8 +19,17 @@
 export const SELECTORS = {
   /** The panel the chat lives in — the right-hand sidebar. */
   chatPane: ['#workbench\\.parts\\.auxiliarybar'],
-  /** The chat box: a rich text editor, not an input. */
+  /**
+   * The chat box: a rich text editor, not an input.
+   *
+   * The Agents window uses a ProseMirror prompt
+   * (`.ui-prompt-input-editor__input`) that is not inside `[data-composer-id]`.
+   * The older editor is `aislash-editor-input` in the auxiliary bar. Missing
+   * the prompt made a chat that was on screen look like it had no box, and
+   * the message fell through to the desktop bridge.
+   */
   composer: [
+    ".ui-prompt-input-editor__input[contenteditable='true']",
     "div.aislash-editor-input[contenteditable='true']",
     "[data-composer-id] div[contenteditable='true']",
     "div[contenteditable='true'].aislash-editor-input",
@@ -31,8 +40,17 @@ export const SELECTORS = {
   message: ['[data-message-id]'],
   /** The stop button beside the chat box, as an icon rather than a word. */
   stopIcon: ['span.codicon-debug-stop', '[aria-label="Stop"]'],
-  /** A chat's tab, which names the chat it belongs to. */
-  tab: [{ selector: '[data-resource-name]', attribute: 'data-resource-name' }],
+  /**
+   * A chat's tab, which names the chat it belongs to.
+   *
+   * The editor writes the id on `data-resource-name`. The Agents window lists
+   * the same chat as `data-sidebar-item-key="row:<id>"` instead, so both are
+   * tabs: either one brings that chat forward.
+   */
+  tab: [
+    { selector: '[data-resource-name]', attribute: 'data-resource-name' },
+    { selector: '[data-sidebar-item-key]', attribute: 'data-sidebar-item-key' },
+  ],
   /**
    * The mode dropdown, which writes the mode it is set to on itself.
    *
@@ -160,7 +178,14 @@ export const STOP_TURN_KEY = { key: 'Backspace', code: 'Backspace', keyCode: 8, 
  * the first real approval teaches us the words we actually needed.
  */
 const APPROVAL_WORDS =
-  /^(run|run command|run anyway|accept|allow|allow once|always allow|approve|reject|deny|skip|cancel|continue|resume|move on|yes|no)\b/i;
+  /^(run|run command|run anyway|accept|allow|allow once|always allow|approve|reject|deny|skip|cancel|continue|resume|move on)\b/i;
+
+/**
+ * Yes and No are approvals only as the whole label. A prefix match treated
+ * the window's "No Repo" workspace mark as a question and put a permission
+ * card on the phone.
+ */
+const YES_NO = /^(yes|no)[.!]?$/i;
 
 /**
  * Cursor's `switch_mode` card uses transition-specific labels rather than the
@@ -205,7 +230,7 @@ const APPROVAL_MAX = 24;
 export function isApproval(label) {
   const name = String(label || '').trim();
   if (name.length > APPROVAL_MAX || REVIEW_WORDS.test(name)) return false;
-  return APPROVAL_WORDS.test(name) || MODE_SWITCH_WORDS.test(name);
+  return APPROVAL_WORDS.test(name) || YES_NO.test(name) || MODE_SWITCH_WORDS.test(name);
 }
 
 /** Does this control act on file changes rather than answer a question? */
@@ -495,13 +520,23 @@ ${PRESSABLE}
  */
 export const showThread = (threadId) => `(() => {
 ${HELPERS}
-  const pane = __pane();
   const wanted = ${JSON.stringify(String(threadId))};
+  const matches = (value) =>
+    value === wanted || value === 'row:' + wanted || value.endsWith(':' + wanted);
   for (const { selector, attribute } of ${list(SELECTORS.tab)}) {
-    for (const el of pane.querySelectorAll(selector)) {
-      if (el.getAttribute(attribute) !== wanted) continue;
+    for (const el of document.querySelectorAll(selector)) {
+      if (!matches(el.getAttribute(attribute) || '')) continue;
+      el.scrollIntoView({ block: 'nearest' });
+      const rect = el.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
       __mouse(el);
-      return true;
+      return {
+        found: true,
+        at: {
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+        },
+      };
     }
   }
   return false;

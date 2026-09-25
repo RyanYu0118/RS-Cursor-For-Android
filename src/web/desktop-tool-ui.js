@@ -104,6 +104,11 @@ function keyOf(rec) {
   return String(rec?.title || '').trim().toLowerCase();
 }
 
+/** Cursor's browser tools, named `browser_*` or `mcp-cursor-ide-browser-browser_*`. */
+export function isBrowserTool(rec = {}) {
+  return keyOf(rec).includes('browser');
+}
+
 function recOf(item) {
   return item?.rec || item || {};
 }
@@ -182,6 +187,32 @@ export function toolBase(path) {
   return parts.at(-1) || s;
 }
 
+const LANG = {
+  js: 'JS',
+  mjs: 'JS',
+  cjs: 'JS',
+  ts: 'TS',
+  tsx: 'TSX',
+  jsx: 'JSX',
+  css: 'CSS',
+  scss: 'CSS',
+  html: 'HTML',
+  json: 'JSON',
+  md: 'MD',
+  mdc: 'MD',
+  kt: 'KT',
+  svg: 'SVG',
+  yml: 'YML',
+  yaml: 'YML',
+};
+
+/** The short language mark Cursor puts beside a changed file ("JS"). */
+export function fileLang(path) {
+  const base = toolBase(path);
+  const ext = base.includes('.') ? base.split('.').pop().toLowerCase() : '';
+  return LANG[ext] || (ext ? ext.slice(0, 4).toUpperCase() : '');
+}
+
 export function fileStats(rec) {
   const input = rec?.rawInput || {};
   let added = input.added ?? input.editLinesAdded;
@@ -196,6 +227,64 @@ export function fileStats(rec) {
   }
   if (added == null && removed == null) return null;
   return { added: Number(added) || 0, removed: Number(removed) || 0 };
+}
+
+/**
+ * The "N Files Changed" list for one turn: one row per file, in the order it
+ * was first edited. A later update replaces that call's counts; it does not
+ * add them again. Reads are not files changed.
+ *
+ * @returns {{ path: string, name: string, lang: string, added: number, removed: number }[]}
+ */
+export function changedFiles(records = []) {
+  const latest = new Map();
+  for (const rec of records) {
+    if (!rec) continue;
+    if (rec.kind && rec.kind !== 'tool_call' && rec.kind !== 'tool_update') continue;
+    const id = rec.toolCallId || `path:${toolPath(rec)}`;
+    if (!id) continue;
+    const prev = latest.get(id);
+    latest.set(id, {
+      title: rec.title || prev?.title,
+      toolKind: rec.toolKind || prev?.toolKind,
+      rawInput: { ...prev?.rawInput, ...rec.rawInput },
+      content: rec.content || prev?.content,
+      kind: 'tool_call',
+      toolCallId: id,
+    });
+  }
+  const edits = new Map();
+  for (const [id, merged] of latest) {
+    if (classifyTool(merged).lane !== 'fileChange') continue;
+    const path = toolPath(merged);
+    if (!path) continue;
+    const stats = fileStats(merged);
+    edits.set(id, {
+      path,
+      added: stats?.added || 0,
+      removed: stats?.removed || 0,
+    });
+  }
+  latest.clear();
+  for (const [id, edit] of edits) latest.set(id, edit);
+  const byPath = new Map();
+  for (const edit of latest.values()) {
+    const key = edit.path.replace(/\\/g, '/').toLowerCase();
+    const row = byPath.get(key);
+    if (row) {
+      row.added += edit.added;
+      row.removed += edit.removed;
+    } else {
+      byPath.set(key, {
+        path: edit.path,
+        name: toolBase(edit.path),
+        lang: fileLang(edit.path),
+        added: edit.added,
+        removed: edit.removed,
+      });
+    }
+  }
+  return [...byPath.values()];
 }
 
 /** The +/− a batch of file changes adds up to, or null when none reported. */
@@ -269,11 +358,61 @@ export function planFields(rec = {}) {
   };
 }
 
+/** A read of `skills-cursor/<name>/SKILL.md` is Cursor's "Used <name>" row. */
+export function skillName(path) {
+  const s = String(path || '').replace(/\\/g, '/');
+  const m = s.match(/\/(?:skills-cursor|skills)\/([^/]+)\/SKILL\.md$/i);
+  return m ? m[1] : '';
+}
+
+/**
+ * Cursor's thinking line: "Thought briefly" under a second, otherwise
+ * "Thought 5s" (and "Thought 1m 5s" past a minute).
+ */
+export function thoughtLabel(ms) {
+  const n = Number(ms) || 0;
+  if (n < 1000) return 'Thought briefly';
+  const secs = Math.max(1, Math.round(n / 1000));
+  if (secs < 60) return `Thought ${secs}s`;
+  const minutes = Math.floor(secs / 60);
+  const rest = secs % 60;
+  return rest ? `Thought ${minutes}m ${rest}s` : `Thought ${minutes}m`;
+}
+
+/**
+ * A step worth its own row inside Cursor's one work fold.
+ * Reads and searches stay in the "explored" count unless the fold is
+ * nothing but exploration.
+ */
+export function stepShown(rec = {}) {
+  const ui = classifyTool(rec);
+  if (isBrowserTool(rec)) return true;
+  if (ui.lane === 'group' && skillName(toolPath(rec))) return true;
+  if (ui.lane === 'fileChange') return true;
+  if (ui.toolKind === 'execute' && ui.lane !== 'group') return true;
+  return false;
+}
+
 export function displayLabel(rec = {}) {
   const ui = classifyTool(rec);
   const input = rec.rawInput || {};
   if (isCreatedPlan(rec)) return planFields(rec).name;
-  if (input.command && ui.lane !== 'group') return String(input.command);
+  const skill = ui.lane === 'group' ? skillName(toolPath(rec)) : '';
+  if (skill) return `Used ${skill}`;
+  if (isBrowserTool(rec)) {
+    const raw = String(rec.title || '')
+      .replace(/^mcp-cursor-ide-browser-/, '')
+      .replace(/^browser_/, '')
+      .replace(/_/g, ' ')
+      .trim();
+    const nice = raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'action';
+    return `Browser ${nice}`;
+  }
+  if (input.command && ui.lane !== 'group') {
+    const desc = String(input.commandDescription || '').trim();
+    const line = desc || String(input.command).replace(/\s+/g, ' ').trim();
+    return `Ran ${line}`;
+  }
   const base = toolBase(toolPath(rec));
   if (ui.lane === 'fileChange') {
     const verb = ui.toolKind === 'delete' ? 'Deleted' : 'Edited';
@@ -330,6 +469,66 @@ export function activityCopy({ files = 0, searches = 0, running = false } = {}) 
 export function editCopy(count, oneLabel) {
   if (count === 1 && oneLabel) return lineOf(oneLabel);
   return lineOf('Edited ', count, ` ${word(count, 'file')}`);
+}
+
+function tallyWork(items = []) {
+  let files = 0;
+  let searches = 0;
+  let edits = 0;
+  let commands = 0;
+  let browsers = 0;
+  let running = false;
+  for (const item of items) {
+    const rec = recOf(item);
+    const ui = item.ui || classifyTool(rec);
+    const status = item.status || rec.status || 'completed';
+    if (status === 'in_progress' || status === 'pending') running = true;
+    if (ui.lane === 'fileChange') edits += 1;
+    else if (isBrowserTool(rec)) browsers += 1;
+    else if (ui.toolKind === 'search') searches += 1;
+    else if (ui.toolKind === 'execute' && ui.lane !== 'group') commands += 1;
+    else files += 1;
+  }
+  return { files, searches, edits, commands, browsers, running };
+}
+
+/**
+ * One Cursor work fold: "Edited 3 files, explored 1 file, ran 8 commands".
+ * A turn still going leads with a present verb ("Editing 9 files, explored
+ * 14 files, 11 searches, 11 browser actions, ran 19 commands"). Exploration
+ * on its own keeps the older activity line.
+ */
+export function workCopy(items = [], { live = false } = {}) {
+  const tally = tallyWork(items);
+  const { files, searches, edits, commands, browsers } = tally;
+  const running = live || tally.running;
+  if (!edits && !commands && !browsers) return activityCopy({ files, searches, running });
+  const clauses = [];
+  if (edits) clauses.push([running ? 'editing ' : 'edited ', edits, ` ${word(edits, 'file')}`]);
+  if (files || searches || browsers) {
+    const bits = [];
+    const explorePresent = running && !edits && (files || searches);
+    if (files || searches) bits.push(explorePresent ? 'exploring ' : 'explored ');
+    if (files) bits.push(files, ` ${word(files, 'file')}`);
+    if (files && (searches || browsers)) bits.push(', ');
+    if (searches) bits.push(searches, ` ${word(searches, 'search', 'searches')}`);
+    if (searches && browsers) bits.push(', ');
+    if (browsers) bits.push(browsers, ` ${word(browsers, 'browser action')}`);
+    clauses.push(bits);
+  }
+  if (commands) {
+    const cmdPresent = running && !edits && !files && !searches && !browsers;
+    clauses.push([cmdPresent ? 'running ' : 'ran ', commands, ` ${word(commands, 'command')}`]);
+  }
+  const bits = [];
+  clauses.forEach((clause, i) => {
+    if (i) bits.push(', ');
+    if (i === 0 && typeof clause[0] === 'string') {
+      const [head, ...rest] = clause;
+      bits.push(head.charAt(0).toUpperCase() + head.slice(1), ...rest);
+    } else bits.push(...clause);
+  });
+  return lineOf(...bits);
 }
 
 /**
@@ -408,29 +607,30 @@ function batchStatus(batch) {
   return { status, failure };
 }
 
-function groupSummary(batch) {
-  const { status, failure } = batchStatus(batch);
-  const running = status === 'in_progress' || status === 'pending';
-  const { files, searches } = groupTally(batch);
-  return {
-    ...activityCopy({ files, searches, running }),
-    status,
-    failure,
-    lane: 'group',
-    count: batch.length,
-  };
+function isWorkRec(rec) {
+  const ui = classifyTool(rec);
+  if (ui.lane === 'hide') return false;
+  if (isBrowserTool(rec)) return true;
+  if (ui.lane === 'fileChange' || ui.lane === 'group') return true;
+  return ui.toolKind === 'execute';
 }
 
-function fileChangeSummary(batch) {
+function workSummary(batch) {
   const { status, failure } = batchStatus(batch);
-  const first = recOf(batch[0]);
+  const steps = [];
+  for (const item of batch) {
+    const rec = recOf(item);
+    if (!stepShown(rec)) continue;
+    steps.push(item.label || displayLabel(rec));
+  }
   return {
-    ...editCopy(batch.length, displayLabel(first)),
+    ...workCopy(batch),
     status,
     failure,
-    lane: 'fileChange',
+    lane: 'work',
     count: batch.length,
     stats: batchStats(batch),
+    steps,
   };
 }
 
@@ -461,22 +661,20 @@ export function foldTools(tools = [], { includeHidden = false } = {}) {
       i += 1;
       continue;
     }
-    if (ui.lane === 'fileChange') {
+    if (isWorkRec(rec)) {
       const batch = [];
-      while (i < tools.length && classifyTool(recOf(tools[i])).lane === 'fileChange') {
+      while (i < tools.length) {
+        const next = recOf(tools[i]);
+        const nextUi = classifyTool(next);
+        if (nextUi.lane === 'hide') {
+          i += 1;
+          continue;
+        }
+        if (!isWorkRec(next)) break;
         batch.push(tools[i]);
         i += 1;
       }
-      out.push(fileChangeSummary(batch));
-      continue;
-    }
-    if (ui.lane === 'group') {
-      const batch = [];
-      while (i < tools.length && classifyTool(recOf(tools[i])).lane === 'group') {
-        batch.push(tools[i]);
-        i += 1;
-      }
-      out.push(groupSummary(batch));
+      if (batch.length) out.push(workSummary(batch));
       continue;
     }
     const item = tools[i];
