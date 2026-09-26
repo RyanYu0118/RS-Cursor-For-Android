@@ -425,6 +425,104 @@ export function displayLabel(rec = {}) {
   return ui.label || rec.title || rec.toolKind || 'tool';
 }
 
+/**
+ * Cursor's live subtask under the work summary — present-tense action from
+ * `tool-action-labels.js` plus the same details the IDE puts beside it
+ * (commandDescription, basename, pattern). Not the past-tense fold labels.
+ */
+const LIVE_ACTION = {
+  run_terminal_command_v2: 'Running',
+  run_terminal_cmd: 'Running',
+  shell: 'Running',
+  read_file_v2: 'Reading',
+  read_file: 'Reading',
+  ripgrep_raw_search: 'Grepping',
+  ripgrep_search: 'Grepping',
+  glob_file_search: 'Searching files',
+  file_search: 'Searching files',
+  edit_file_v2: 'Editing',
+  edit_file: 'Editing',
+  delete_file: 'Deleting',
+  list_dir_v2: 'Listing',
+  list_dir: 'Listing',
+  read_lints: 'Reading lints',
+  web_search: 'Searching web',
+  web_fetch: 'Fetching page',
+  semantic_search_full: 'Searching',
+  create_plan: 'Writing plan',
+  await: 'Waiting',
+  todo_write: 'Updating todos',
+  todo_read: 'Reading todos',
+  task_v2: 'Working on task',
+  generate_image: 'Generating image',
+  switch_mode: 'Switching mode',
+  computer_use: 'Using computer',
+  record_screen: 'Recording screen',
+  mcp_auth: 'Authenticating MCP server',
+  connect_scm: 'Connecting GitHub',
+  read_mcp_resource: 'Reading resource',
+  get_mcp_tools: 'Exploring tools',
+};
+
+function liveActionFor(rec, ui) {
+  const key = keyOf(rec);
+  if (LIVE_ACTION[key]) return LIVE_ACTION[key];
+  if (isBrowserTool(rec)) return 'Running';
+  if (ui.toolKind === 'execute') return 'Running';
+  if (ui.toolKind === 'delete') return 'Deleting';
+  if (ui.toolKind === 'edit') return 'Editing';
+  if (ui.toolKind === 'read') return 'Reading';
+  if (ui.toolKind === 'search') return key.includes('grep') ? 'Grepping' : 'Searching';
+  if (ui.toolKind === 'fetch') return 'Fetching';
+  if (ui.toolKind === 'plan') return 'Writing plan';
+  return ui.short || ui.label || 'Running';
+}
+
+function liveDetailsFor(rec, ui) {
+  const input = rec.rawInput || {};
+  if (input.command && ui.lane !== 'group' && ui.toolKind === 'execute') {
+    const desc = String(input.commandDescription || '').trim();
+    if (desc) return desc;
+    const cmd = String(input.command).replace(/\s+/g, ' ').trim();
+    return cmd || 'command';
+  }
+  if (ui.toolKind === 'search' || /grep|search|glob|find/.test(keyOf(rec))) {
+    const pattern = String(input.pattern || input.query || input.glob || '').trim();
+    const where = toolBase(toolPath(rec));
+    if (pattern && where) return `${pattern} in ${where}`;
+    if (pattern) return pattern;
+    if (where) return where;
+  }
+  if (typeof input.searchTerm === 'string' && input.searchTerm.trim()) {
+    return input.searchTerm.trim();
+  }
+  if (typeof input.url === 'string' && input.url.trim()) return input.url.trim();
+  const base = toolBase(toolPath(rec));
+  if (base) return base;
+  if (typeof input.query === 'string' && input.query.trim()) return input.query.trim();
+  if (isBrowserTool(rec)) {
+    const raw = String(rec.title || '')
+      .replace(/^mcp-cursor-ide-browser-/, '')
+      .replace(/^browser_/, '')
+      .replace(/_/g, ' ')
+      .trim();
+    return raw || '';
+  }
+  return '';
+}
+
+/** One line matching Cursor's live tool status: "Reading app.js", "Running …". */
+export function liveStepLabel(rec = {}) {
+  const ui = classifyTool(rec);
+  if (isCreatedPlan(rec)) return planFields(rec).name;
+  const skill = ui.lane === 'group' ? skillName(toolPath(rec)) : '';
+  if (skill) return `Using ${skill}`;
+  const action = liveActionFor(rec, ui);
+  const details = liveDetailsFor(rec, ui);
+  if (details) return `${action} ${details}`;
+  return action;
+}
+
 const RANK = { in_progress: 4, pending: 4, failed: 3, cancelled: 2, completed: 1 };
 
 function mergeStatus(a, b) {

@@ -4748,7 +4748,7 @@ if (existsSync(SRC)) {
 // reads fold together, and a few internal calls stay off the stream.
 {
   try {
-    const { classifyTool, displayLabel, fileStats, foldTools, isSimpleLs, toolOutputText, diffFromPrecomputed } = {
+    const { classifyTool, displayLabel, liveStepLabel, fileStats, foldTools, isSimpleLs, toolOutputText, diffFromPrecomputed } = {
       ...(await import('../src/core/desktop-tool-ui.mjs')),
       diffFromPrecomputed: (await import('../src/core/desktop-threads.mjs')).diffFromPrecomputed,
     };
@@ -4892,6 +4892,39 @@ if (existsSync(SRC)) {
         rawInput: { command: 'Get-ChildItem', commandDescription: 'See backup folder layout on R:' },
       }),
       'Ran See backup folder layout on R:',
+    );
+    // Live subtask under the summary mirrors Cursor's present-tense action labels.
+    check(
+      'live shell step',
+      liveStepLabel({
+        title: 'run_terminal_command_v2',
+        rawInput: { command: 'Get-ChildItem', commandDescription: 'See backup folder layout on R:' },
+      }),
+      'Running See backup folder layout on R:',
+    );
+    check(
+      'live read step',
+      liveStepLabel({
+        title: 'read_file_v2',
+        rawInput: { targetFile: 'D:\\auto\\src\\web\\app.js' },
+      }),
+      'Reading app.js',
+    );
+    check(
+      'live edit step',
+      liveStepLabel({
+        title: 'edit_file_v2',
+        rawInput: { relativeWorkspacePath: 'src/web/style.css' },
+      }),
+      'Editing style.css',
+    );
+    check(
+      'live grep step',
+      liveStepLabel({
+        title: 'ripgrep_raw_search',
+        rawInput: { pattern: 'liveStepLabel' },
+      }),
+      'Grepping liveStepLabel',
     );
     const { changedFiles } = await import('../src/core/desktop-tool-ui.mjs');
     check(
@@ -5092,6 +5125,9 @@ if (existsSync(SRC)) {
     }
     if (!js.includes('function syncLiveStep') || !js.includes('live-step-line') || !css.includes('live-step-gleam')) {
       fail('the live turn must show the current subtask with a gleam, like Cursor');
+    }
+    if (!js.includes('liveStepLabel')) {
+      fail('live subtask text must use Cursor present-tense labels, not past-tense fold labels');
     }
     if (!css.includes('translateY(-22px)') || !js.includes("rail.style.transition = 'none'")) {
       fail('subtask changes must scroll up, and finish without a snap-down');

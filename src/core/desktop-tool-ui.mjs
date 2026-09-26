@@ -6,6 +6,7 @@ export {
   activityCopy,
   classifyTool,
   displayLabel,
+  liveStepLabel,
   durationText,
   changedFiles,
   editCopy,

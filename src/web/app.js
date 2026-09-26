@@ -28,6 +28,7 @@ import {
   changedFiles,
   classifyTool,
   displayLabel,
+  liveStepLabel,
   durationText,
   fileStats,
   isCreatedPlan,
@@ -1327,10 +1328,12 @@ function retireLiveFold() {
  */
 function currentStepText() {
   if (!state.turn || state.replaying) return '';
+  // Cursor's gleaming line uses present-tense action + details ("Reading x",
+  // "Running …"), not the past-tense fold labels ("Read x", "Ran …").
   const items = state.bundle?.items || [];
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const s = items[i].rec?.status || 'completed';
-    if (s === 'in_progress' || s === 'pending') return displayLabel(items[i].rec);
+    if (s === 'in_progress' || s === 'pending') return liveStepLabel(items[i].rec);
   }
   if (!state.bundle?.card?.isConnected || state.bundle.settled) return '';
   if (state.thinking) return 'Thinking';

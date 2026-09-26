@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Fix**: Live subtask text uses Cursor's present-tense labels (Reading / Running / Grepping), not past-tense fold labels. See [Tool lanes](concepts/tool-lanes.md).
 * **Fix**: Ending a turn clears the live-subtask gleam so a finished fold does not keep flashing Thinking. See [Tool lanes](concepts/tool-lanes.md).
 * **Fix**: Live-subtask gleam keeps a muted grey base and only sweeps a white highlight — it no longer flashes black/white. See [Tool lanes](concepts/tool-lanes.md).
 * **Update**: The web queue is Cursor's card — **N Queued**, Start Multitasking, ×, editable body — not a sent bubble or folded summary. See [Queue](concepts/queue.md) and [Web](concepts/web.md).
