@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -21,8 +19,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,14 +36,15 @@ import com.ryanstudio.rscursor.data.ChatItem
 import com.ryanstudio.rscursor.data.ImagePart
 import com.ryanstudio.rscursor.data.QueueItem
 import com.ryanstudio.rscursor.ui.shell.TranscriptSkeleton
+import com.ryanstudio.rscursor.ui.theme.GlassBubbleAssistBrush
+import com.ryanstudio.rscursor.ui.theme.GlassBubbleUserBrush
+import com.ryanstudio.rscursor.ui.theme.GlassBorderBrush
 import com.ryanstudio.rscursor.ui.theme.RsAllow
-import com.ryanstudio.rscursor.ui.theme.RsAssistantBubble
 import com.ryanstudio.rscursor.ui.theme.RsDeny
 import com.ryanstudio.rscursor.ui.theme.RsMuted
-import com.ryanstudio.rscursor.ui.theme.RsSurface
-import com.ryanstudio.rscursor.ui.theme.RsSurfaceHi
 import com.ryanstudio.rscursor.ui.theme.RsText
-import com.ryanstudio.rscursor.ui.theme.RsUserBubble
+import com.ryanstudio.rscursor.ui.theme.glassPanel
+import androidx.compose.foundation.border
 
 @Composable
 fun TranscriptScreen(
@@ -77,7 +74,7 @@ fun TranscriptScreen(
         state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (queue.isNotEmpty()) {
             item(key = "queue") {
@@ -105,38 +102,36 @@ fun TranscriptScreen(
 
 @Composable
 private fun QueueCard(queue: List<QueueItem>) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = RsSurfaceHi),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .glassPanel(shape = RoundedCornerShape(18.dp), strong = true)
+                .padding(14.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("排队中", color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            queue.forEach { q ->
-                Text(
-                    text = q.text.ifBlank { "(附件)" },
-                    color = RsText,
-                    maxLines = 2,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
+        Text("排队中", color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        queue.forEach { q ->
+            Text(
+                text = q.text.ifBlank { "(附件)" },
+                color = RsText,
+                maxLines = 2,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
 }
 
 @Composable
 private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.End,
-    ) {
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         Box(
             modifier =
                 Modifier
                     .widthIn(max = 520.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(RsUserBubble)
-                    .padding(12.dp),
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(GlassBubbleUserBrush)
+                    .border(1.dp, GlassBorderBrush, RoundedCornerShape(22.dp))
+                    .padding(14.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (item.images.isNotEmpty()) {
@@ -151,7 +146,7 @@ private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
                                     modifier =
                                         Modifier
                                             .size(72.dp)
-                                            .clip(RoundedCornerShape(8.dp)),
+                                            .clip(RoundedCornerShape(12.dp)),
                                 )
                             }
                         }
@@ -175,9 +170,10 @@ private fun AssistantBubble(item: ChatItem.Assistant) {
             modifier =
                 Modifier
                     .widthIn(max = 640.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(RsAssistantBubble)
-                    .padding(12.dp),
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(GlassBubbleAssistBrush)
+                    .border(1.dp, GlassBorderBrush, RoundedCornerShape(22.dp))
+                    .padding(14.dp),
         ) {
             Text(
                 text = item.text,
@@ -190,23 +186,21 @@ private fun AssistantBubble(item: ChatItem.Assistant) {
 
 @Composable
 private fun ToolCard(item: ChatItem.Tool) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = RsSurface),
-        shape = RoundedCornerShape(10.dp),
-        modifier = Modifier.fillMaxWidth(),
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .glassPanel(shape = RoundedCornerShape(16.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = item.title.ifBlank { "tool" },
-                color = RsText,
-                modifier = Modifier.weight(1f),
-                maxLines = 2,
-            )
-            Text(item.status, color = RsMuted, fontSize = 12.sp)
-        }
+        Text(
+            text = item.title.ifBlank { "tool" },
+            color = RsText,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+        )
+        Text(item.status, color = RsMuted, fontSize = 12.sp)
     }
 }
 
@@ -216,31 +210,34 @@ private fun PermissionCard(
     item: ChatItem.Permission,
     onPermission: (String, String) -> Unit,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = RsSurfaceHi),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .glassPanel(shape = RoundedCornerShape(18.dp), strong = true)
+                .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("需要许可", color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            Text(item.title, color = RsText)
-            if (item.resolved) {
-                Text(item.outcome, color = RsMuted, fontSize = 13.sp)
-            } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item.options.forEach { opt ->
-                        val deny = Regex("reject|deny", RegexOption.IGNORE_CASE)
+        Text("需要许可", color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(item.title, color = RsText)
+        if (item.resolved) {
+            Text(item.outcome, color = RsMuted, fontSize = 13.sp)
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item.options.forEach { opt ->
+                    val deny =
+                        Regex("reject|deny", RegexOption.IGNORE_CASE)
                             .containsMatchIn("${opt.kind} ${opt.optionId}")
-                        Button(
-                            onClick = { onPermission(item.requestId, opt.optionId) },
-                            colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor = if (deny) RsDeny else RsAllow,
-                                    contentColor = RsText,
-                                ),
-                        ) {
-                            Text(opt.name)
-                        }
+                    Button(
+                        onClick = { onPermission(item.requestId, opt.optionId) },
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = if (deny) RsDeny else RsAllow,
+                                contentColor = RsText,
+                            ),
+                        shape = RoundedCornerShape(999.dp),
+                    ) {
+                        Text(opt.name)
                     }
                 }
             }
@@ -255,26 +252,30 @@ private fun QuestionCard(
     onAnswer: (String, String) -> Unit,
     onSkip: (String) -> Unit,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = RsSurfaceHi),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .glassPanel(shape = RoundedCornerShape(18.dp), strong = true)
+                .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(item.title, color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            if (item.prompt.isNotBlank()) Text(item.prompt, color = RsText)
-            if (item.answered) {
-                Text("已回答", color = RsMuted)
-            } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item.options.forEach { opt ->
-                        OutlinedButton(onClick = { onAnswer(item.askId, opt.optionId) }) {
-                            Text(opt.name)
-                        }
+        Text(item.title, color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        if (item.prompt.isNotBlank()) Text(item.prompt, color = RsText)
+        if (item.answered) {
+            Text("已回答", color = RsMuted)
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item.options.forEach { opt ->
+                    OutlinedButton(
+                        onClick = { onAnswer(item.askId, opt.optionId) },
+                        shape = RoundedCornerShape(999.dp),
+                    ) {
+                        Text(opt.name)
                     }
-                    TextButton(onClick = { onSkip(item.askId) }) {
-                        Text("Skip")
-                    }
+                }
+                TextButton(onClick = { onSkip(item.askId) }) {
+                    Text("Skip")
                 }
             }
         }

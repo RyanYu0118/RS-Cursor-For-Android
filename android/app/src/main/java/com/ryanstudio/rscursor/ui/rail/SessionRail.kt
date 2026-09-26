@@ -1,6 +1,5 @@
 package com.ryanstudio.rscursor.ui.rail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,7 +26,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,9 +33,8 @@ import androidx.compose.ui.unit.sp
 import com.ryanstudio.rscursor.data.SessionMeta
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
-import com.ryanstudio.rscursor.ui.theme.RsSurface
-import com.ryanstudio.rscursor.ui.theme.RsSurfaceHi
 import com.ryanstudio.rscursor.ui.theme.RsText
+import com.ryanstudio.rscursor.ui.theme.glassPanel
 
 @Composable
 fun SessionRail(
@@ -54,7 +51,8 @@ fun SessionRail(
             modifier
                 .width(280.dp)
                 .fillMaxHeight()
-                .background(RsSurface)
+                .padding(start = 10.dp, top = 4.dp, bottom = 10.dp, end = 6.dp)
+                .glassPanel(shape = RoundedCornerShape(24.dp), strong = true)
                 .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -77,7 +75,7 @@ fun SessionRail(
         )
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(sessions, key = { it.id }) { session ->
                 SessionRow(
@@ -88,21 +86,15 @@ fun SessionRail(
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        TextButton(
-            onClick = onNew,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+        TextButton(onClick = onNew, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = RsAccent)
             Spacer(modifier = Modifier.width(6.dp))
-            Text("新建会话")
+            Text("新建会话", color = RsText)
         }
-        TextButton(
-            onClick = onSettings,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+        TextButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp), tint = RsMuted)
             Spacer(modifier = Modifier.width(6.dp))
-            Text("主机设置")
+            Text("主机设置", color = RsMuted)
         }
     }
 }
@@ -113,13 +105,11 @@ private fun SessionRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val bg = if (selected) RsSurfaceHi else RsSurface
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(bg)
+                .glassPanel(shape = RoundedCornerShape(16.dp), strong = selected)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {

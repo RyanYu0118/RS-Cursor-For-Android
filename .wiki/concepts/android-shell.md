@@ -1,8 +1,8 @@
 ---
 type: Concept
 title: Android shell
-description: Native Jetpack Compose pad client for Auto — skeleton until WS ready, then rail/chat/composer without embedding the web UI.
-tags: [android, compose, pad]
+description: Native Jetpack Compose pad client for Auto — immersive light field, liquid-glass panels, skeleton until WS ready.
+tags: [android, compose, pad, glass]
 status: stable
 sources:
   - id: android
@@ -11,6 +11,9 @@ sources:
   - id: main
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/MainActivity.kt
     title: Compose MainActivity
+  - id: glass
+    resource: /android/app/src/main/java/com/ryanstudio/rscursor/ui/theme/Glass.kt
+    title: Immersive light + liquid glass
   - id: repo
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/data/HostRepository.kt
     title: HostRepository + WebSocket
@@ -20,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T12:30:00Z }
+generated: { by: agent, at: 2026-09-26T12:55:00Z }
 ---
 
 # Android shell
@@ -29,6 +32,14 @@ Native Jetpack Compose client for Auto on a pad. The host still runs on
 the computer ([Host](host.md)); the app talks to it over WebSocket /
 REST the same way the [Web](web.md) PWA does. Chat, rail, composer, and
 the + menu are Compose — not a WebView.
+
+## Look
+
+The shell uses an **immersive light field** (slow-moving cyan / violet /
+rose orbs over a deep navy base) and **liquid-glass** panels: translucent
+fills, specular borders, large corner radii. Top bar, rail, composer,
+bubbles, and cards share that material. This approximates a HarmonyOS
+glass feel on Android; it is not a system backdrop blur.
 
 ## Why it exists
 

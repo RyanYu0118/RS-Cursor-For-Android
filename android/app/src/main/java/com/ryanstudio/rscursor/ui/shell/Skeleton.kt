@@ -25,45 +25,53 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
-import com.ryanstudio.rscursor.ui.theme.RsBg
+import com.ryanstudio.rscursor.ui.theme.ImmersiveLightBackground
 import com.ryanstudio.rscursor.ui.theme.RsSkeleton
-import com.ryanstudio.rscursor.ui.theme.RsSurface
+import com.ryanstudio.rscursor.ui.theme.glassPanel
 
 @Composable
 fun SkeletonShell(
     showRail: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier = modifier.fillMaxSize().background(RsBg)) {
-        if (showRail) {
+    ImmersiveLightBackground(modifier = modifier) {
+        Row(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+            if (showRail) {
+                Column(
+                    modifier =
+                        Modifier
+                            .width(260.dp)
+                            .fillMaxHeight()
+                            .glassPanel(shape = RoundedCornerShape(24.dp))
+                            .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Bone(Modifier.fillMaxWidth(0.55f).height(22.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    repeat(6) {
+                        Bone(Modifier.fillMaxWidth().height(40.dp))
+                    }
+                }
+            }
             Column(
                 modifier =
                     Modifier
-                        .width(260.dp)
+                        .weight(1f)
                         .fillMaxHeight()
-                        .background(RsSurface)
+                        .padding(start = if (showRail) 12.dp else 0.dp)
+                        .glassPanel(shape = RoundedCornerShape(24.dp))
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Bone(Modifier.fillMaxWidth(0.55f).height(22.dp))
-                Spacer(Modifier.height(8.dp))
-                repeat(6) {
-                    Bone(Modifier.fillMaxWidth().height(40.dp))
-                }
+                Bone(Modifier.fillMaxWidth(0.4f).height(18.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                Bone(Modifier.fillMaxWidth(0.72f).height(56.dp))
+                Bone(Modifier.fillMaxWidth(0.9f).height(72.dp))
+                Bone(Modifier.fillMaxWidth(0.55f).height(48.dp))
+                Bone(Modifier.fillMaxWidth(0.8f).height(64.dp))
+                Spacer(modifier = Modifier.weight(1f))
+                Bone(Modifier.fillMaxWidth().height(52.dp))
             }
-        }
-        Column(
-            modifier = Modifier.weight(1f).fillMaxHeight().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Bone(Modifier.fillMaxWidth(0.4f).height(18.dp))
-            Spacer(Modifier.height(4.dp))
-            Bone(Modifier.fillMaxWidth(0.72f).height(56.dp))
-            Bone(Modifier.fillMaxWidth(0.9f).height(72.dp))
-            Bone(Modifier.fillMaxWidth(0.55f).height(48.dp))
-            Bone(Modifier.fillMaxWidth(0.8f).height(64.dp))
-            Spacer(Modifier.weight(1f))
-            Bone(Modifier.fillMaxWidth().height(52.dp))
         }
     }
 }
@@ -90,7 +98,7 @@ private fun Bone(modifier: Modifier = Modifier) {
             targetValue = 1f,
             animationSpec =
                 infiniteRepeatable(
-                    animation = tween(1200, easing = LinearEasing),
+                    animation = tween(1400, easing = LinearEasing),
                     repeatMode = RepeatMode.Restart,
                 ),
             label = "shift",
@@ -99,12 +107,12 @@ private fun Bone(modifier: Modifier = Modifier) {
         Brush.horizontalGradient(
             colors =
                 listOf(
-                    RsSkeleton.copy(alpha = 0.55f),
-                    RsSkeleton.copy(alpha = 0.95f),
-                    RsSkeleton.copy(alpha = 0.55f),
+                    RsSkeleton.copy(alpha = 0.35f),
+                    RsSkeleton.copy(alpha = 0.85f),
+                    RsSkeleton.copy(alpha = 0.35f),
                 ),
-            startX = shift * 400f - 200f,
-            endX = shift * 400f + 200f,
+            startX = shift * 420f - 210f,
+            endX = shift * 420f + 210f,
         )
-    Box(modifier = modifier.clip(RoundedCornerShape(8.dp)).background(brush))
+    Box(modifier = modifier.clip(RoundedCornerShape(14.dp)).background(brush))
 }

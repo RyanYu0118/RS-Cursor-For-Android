@@ -1,6 +1,5 @@
 package com.ryanstudio.rscursor.ui.composer
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,8 +42,8 @@ import com.ryanstudio.rscursor.data.Catalog
 import com.ryanstudio.rscursor.data.LocalAttachment
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
-import com.ryanstudio.rscursor.ui.theme.RsSurface
 import com.ryanstudio.rscursor.ui.theme.RsText
+import com.ryanstudio.rscursor.ui.theme.glassPanel
 
 @Composable
 fun ComposerBar(
@@ -70,8 +70,9 @@ fun ComposerBar(
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(RsSurface)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .glassPanel(shape = RoundedCornerShape(26.dp), strong = true)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
     ) {
         if (attachments.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -84,7 +85,8 @@ fun ComposerBar(
                             modifier =
                                 Modifier
                                     .size(56.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .glassPanel(shape = RoundedCornerShape(14.dp)),
                         )
                         IconButton(onClick = { onRemoveAttachment(index) }) {
                             Icon(Icons.Default.Close, contentDescription = "移除", tint = RsMuted)
@@ -182,13 +184,16 @@ fun ComposerBar(
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("给 Agent 发消息…", color = RsMuted) },
                 maxLines = 6,
+                shape = RoundedCornerShape(18.dp),
                 colors =
                     OutlinedTextFieldDefaults.colors(
                         focusedTextColor = RsText,
                         unfocusedTextColor = RsText,
-                        focusedBorderColor = RsAccent,
-                        unfocusedBorderColor = RsMuted.copy(alpha = 0.4f),
+                        focusedBorderColor = RsAccent.copy(alpha = 0.7f),
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
                         cursorColor = RsAccent,
+                        focusedContainerColor = Color.White.copy(alpha = 0.06f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
                     ),
             )
             Spacer(modifier = Modifier.width(4.dp))
