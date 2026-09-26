@@ -2647,28 +2647,10 @@ function isWorkspaceMark(rec) {
 }
 
 function renderPermission(rec) {
-  if (isWorkspaceMark(rec)) return;
-  const card = div('perm');
-  const title = rec.toolCall?.title || rec.toolCall?.kind || 'this action';
-  card.innerHTML = `
-    <div class="head">Permission needed</div>
-    <div class="what"></div>
-    <div class="opts"></div>`;
-  card.querySelector('.what').textContent = title;
-
-  const opts = card.querySelector('.opts');
-  for (const opt of rec.options || []) {
-    const b = document.createElement('button');
-    b.textContent = opt.name || opt.optionId;
-    b.className = /reject|deny/i.test(`${opt.kind} ${opt.optionId}`) ? 'deny' : 'allow';
-    b.onclick = () => {
-      sendOp({ op: 'permission', requestId: rec.requestId, optionId: opt.optionId });
-      opts.innerHTML = '<span class="outcome">sending…</span>';
-    };
-    opts.appendChild(b);
-  }
-  state.permCards.set(rec.requestId, card);
-  add(card);
+  // Cursor desktop approvals are no longer mirrored (they flickered). ACP
+  // tool asks with policy `auto` never reach here; anything else is answered
+  // in the IDE. Agent ask_question cards still use renderQuestion.
+  return;
 }
 
 function renderPermissionResolved(rec) {

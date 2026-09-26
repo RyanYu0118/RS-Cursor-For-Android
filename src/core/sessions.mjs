@@ -2709,31 +2709,11 @@ export class SessionManager extends EventEmitter {
       // A question card is not an approval. Its buttons read "Skip" and
       // "Continue", the words alone cannot tell them apart from one, and the
       // question has already gone to the phone with its own real options.
-      const names = this.#questionWaiting(id)
-        ? []
-        : (state.asking || []).map((c) => c.label || c.text).filter(Boolean);
-      // One look is a flicker: Cursor's DOM often flashes an approval-shaped
-      // control that is gone on the next tick, and each flash used to push a
-      // permission card to the phone then cancel it. Wait for the same labels
-      // across two looks (~4s) before asking on anyone's behalf.
-      const live = this.live.get(id) || {};
-      const signature = names.join('|');
-      if (names.length) {
-        const cand = live.askCandidate;
-        if (cand?.signature === signature) cand.hits += 1;
-        else live.askCandidate = { signature, hits: 1 };
-        this.live.set(id, live);
-        if ((live.askCandidate?.hits || 0) >= 2) {
-          this.#askOnBehalfOfCursor(id, meta, names);
-        }
-      } else {
-        if (live.askCandidate) {
-          live.askCandidate = null;
-          this.live.set(id, live);
-        }
-        this.#withdrawAsk(id, 'answered in Cursor');
-      }
-
+      //
+      // Do not mirror Cursor's approval buttons to web / Telegram / Android.
+      // Even with a two-look debounce, false flashes still painted "Permission
+      // needed" cards that vanished a moment later. Answer those in the IDE;
+      // agent ask_question cards still arrive through their own path.
       this.#queueChanged(id, state.queue);
 
       const running = state.generating || this.meta.get(id)?.status === STATUS.busy;

@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Update**: Cursor desktop approvals are no longer mirrored to clients (queue watch stays); Android Enter sends, Shift+Enter newlines. See [Approvals](concepts/approvals.md) and [Android shell](concepts/android-shell.md).
 * **Update**: Android rail mirrors Agents — Pinned / Recent / Repositories, `desktop.continue`, per-folder new session. See [Android shell](concepts/android-shell.md).
 * **Update**: Android pad keeps one glass chat window; rail/top bar stay compact; chat prose renders Markdown. See [Android shell](concepts/android-shell.md).
 * **Fix**: Desktop Cursor approvals wait for two looks before a phone card, and cancelled asks are removed (not left as flickering "cancelled" rows). See [Approvals](concepts/approvals.md).

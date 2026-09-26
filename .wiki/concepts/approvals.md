@@ -20,7 +20,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Desktop approval watcher
-generated: { by: agent, at: 2026-09-26T13:10:00Z }
+generated: { by: agent, at: 2026-09-26T14:15:00Z }
 ---
 
 # Approvals, questions, and plans
@@ -43,40 +43,20 @@ A session whose policy you change keeps that choice.
 
 ## Cursor's own approvals
 
-While a desktop turn runs, Auto watches the window for controls whose words
-mean it is waiting for a person, parks them in the same broker, and presses
-whichever option comes back — withdrawing the question if it is answered in
-the IDE first. The same labels must appear on **two consecutive looks**
-(~4s) before a card is sent, so a one-frame DOM flash does not flicker on
-the phone. Cancelled asks are removed from the screen rather than left as
-"cancelled". The vocabulary lives in `cursor-dom.mjs` (never class names).
-With Cursor set to run everything automatically it rarely asks — treat the
-first real sighting as a chance to learn the words Cursor actually uses.
+Auto **does not** mirror Cursor's approval buttons to web, Telegram, or
+Android any more. DOM flashes kept painting "Permission needed" cards that
+vanished a moment later; those asks stay in the IDE. The desktop turn
+watcher still polls for the **queue**, not for approval labels.
+
+Agent `ask_question` cards still go to the phone with their real options.
+ACP tool permissions use the session policy (`auto` by default).
 
 ### Automatic mode transitions
 
 An agent may request an Agent ↔ Plan transition with `switch_mode`. Cursor
-renders that request through its approval controls rather than changing mode
-silently. The observed card offers **Always ask**, **Skip**, and **Switch**;
-Auto relays the resolving actions, Skip and Switch, through the same permission
-broker as Run / Allow. Web and Telegram therefore show the real choices, and
-the selected wording is pressed back in Cursor. The `^↵` key hint rendered
-inside Switch is stripped before the action is matched.
-
-The matching is intentionally exact. “Switch mode” and “Switch chat” controls
-are navigation, not approvals, and must never be offered as one. Skip is a
-rejection choice; Switch is an allow choice. Cursor remains the owner of the
-actual transition.
-
-**Yes** and **No** count only when they are the whole label. "No Repo" is the
-window's mark for an empty workspace, not a question, and is not sent to the
-phone.
-
-Skip and Continue **inside a chat message bubble** are not approvals: they
-belong to Cursor's `ask_question` card. Offering Skip from that card as
-"Permission needed" was the first wild miss — the card is drawn before its
-options are written, and those two words are otherwise indistinguishable
-from an approval.
+renders that on its own approval controls (**Always ask**, **Skip**,
+**Switch**). Those stay in the IDE — Auto no longer relays them as phone
+permission cards. Answer Skip / Switch there.
 
 ## The file-review bar is not a question
 

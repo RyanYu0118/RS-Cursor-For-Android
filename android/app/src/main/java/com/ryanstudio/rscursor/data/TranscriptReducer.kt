@@ -83,37 +83,13 @@ class TranscriptReducer {
                 }
             }
             "permission_request" -> {
-                flushStream()
-                if (isWorkspaceMark(rec)) return
-                val rid = rec.optString("requestId").ifBlank { "perm-${rec.optLong("seq")}" }
-                val title =
-                    rec.optJSONObject("toolCall")?.optString("title")
-                        ?: rec.optJSONObject("toolCall")?.optString("kind")
-                        ?: "this action"
-                items["perm-$rid"] =
-                    ChatItem.Permission(
-                        key = "perm-$rid",
-                        requestId = rid,
-                        title = title,
-                        options = parseOptions(rec.optJSONArray("options")),
-                    )
+                // Cursor desktop approvals used to flash here then vanish.
+                // Those are answered in the IDE now; do not paint a card.
+                return
             }
             "permission_resolved" -> {
                 val rid = rec.optString("requestId")
-                val key = "perm-$rid"
-                // Cancelled asks (answered in IDE / false flash) should vanish,
-                // not sit as a stack of red "cancelled" cards that flicker.
-                if (rec.optBoolean("cancelled")) {
-                    items.remove(key)
-                    return
-                }
-                val prev = items[key] as? ChatItem.Permission ?: return
-                val how =
-                    buildString {
-                        append(rec.optString("optionId").ifBlank { "answered" })
-                        if (rec.optBoolean("automatic")) append(" (policy)")
-                    }
-                items[key] = prev.copy(resolved = true, outcome = how)
+                items.remove("perm-$rid")
             }
             "question" -> {
                 flushStream()

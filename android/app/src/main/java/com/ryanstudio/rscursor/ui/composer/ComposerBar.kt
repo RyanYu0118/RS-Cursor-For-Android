@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
@@ -34,7 +36,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -177,10 +186,29 @@ fun ComposerBar(
             OutlinedTextField(
                 value = draft,
                 onValueChange = onDraftChange,
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            if (event.key != Key.Enter && event.key != Key.NumPadEnter) {
+                                return@onPreviewKeyEvent false
+                            }
+                            // Shift+Enter keeps the newline; bare Enter sends.
+                            if (event.isShiftPressed) return@onPreviewKeyEvent false
+                            if (!busy && (draft.isNotBlank() || attachments.isNotEmpty())) onSend()
+                            true
+                        },
                 placeholder = { Text("给 Agent 发消息…", color = RsMuted) },
                 maxLines = 6,
                 shape = RoundedCornerShape(16.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions =
+                    KeyboardActions(
+                        onSend = {
+                            if (!busy && (draft.isNotBlank() || attachments.isNotEmpty())) onSend()
+                        },
+                    ),
                 colors =
                     OutlinedTextFieldDefaults.colors(
                         focusedTextColor = RsText,
