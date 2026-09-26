@@ -5093,6 +5093,9 @@ if (existsSync(SRC)) {
     if (!js.includes('function syncLiveStep') || !js.includes('live-step-line') || !css.includes('live-step-gleam')) {
       fail('the live turn must show the current subtask with a gleam, like Cursor');
     }
+    if (!css.includes('translateY(-22px)') || !js.includes("rail.style.transition = 'none'")) {
+      fail('subtask changes must scroll up, and finish without a snap-down');
+    }
     if (!js.includes('quietThinking') || !js.includes('reuseQuiet')) {
       fail('quiet must fold the turn’s thinking spells into one block');
     }

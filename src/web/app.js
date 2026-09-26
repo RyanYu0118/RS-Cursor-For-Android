@@ -1378,21 +1378,27 @@ function syncLiveStep() {
     rail.style.transform = '';
     return;
   }
-  // Scroll the previous step up; the new one rises into place.
+  // Scroll the previous step up; the new one rises from below.
+  // Cleanup must not transition — dropping `sliding` while the old line is
+  // still in the rail snaps the new line down and reads as the wrong direction.
   const old = rail.querySelector('.live-step-line');
   old.classList.remove('shimmer');
-  old.classList.add('exit');
-  next.classList.add('enter');
   rail.append(next);
   rail.classList.remove('sliding');
+  rail.style.transition = '';
   void rail.offsetWidth;
   rail.classList.add('sliding');
+  let finished = false;
   const done = () => {
-    rail.classList.remove('sliding');
-    old.remove();
-    next.classList.remove('enter');
-    rail.style.transform = '';
+    if (finished) return;
+    finished = true;
     rail.removeEventListener('transitionend', done);
+    rail.style.transition = 'none';
+    old.remove();
+    rail.classList.remove('sliding');
+    rail.style.transform = '';
+    void rail.offsetWidth;
+    rail.style.removeProperty('transition');
   };
   rail.addEventListener('transitionend', done);
   setTimeout(done, 400);
