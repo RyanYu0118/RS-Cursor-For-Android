@@ -1,5 +1,11 @@
 package com.ryanstudio.rscursor.ui.chat
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,17 +15,24 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,15 +47,20 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.ryanstudio.rscursor.data.ChatItem
 import com.ryanstudio.rscursor.data.ImagePart
 import com.ryanstudio.rscursor.data.QueueItem
+import com.ryanstudio.rscursor.data.ToolLanes
 import com.ryanstudio.rscursor.ui.shell.TranscriptSkeleton
 import com.ryanstudio.rscursor.ui.theme.GlassBubbleUserBrush
 import com.ryanstudio.rscursor.ui.theme.RsAccent
@@ -72,6 +90,9 @@ fun TranscriptScreen(
         return
     }
 
+    val rows = remember(items, busy) { ToolLanes.project(items, busy) }
+    var openFolds by remember { mutableStateOf(setOf<String>()) }
+
     val listState = rememberLazyListState()
     var stickBottom by remember { mutableStateOf(true) }
     var anchorKey by remember { mutableStateOf<String?>(null) }
@@ -88,7 +109,13 @@ fun TranscriptScreen(
         val grew = items.size > prevSize
         val prepended = grew && first != null && first != prevFirstKey && !stickBottom
         if (prepended && anchorKey != null) {
-            val idx = items.indexOfFirst { it.key == anchorKey }
+            val idx = rows.indexOfFirst {
+                when (it) {
+                    is ToolLanes.Row.Item -> it.item.key == anchorKey
+                    is ToolLanes.Row.Fold -> it.fold.key == anchorKey
+                    is ToolLanes.Row.LiveStrip -> "live" == anchorKey
+                }
+            }
             if (idx >= 0) {
                 listState.scrollToItem(idx + headerCount(), anchorOffset)
             }
@@ -97,9 +124,9 @@ fun TranscriptScreen(
         prevFirstKey = first
     }
 
-    LaunchedEffect(items.size, items.lastOrNull()?.key, busy) {
-        if (stickBottom && items.isNotEmpty()) {
-            val last = headerCount() + items.lastIndex + if (busy) 1 else 0
+    LaunchedEffect(rows.size, rows.lastOrNull(), busy) {
+        if (stickBottom && rows.isNotEmpty()) {
+            val last = headerCount() + rows.lastIndex
             listState.animateScrollToItem(last.coerceAtLeast(0))
         }
     }
@@ -114,7 +141,7 @@ fun TranscriptScreen(
             val anchor =
                 info.visibleItemsInfo.firstOrNull {
                     val k = it.key
-                    k != "earlier" && k != "queue" && k != "working"
+                    k != "earlier" && k != "queue"
                 }
             Triple(nearTop, nearBottom, anchor?.let { it.key.toString() to it.offset })
         }
@@ -131,8 +158,6 @@ fun TranscriptScreen(
             }
     }
 
-    // Still at the top after a chunk landed — keep pulling until the gap is gone
-    // or the user scrolls away.
     LaunchedEffect(earlierCount, loadingEarlier, items.size) {
         if (!loadingEarlier && earlierCount > 0 && listState.firstVisibleItemIndex <= 1) {
             onLoadEarlier()
@@ -159,23 +184,158 @@ fun TranscriptScreen(
                 QueueCard(queue)
             }
         }
-        items(items, key = { it.key }) { item ->
-            when (item) {
-                is ChatItem.User -> UserBubble(item, imageUrl)
-                is ChatItem.Assistant -> AssistantBubble(item)
-                is ChatItem.Tool -> ToolCard(item)
-                is ChatItem.Permission -> PermissionCard(item, onPermission)
-                is ChatItem.Question -> QuestionCard(item, onAnswer, onSkipQuestion)
-                is ChatItem.Notice -> NoticeLine(item)
-                is ChatItem.Status -> StatusLine(item.text)
+        items(rows, key = { row ->
+            when (row) {
+                is ToolLanes.Row.Item -> row.item.key
+                is ToolLanes.Row.Fold -> row.fold.key
+                is ToolLanes.Row.LiveStrip -> "live-strip"
             }
-        }
-        if (busy) {
-            item(key = "working") {
-                StatusLine("Working…")
+        }) { row ->
+            when (row) {
+                is ToolLanes.Row.Item ->
+                    when (val item = row.item) {
+                        is ChatItem.User -> UserBubble(item, imageUrl)
+                        is ChatItem.Assistant -> AssistantBubble(item)
+                        is ChatItem.Tool -> ToolCard(item) // rare; folds cover most
+                        is ChatItem.Permission -> PermissionCard(item, onPermission)
+                        is ChatItem.Question -> QuestionCard(item, onAnswer, onSkipQuestion)
+                        is ChatItem.Notice -> NoticeLine(item)
+                        is ChatItem.Status -> StatusLine(item.text)
+                    }
+                is ToolLanes.Row.Fold -> {
+                    val open = row.fold.live || row.fold.key in openFolds
+                    WorkFoldCard(
+                        fold = row.fold,
+                        expanded = open,
+                        onToggle = {
+                            openFolds =
+                                if (row.fold.key in openFolds) openFolds - row.fold.key
+                                else openFolds + row.fold.key
+                        },
+                    )
+                }
+                is ToolLanes.Row.LiveStrip -> LiveStatusStrip(row.text)
             }
         }
     }
+}
+
+@Composable
+private fun WorkFoldCard(
+    fold: ToolLanes.WorkFold,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.05f))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .padding(vertical = 2.dp),
+        ) {
+            Icon(
+                if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = RsMuted,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = fold.summary,
+                color = RsText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (!fold.liveStep.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            GleamLine(fold.liveStep)
+        }
+        if (expanded && fold.steps.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                fold.steps.forEach { step ->
+                    Text(
+                        text = step.label,
+                        color = if (step.status == "in_progress" || step.status == "pending") RsAccent else RsMuted,
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 22.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveStatusStrip(text: String) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+    ) {
+        GleamLine(text)
+    }
+}
+
+@Composable
+private fun GleamLine(text: String) {
+    val transition = rememberInfiniteTransition(label = "gleam")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(1600, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+        label = "gleam-phase",
+    )
+    Text(
+        text = text,
+        color = RsMuted,
+        fontSize = 13.sp,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .drawWithContent {
+                    drawContent()
+                    val w = size.width
+                    val band = w * 0.35f
+                    val x = -band + (w + band * 2) * phase
+                    drawRect(
+                        brush =
+                            Brush.linearGradient(
+                                colors =
+                                    listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = 0.35f),
+                                        Color.Transparent,
+                                    ),
+                                start = Offset(x, 0f),
+                                end = Offset(x + band, size.height),
+                            ),
+                    )
+                }
+                .padding(start = 22.dp, top = 2.dp, bottom = 2.dp),
+    )
 }
 
 @Composable

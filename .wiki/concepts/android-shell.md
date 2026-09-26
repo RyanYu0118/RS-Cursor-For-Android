@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T14:30:00Z }
+generated: { by: agent, at: 2026-09-26T14:40:00Z }
 ---
 
 # Android shell
@@ -56,6 +56,10 @@ The WebSocket bumps a generation on each connect so a replaced socket's late
 Attach paints a short tail; scrolling to the top (or tapping the earlier row)
 asks `transcript.more` and prepends older history without jumping the viewport.
 Composer Enter sends; Shift+Enter inserts a newline.
+
+Tool calls paint as Cursor's **work fold** (summary + expandable steps + live
+subtask gleam), using the same lane table as the [web](web.md) /
+[tool lanes](tool-lanes.md).
 
 ## Why it exists
 

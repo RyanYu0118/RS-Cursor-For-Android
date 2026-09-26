@@ -118,24 +118,16 @@ class TranscriptReducer {
                 flushStream()
                 val id = rec.optString("toolCallId").ifBlank { "tool-${rec.optLong("seq")}" }
                 val key = "tool-$id"
-                items[key] =
-                    ChatItem.Tool(
-                        key = key,
-                        toolCallId = id,
-                        title = rec.optString("title").ifBlank {
-                            rec.optJSONObject("toolCall")?.optString("title")
-                                ?: rec.optString("kind", "tool")
-                        },
-                        status = rec.optString("status", "pending"),
-                    )
+                items[key] = toolFrom(rec, id, key)
             }
             "tool_update" -> {
                 val id = rec.optString("toolCallId")
                 val key = "tool-$id"
                 val prev = items[key] as? ChatItem.Tool
                 if (prev != null) {
-                    items[key] =
-                        prev.copy(status = rec.optString("status", prev.status).ifBlank { prev.status })
+                    items[key] = mergeTool(prev, rec)
+                } else {
+                    items[key] = toolFrom(rec, id, key)
                 }
             }
             "permission_request" -> {
@@ -204,6 +196,62 @@ class TranscriptReducer {
         streamKey = null
         streamBuf = StringBuilder()
         streamThought = false
+    }
+
+    private fun toolFrom(rec: JSONObject, id: String, key: String): ChatItem.Tool {
+        val input = rec.optJSONObject("rawInput") ?: JSONObject()
+        val path =
+            input.optString("relativeWorkspacePath")
+                .ifBlank { input.optString("targetFile") }
+                .ifBlank { input.optString("path") }
+                .ifBlank { input.optString("file_path") }
+                .ifBlank { input.optString("effectiveUri") }
+        val added =
+            when {
+                input.has("added") -> input.optInt("added")
+                input.has("editLinesAdded") -> input.optInt("editLinesAdded")
+                else -> null
+            }
+        val removed =
+            when {
+                input.has("removed") -> input.optInt("removed")
+                input.has("editLinesRemoved") -> input.optInt("editLinesRemoved")
+                else -> null
+            }
+        return ChatItem.Tool(
+            key = key,
+            toolCallId = id,
+            title =
+                rec.optString("title").ifBlank {
+                    rec.optJSONObject("toolCall")?.optString("title")
+                        ?: rec.optString("kind", "tool")
+                },
+            status = rec.optString("status", "pending"),
+            toolKind = rec.optString("toolKind"),
+            command = input.optString("command"),
+            commandDescription = input.optString("commandDescription"),
+            path = path,
+            query = input.optString("query").ifBlank { input.optString("searchTerm") },
+            pattern = input.optString("pattern").ifBlank { input.optString("glob") },
+            added = added,
+            removed = removed,
+        )
+    }
+
+    private fun mergeTool(prev: ChatItem.Tool, rec: JSONObject): ChatItem.Tool {
+        val next = toolFrom(rec, prev.toolCallId, prev.key)
+        return prev.copy(
+            title = next.title.ifBlank { prev.title },
+            status = rec.optString("status", prev.status).ifBlank { prev.status },
+            toolKind = next.toolKind.ifBlank { prev.toolKind },
+            command = next.command.ifBlank { prev.command },
+            commandDescription = next.commandDescription.ifBlank { prev.commandDescription },
+            path = next.path.ifBlank { prev.path },
+            query = next.query.ifBlank { prev.query },
+            pattern = next.pattern.ifBlank { prev.pattern },
+            added = next.added ?: prev.added,
+            removed = next.removed ?: prev.removed,
+        )
     }
 
     private fun recKey(rec: JSONObject, prefix: String): String {

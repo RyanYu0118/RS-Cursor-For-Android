@@ -62,6 +62,14 @@ sealed class ChatItem {
         val toolCallId: String,
         val title: String,
         val status: String,
+        val toolKind: String = "",
+        val command: String = "",
+        val commandDescription: String = "",
+        val path: String = "",
+        val query: String = "",
+        val pattern: String = "",
+        val added: Int? = null,
+        val removed: Int? = null,
     ) : ChatItem()
 
     data class Permission(
