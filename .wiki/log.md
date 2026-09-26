@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Update**: Android rail mirrors Agents — Pinned / Recent / Repositories, `desktop.continue`, per-folder new session. See [Android shell](concepts/android-shell.md).
 * **Update**: Android pad keeps one glass chat window; rail/top bar stay compact; chat prose renders Markdown. See [Android shell](concepts/android-shell.md).
 * **Fix**: Desktop Cursor approvals wait for two looks before a phone card, and cancelled asks are removed (not left as flickering "cancelled" rows). See [Approvals](concepts/approvals.md).
 * **Update**: Android pad UI uses an immersive light field and liquid-glass panels (rail, top bar, bubbles, composer). See [Android shell](concepts/android-shell.md).

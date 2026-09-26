@@ -38,6 +38,14 @@ class HostViewModel(app: Application) : AndroidViewModel(app) {
 
     fun createSession() = repo.createSession()
 
+    fun createSession(folder: String) = repo.createSession(folder)
+
+    fun openRailItem(chat: com.ryanstudio.rscursor.data.RailChat) = repo.openRailItem(chat)
+
+    fun openPinned(pin: com.ryanstudio.rscursor.data.RailPinned) = repo.openPinned(pin)
+
+    fun toggleRepo(folder: String) = repo.toggleRepo(folder)
+
     fun setDraft(text: String) = repo.setDraft(text)
 
     fun send() = repo.sendPrompt()

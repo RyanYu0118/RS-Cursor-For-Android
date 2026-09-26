@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.sp
 import com.ryanstudio.rscursor.data.ConnPhase
 import com.ryanstudio.rscursor.data.HostUiState
 import com.ryanstudio.rscursor.data.ImagePart
+import com.ryanstudio.rscursor.data.RailChat
+import com.ryanstudio.rscursor.data.RailPinned
 import com.ryanstudio.rscursor.ui.chat.TranscriptScreen
 import com.ryanstudio.rscursor.ui.composer.ComposerBar
 import com.ryanstudio.rscursor.ui.rail.SessionRail
@@ -45,8 +47,11 @@ import com.ryanstudio.rscursor.ui.theme.glassPanel
 @Composable
 fun AppScaffold(
     state: HostUiState,
-    onSelectSession: (String) -> Unit,
+    onOpenChat: (RailChat) -> Unit,
+    onOpenPinned: (RailPinned) -> Unit,
     onNewSession: () -> Unit,
+    onNewInFolder: (String) -> Unit,
+    onToggleRepo: (String) -> Unit,
     onSettings: () -> Unit,
     onOpenWeb: () -> Unit,
     onDraftChange: (String) -> Unit,
@@ -143,10 +148,15 @@ fun AppScaffold(
             ) {
                 if (state.railOpen) {
                     SessionRail(
-                        sessions = state.sessions,
-                        activeId = state.sessionId,
-                        onSelect = onSelectSession,
+                        pinned = state.railPinned,
+                        repos = state.railRepos,
+                        activeSessionId = state.sessionId,
+                        activeDesktopThreadId = state.meta?.desktopThreadId,
+                        onOpenChat = onOpenChat,
+                        onOpenPinned = onOpenPinned,
                         onNew = onNewSession,
+                        onNewInFolder = onNewInFolder,
+                        onToggleRepo = onToggleRepo,
                         onSettings = onSettings,
                         onClose = { onRailOpen(false) },
                     )

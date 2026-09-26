@@ -64,7 +64,7 @@ default (that would close every window) and falls back to ACP unless
 | [Host](concepts/host.md) | HTTP, WebSocket, session API, restart |
 | [Supervise](concepts/supervise.md) | Keep the host alive across crash and reboot |
 | [Web](concepts/web.md) | PWA that caches and replays the transcript |
-| [Android shell](concepts/android-shell.md) | Native Compose pad with liquid-glass look |
+| [Android shell](concepts/android-shell.md) | Native Compose pad; Agents-style rail + glass chat |
 | [Telegram](concepts/telegram.md) | Prompt, watch, approve, switch, restart |
 | [Browser](concepts/browser.md) | Real Chrome on this machine, live frames in the client's color scheme |
 | [Terminals](concepts/terminals.md) | PTYs for you and (when ACP uses them) the agent |

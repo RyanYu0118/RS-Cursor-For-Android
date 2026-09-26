@@ -260,6 +260,11 @@ class TranscriptReducer {
                 modelName = o.optString("modelName"),
                 mode = o.optString("mode"),
                 kind = o.optString("kind"),
+                desktopThreadId = o.optString("desktopThreadId"),
+                updatedAt =
+                    RailBuilder.parseTime(
+                        o.opt("updatedAt") ?: o.opt("createdAt"),
+                    ),
                 active = o.optBoolean("active", false),
             )
 

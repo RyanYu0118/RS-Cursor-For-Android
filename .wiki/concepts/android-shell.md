@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T13:20:00Z }
+generated: { by: agent, at: 2026-09-26T14:00:00Z }
 ---
 
 # Android shell
@@ -40,6 +40,14 @@ glass chat window** (transcript + composer). The top bar and session rail
 stay compact and flat — closer to the [Web](web.md) layout — without their
 own glass cards. Assistant and user prose render as **Markdown**, not raw
 source.
+
+## Side rail
+
+Mirrors Cursor Agents / the web rail: **New Chat**, **Search** (filter),
+**Pinned**, **Recent**, then **Repositories** as accordions. Rows come from
+the host `sidebar` snapshot (plus Auto sessions and recent desktop chats).
+Tapping an Auto session attaches; tapping a desktop-only chat sends
+`desktop.continue`. Repo **+** starts `session.create` in that folder.
 
 ## Why it exists
 
@@ -62,7 +70,8 @@ flash.
 ## What v1 covers
 
 - Host URL settings ([SettingsActivity](/android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt))
-- Side rail: session list, switch, new session
+- Side rail: Agents-style Pinned / Recent / Repositories, attach or
+  `desktop.continue`, new session (global or per folder)
 - Transcript: user / assistant text, image thumbs, tool rows, permission
   and question cards, queue strip
 - Composer: text, send / stop, draft sync, attachments
@@ -74,10 +83,10 @@ Browser and Terminals tabs are not ported yet.
 
 [`HostRepository`](/android/app/src/main/java/com/ryanstudio/rscursor/data/HostRepository.kt)
 opens `ws(s)://host/?session=&fromSeq=`, handles `hello` / `attached` /
-`record` / `sessions` / `draft` / `queue`, and sends `attach`, `prompt`,
-`cancel`, `session.create`, `session.draft`, `session.mode`,
-`session.model`, `permission`. Images load from
-`GET /api/image?session=&path=`.
+`record` / `sessions` / `projects` / `draft` / `queue`, and sends `attach`,
+`prompt`, `cancel`, `session.create`, `desktop.continue`, `projects.list`,
+`session.draft`, `session.mode`, `session.model`, `permission`. Images load
+from `GET /api/image?session=&path=`.
 
 ## Icon
 

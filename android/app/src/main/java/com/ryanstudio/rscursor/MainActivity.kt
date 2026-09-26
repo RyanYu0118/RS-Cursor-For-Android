@@ -39,8 +39,11 @@ class MainActivity : ComponentActivity() {
                 val state by vm.ui.collectAsStateWithLifecycle()
                 AppScaffold(
                     state = state,
-                    onSelectSession = vm::attach,
-                    onNewSession = vm::createSession,
+                    onOpenChat = vm::openRailItem,
+                    onOpenPinned = vm::openPinned,
+                    onNewSession = { vm.createSession() },
+                    onNewInFolder = { folder -> vm.createSession(folder) },
+                    onToggleRepo = vm::toggleRepo,
                     onSettings = {
                         openSettings.launch(Intent(this, SettingsActivity::class.java))
                     },

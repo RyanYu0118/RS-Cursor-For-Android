@@ -18,6 +18,10 @@ class HostRepository {
     private var hostUrl: String = ""
     private var reconnectPosted = AtomicBoolean(false)
     private var draftSeq = 0L
+    private var sidebarJson: JSONObject? = null
+    private var recentChats: List<JSONObject> = emptyList()
+    private val collapsedRepos = mutableSetOf<String>()
+    private var collapsedSeeded = false
 
     private var _state = HostUiState()
     val state: HostUiState get() = _state
@@ -101,8 +105,42 @@ class HostRepository {
         )
     }
 
-    fun createSession() {
-        send(JSONObject().put("op", "session.create"))
+    fun createSession(folder: String? = null) {
+        val op = JSONObject().put("op", "session.create")
+        if (!folder.isNullOrBlank()) op.put("folder", folder)
+        send(op)
+    }
+
+    fun continueDesktop(chatId: String, folder: String) {
+        send(
+            JSONObject()
+                .put("op", "desktop.continue")
+                .put("chatId", chatId)
+                .put("folder", folder),
+        )
+    }
+
+    fun openRailItem(chat: RailChat) {
+        val sid = chat.sessionId
+        if (!sid.isNullOrBlank()) {
+            attach(sid)
+            return
+        }
+        val cid = chat.chatId ?: return
+        continueDesktop(cid, chat.folder)
+    }
+
+    fun openPinned(pin: RailPinned) {
+        val known = _state.sessions.find { it.desktopThreadId == pin.id }
+        if (known != null) {
+            attach(known.id)
+            return
+        }
+        if (pin.id.isNotBlank() && pin.folder.isNotBlank()) {
+            continueDesktop(pin.id, pin.folder)
+            return
+        }
+        if (pin.folder.isNotBlank()) createSession(pin.folder) else createSession()
     }
 
     fun setDraft(text: String, claim: Boolean = true, force: Boolean = false) {
@@ -228,6 +266,16 @@ class HostRepository {
         publish(_state.copy(railOpen = open))
     }
 
+    fun toggleRepo(folder: String) {
+        val key = RailBuilder.folderKey(folder).ifBlank { "norepo" }
+        if (!collapsedRepos.add(key)) collapsedRepos.remove(key)
+        publish(_state.copy(railRepos = applyCollapsed(_state.railRepos)))
+    }
+
+    fun refreshProjects() {
+        send(JSONObject().put("op", "projects.list"))
+    }
+
     fun imageUrl(part: ImagePart): String? {
         if (!part.data.isNullOrBlank()) {
             return "data:${part.mimeType};base64,${part.data}"
@@ -267,6 +315,8 @@ class HostRepository {
                 banner = null,
             ),
         )
+        // hello has chats but not the Agents sidebar; ask once so rail can match web.
+        send(JSONObject().put("op", "projects.list"))
     }
 
     private fun scheduleReconnect(reason: String) {
@@ -292,6 +342,8 @@ class HostRepository {
         when (msg.optString("type")) {
             "hello" -> {
                 val sessions = parseSessions(msg.optJSONArray("sessions"))
+                ingestSidebar(msg)
+                val (pinned, repos) = rebuildRail(sessions)
                 publish(
                     _state.copy(
                         sessions = sessions,
@@ -299,20 +351,35 @@ class HostRepository {
                         phase = ConnPhase.Connected,
                         reconnecting = false,
                         banner = null,
+                        railPinned = pinned,
+                        railRepos = repos,
                     ),
                 )
             }
             "sessions" -> {
                 val sessions = parseSessions(msg.optJSONArray("sessions"))
                 val mine = sessions.find { it.id == _state.sessionId }
+                val (pinned, repos) = rebuildRail(sessions)
                 publish(
                     _state.copy(
                         sessions = sessions,
                         sessionsReady = true,
                         meta = mine ?: _state.meta,
                         busy = mine?.status == "busy" || mine?.status == "starting",
+                        railPinned = pinned,
+                        railRepos = repos,
                     ),
                 )
+            }
+            "projects" -> {
+                ingestSidebar(msg)
+                val (pinned, repos) = rebuildRail(_state.sessions)
+                publish(_state.copy(railPinned = pinned, railRepos = repos))
+            }
+            "desktopRecent" -> {
+                recentChats = RailBuilder.parseChats(msg.optJSONArray("chats"))
+                val (pinned, repos) = rebuildRail(_state.sessions)
+                publish(_state.copy(railPinned = pinned, railRepos = repos))
             }
             "attached" -> onAttached(msg)
             "record" -> {
@@ -374,6 +441,21 @@ class HostRepository {
             reducer.apply(p.put("kind", p.optString("kind").ifBlank { "permission_request" }))
         }
         val draftText = msg.optJSONObject("draft")?.optString("text").orEmpty()
+        ingestSidebar(msg)
+        // Keep the active chat's repo expanded so attach never hides it.
+        meta?.folder?.let { folder ->
+            val key = RailBuilder.folderKey(folder)
+            if (key.isNotBlank()) collapsedRepos.remove(key)
+        }
+        val sessions =
+            _state.sessions.let { list ->
+                if (meta == null) list
+                else {
+                    val without = list.filterNot { it.id == meta.id }
+                    without + meta
+                }
+            }
+        val (pinned, repos) = rebuildRail(sessions)
         publish(
             _state.copy(
                 sessionId = sessionId,
@@ -387,10 +469,47 @@ class HostRepository {
                 banner = null,
                 busy = meta?.status == "busy" || meta?.status == "starting",
                 draft = if (draftText.isNotEmpty()) draftText else _state.draft,
+                sessions = sessions,
+                railPinned = pinned,
+                railRepos = repos,
             ),
         )
         send(JSONObject().put("op", "queue.list").put("sessionId", sessionId))
     }
+
+    private fun ingestSidebar(msg: JSONObject) {
+        msg.optJSONObject("sidebar")?.let { sidebarJson = it }
+        if (msg.has("chats")) {
+            recentChats = RailBuilder.parseChats(msg.optJSONArray("chats"))
+        }
+    }
+
+    private fun rebuildRail(sessions: List<SessionMeta>): Pair<List<RailPinned>, List<RailRepo>> {
+        val (pinned, repos) = RailBuilder.build(sessions, sidebarJson, recentChats)
+        if (!collapsedSeeded && repos.isNotEmpty()) {
+            collapsedSeeded = true
+            for (repo in repos) {
+                if (repo.collapsed) {
+                    collapsedRepos += RailBuilder.folderKey(repo.folder).ifBlank { "norepo" }
+                }
+            }
+        }
+        // Keep the focused session's folder open.
+        val focusFolder =
+            _state.meta?.folder
+                ?: sessions.find { it.id == _state.sessionId }?.folder
+                ?: ""
+        if (focusFolder.isNotBlank()) {
+            collapsedRepos.remove(RailBuilder.folderKey(focusFolder))
+        }
+        return pinned to applyCollapsed(repos)
+    }
+
+    private fun applyCollapsed(repos: List<RailRepo>): List<RailRepo> =
+        repos.map { repo ->
+            val key = RailBuilder.folderKey(repo.folder).ifBlank { "norepo" }
+            repo.copy(collapsed = key in collapsedRepos)
+        }
 
     private fun parseSessions(arr: JSONArray?): List<SessionMeta> {
         if (arr == null) return emptyList()

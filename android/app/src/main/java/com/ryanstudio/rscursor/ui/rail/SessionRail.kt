@@ -1,9 +1,12 @@
 package com.ryanstudio.rscursor.ui.rail
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,130 +17,501 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ryanstudio.rscursor.data.SessionMeta
+import com.ryanstudio.rscursor.data.RailBuilder
+import com.ryanstudio.rscursor.data.RailChat
+import com.ryanstudio.rscursor.data.RailPinned
+import com.ryanstudio.rscursor.data.RailRepo
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import com.ryanstudio.rscursor.ui.theme.RsText
 
+private val RailCorner = RoundedCornerShape(12.dp)
+private val PreviewLimit = 5
+private val RecentLimit = 10
+
 @Composable
 fun SessionRail(
-    sessions: List<SessionMeta>,
-    activeId: String?,
-    onSelect: (String) -> Unit,
+    pinned: List<RailPinned>,
+    repos: List<RailRepo>,
+    activeSessionId: String?,
+    activeDesktopThreadId: String?,
+    onOpenChat: (RailChat) -> Unit,
+    onOpenPinned: (RailPinned) -> Unit,
     onNew: () -> Unit,
+    onNewInFolder: (String) -> Unit,
+    onToggleRepo: (String) -> Unit,
     onSettings: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var filter by remember { mutableStateOf("") }
+    var filterOpen by remember { mutableStateOf(false) }
+    var expandedMore by remember { mutableStateOf(setOf<String>()) }
+
+    val needle = filter.trim().lowercase()
+    val recent =
+        remember(repos, needle) {
+            repos
+                .asSequence()
+                .flatMap { it.chats.asSequence() }
+                .distinctBy { it.key }
+                .sortedByDescending { it.at }
+                .filter { needle.isEmpty() || it.title.lowercase().contains(needle) }
+                .take(RecentLimit)
+                .toList()
+        }
+    val visibleRepos =
+        remember(repos, needle) {
+            if (needle.isEmpty()) {
+                repos
+            } else {
+                repos.mapNotNull { repo ->
+                    val chats =
+                        repo.chats.filter {
+                            it.title.lowercase().contains(needle) ||
+                                repo.name.lowercase().contains(needle)
+                        }
+                    if (chats.isEmpty() && !repo.name.lowercase().contains(needle)) null
+                    else repo.copy(chats = chats, collapsed = false)
+                }
+            }
+        }
+    val pinnedVisible =
+        remember(pinned, needle) {
+            if (needle.isEmpty()) pinned
+            else pinned.filter { it.name.lowercase().contains(needle) }
+        }
+
     Column(
         modifier =
             modifier
-                .width(248.dp)
+                .width(268.dp)
                 .fillMaxHeight()
-                .padding(start = 4.dp, top = 0.dp, bottom = 4.dp, end = 4.dp)
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .padding(start = 2.dp, end = 2.dp, bottom = 4.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, end = 0.dp, top = 2.dp),
+        ) {
             Text(
-                text = "RS Cursor",
+                text = "Agents",
                 color = RsText,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-                modifier = Modifier.weight(1f).padding(start = 6.dp),
+                fontSize = 15.sp,
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
             )
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "关闭侧栏", tint = RsMuted)
+            IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "关闭侧栏", tint = RsMuted, modifier = Modifier.size(18.dp))
             }
         }
-        Text(
-            text = "会话",
-            color = RsMuted,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 8.dp),
+
+        RailAction(
+            icon = Icons.Default.Add,
+            label = "New Chat",
+            onClick = onNew,
         )
+        RailAction(
+            icon = Icons.Default.Search,
+            label = if (filterOpen) "Search…" else "Search",
+            onClick = { filterOpen = !filterOpen },
+            accent = filterOpen,
+        )
+        AnimatedVisibility(visible = filterOpen) {
+            BasicTextField(
+                value = filter,
+                onValueChange = { filter = it },
+                singleLine = true,
+                textStyle = TextStyle(color = RsText, fontSize = 13.sp),
+                cursorBrush = SolidColor(RsAccent),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .clip(RailCorner)
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                decorationBox = { inner ->
+                    if (filter.isEmpty()) {
+                        Text("Filter chats…", color = RsMuted, fontSize = 13.sp)
+                    }
+                    inner()
+                },
+            )
+        }
+        RailAction(
+            icon = Icons.Default.Settings,
+            label = "Settings",
+            onClick = onSettings,
+            muted = true,
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            contentPadding = PaddingValues(bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            items(sessions, key = { it.id }) { session ->
-                SessionRow(
-                    session = session,
-                    selected = session.id == activeId,
-                    onClick = { onSelect(session.id) },
-                )
+            if (pinnedVisible.isNotEmpty()) {
+                item(key = "sec-pinned") {
+                    SectionLabel("Pinned")
+                }
+                items(pinnedVisible, key = { "pin:${it.id}" }) { pin ->
+                    PinnedRow(
+                        pin = pin,
+                        selected =
+                            pin.id == activeDesktopThreadId ||
+                                (activeDesktopThreadId.isNullOrBlank() && pin.id == activeSessionId),
+                        onClick = { onOpenPinned(pin) },
+                    )
+                }
             }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        TextButton(onClick = onNew, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = RsAccent)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("新建会话", color = RsText, fontSize = 13.sp)
-        }
-        TextButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp), tint = RsMuted)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("主机设置", color = RsMuted, fontSize = 13.sp)
+
+            if (recent.isNotEmpty()) {
+                item(key = "sec-recent") {
+                    SectionLabel(if (pinnedVisible.isEmpty()) "Recent" else "Recent")
+                }
+                items(recent, key = { "r:${it.key}" }) { chat ->
+                    ChatRow(
+                        chat = chat,
+                        selected = isSelected(chat, activeSessionId, activeDesktopThreadId),
+                        indented = false,
+                        onClick = { onOpenChat(chat) },
+                    )
+                }
+            }
+
+            item(key = "sec-repos") {
+                SectionLabel("Repositories")
+            }
+
+            if (visibleRepos.isEmpty() && pinnedVisible.isEmpty() && recent.isEmpty()) {
+                item(key = "empty") {
+                    Text(
+                        "No projects yet — start a new chat.",
+                        color = RsMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
+            }
+
+            visibleRepos.forEach { repo ->
+                val repoKey = RailBuilder.folderKey(repo.folder).ifBlank { repo.name }
+                val open = !repo.collapsed || needle.isNotEmpty()
+                val showAll = repoKey in expandedMore || needle.isNotEmpty()
+                val chats = if (showAll) repo.chats else repo.chats.take(PreviewLimit)
+
+                item(key = "repo:$repoKey") {
+                    RepoHead(
+                        repo = repo,
+                        open = open,
+                        onToggle = { onToggleRepo(repo.folder) },
+                        onAdd = { onNewInFolder(repo.folder) },
+                    )
+                }
+                if (open) {
+                    if (chats.isEmpty()) {
+                        item(key = "empty:$repoKey") {
+                            Text(
+                                "No chats yet.",
+                                color = RsMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(start = 28.dp, top = 2.dp, bottom = 6.dp),
+                            )
+                        }
+                    } else {
+                        items(chats, key = { "c:$repoKey:${it.key}" }) { chat ->
+                            ChatRow(
+                                chat = chat,
+                                selected = isSelected(chat, activeSessionId, activeDesktopThreadId),
+                                indented = true,
+                                onClick = { onOpenChat(chat) },
+                            )
+                        }
+                        if (!showAll && repo.chats.size > PreviewLimit) {
+                            item(key = "more:$repoKey") {
+                                Text(
+                                    "More",
+                                    color = RsAccent,
+                                    fontSize = 12.sp,
+                                    modifier =
+                                        Modifier
+                                            .padding(start = 28.dp, top = 2.dp, bottom = 4.dp)
+                                            .clip(RailCorner)
+                                            .clickable {
+                                                expandedMore = expandedMore + repoKey
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SessionRow(
-    session: SessionMeta,
-    selected: Boolean,
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        color = RsMuted,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 4.dp, end = 8.dp),
+    )
+}
+
+@Composable
+private fun RailAction(
+    icon: ImageVector,
+    label: String,
     onClick: () -> Unit,
+    accent: Boolean = false,
+    muted: Boolean = false,
 ) {
-    val bg = if (selected) Color.White.copy(alpha = 0.1f) else Color.Transparent
-    Column(
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp)
+                .clip(RailCorner)
+                .background(if (accent) Color.White.copy(alpha = 0.08f) else Color.Transparent)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (muted) RsMuted else RsText,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            label,
+            color = if (muted) RsMuted else RsText,
+            fontSize = 13.sp,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun PinnedRow(
+    pin: RailPinned,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg =
+        if (selected) {
+            Color.White.copy(alpha = 0.12f)
+        } else {
+            Color.Transparent
+        }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp)
+                .clip(RailCorner)
                 .background(bg)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(pinColor(pin.color.ifBlank { pin.name })),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
         Text(
-            text = session.title,
+            pin.name,
             color = if (selected) RsAccent else RsText,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        val age = RailBuilder.relTime(pin.at)
+        if (age.isNotEmpty()) {
+            Text(age, color = RsMuted, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun RepoHead(
+    repo: RailRepo,
+    open: Boolean,
+    onToggle: () -> Unit,
+    onAdd: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 1.dp)
+                .clip(RailCorner)
+                .clickable(onClick = onToggle)
+                .padding(start = 6.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
+    ) {
+        Icon(
+            if (open) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = RsMuted,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            if (repo.kind == "home") Icons.Default.Home else Icons.Default.Folder,
+            contentDescription = null,
+            tint = RsMuted,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            repo.name.ifBlank { "No Repo" },
+            color = RsText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (repo.chats.isNotEmpty()) {
+            Text(
+                "${repo.chats.size}",
+                color = RsMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+        }
+        Box(
+            modifier =
+                Modifier
+                    .size(26.dp)
+                    .clip(RailCorner)
+                    .clickable(onClick = onAdd),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "新建", tint = RsMuted, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+@Composable
+private fun ChatRow(
+    chat: RailChat,
+    selected: Boolean,
+    indented: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg =
+        when {
+            selected -> Color.White.copy(alpha = 0.12f)
+            else -> Color.Transparent
+        }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp)
+                .clip(RailCorner)
+                .background(bg)
+                .clickable(onClick = onClick)
+                .padding(
+                    start = if (indented) 28.dp else 10.dp,
+                    end = 10.dp,
+                    top = 6.dp,
+                    bottom = 6.dp,
+                ),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) RsAccent else RsMuted.copy(alpha = 0.55f)),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            chat.title,
+            color = if (selected) RsAccent else RsText,
+            fontSize = 13.sp,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-            fontSize = 14.sp,
+            modifier = Modifier.weight(1f),
         )
-        val sub =
-            buildString {
-                if (session.status == "busy" || session.status == "starting") append("工作中 · ")
-                append(session.folder.substringAfterLast('\\').substringAfterLast('/').ifBlank { session.folder })
-            }
-        if (sub.isNotBlank()) {
-            Text(
-                text = sub,
-                color = RsMuted,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        val age = RailBuilder.relTime(chat.at)
+        if (age.isNotEmpty()) {
+            Text(age, color = RsMuted, fontSize = 11.sp)
         }
     }
+}
+
+private fun isSelected(
+    chat: RailChat,
+    activeSessionId: String?,
+    activeDesktopThreadId: String?,
+): Boolean {
+    if (!chat.sessionId.isNullOrBlank() && chat.sessionId == activeSessionId) return true
+    if (!chat.chatId.isNullOrBlank() && chat.chatId == activeDesktopThreadId) return true
+    return false
+}
+
+private fun pinColor(name: String): Color {
+    val known =
+        mapOf(
+            "green" to Color(0xFF3DD68C),
+            "blue" to Color(0xFF6EA8FE),
+            "orange" to Color(0xFFE6A15C),
+            "purple" to Color(0xFFC084FC),
+            "red" to Color(0xFFF07178),
+            "yellow" to Color(0xFFE6C15C),
+        )
+    known[name.lowercase()]?.let { return it }
+    var n = 0
+    for (ch in name) n = (n * 33 + ch.code) ushr 0
+    val hue = (n % 360).toFloat()
+    return Color.hsl(hue, 0.62f, 0.58f)
 }

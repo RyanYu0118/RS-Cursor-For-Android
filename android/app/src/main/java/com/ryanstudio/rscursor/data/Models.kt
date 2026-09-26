@@ -11,6 +11,8 @@ data class SessionMeta(
     val modelName: String = "",
     val mode: String = "",
     val kind: String = "",
+    val desktopThreadId: String = "",
+    val updatedAt: Long = 0L,
     val active: Boolean = false,
 )
 
@@ -104,6 +106,32 @@ data class LocalAttachment(
     val name: String,
 )
 
+/** Cursor Agents–style rail row (Auto session or desktop chat). */
+data class RailChat(
+    val key: String,
+    val sessionId: String? = null,
+    val chatId: String? = null,
+    val title: String,
+    val folder: String = "",
+    val at: Long = 0L,
+)
+
+data class RailRepo(
+    val folder: String,
+    val name: String,
+    val kind: String = "folder",
+    val collapsed: Boolean = false,
+    val chats: List<RailChat> = emptyList(),
+)
+
+data class RailPinned(
+    val id: String,
+    val name: String,
+    val folder: String = "",
+    val at: Long = 0L,
+    val color: String = "",
+)
+
 enum class ConnPhase {
     NoHost,
     Connecting,
@@ -128,4 +156,6 @@ data class HostUiState(
     val queue: List<QueueItem> = emptyList(),
     val banner: String? = null,
     val railOpen: Boolean = true,
+    val railPinned: List<RailPinned> = emptyList(),
+    val railRepos: List<RailRepo> = emptyList(),
 )
