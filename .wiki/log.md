@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-25
+* **Fix**: Draft sync used Cursor's `getStates()` "focused" row, but that API returns `loadedComposers` — so every chat looked unfocused and phone drafts never reached the computer. Sync now keys off the on-screen `data-composer-id` (same as FACTS). See [Cursor window](concepts/cursor-window.md).
 * **Fix**: Draft sync pauses while Cursor is on another chat; each side keeps its text locally and syncs again when that same chat is focused. See [Cursor window](concepts/cursor-window.md).
 * **Update**: Composer **+** opens Cursor-style Plan/Debug/Multitask/Ask + Files/Model/MCP; the Agent chip is gone from the pill. The model chip opens Fast/Context/Effort then a nested model list (Auto / Cursor Models / Other Models). See [Web](concepts/web.md).
 * **Fix**: Pad composer is a Cursor-style pill: + on the left opens attachments via `label[for=file]` (fixes Android WebView), with model chip, optional voice, and a white send button on the right. See [Web](concepts/web.md).

@@ -3648,7 +3648,9 @@ if (existsSync(SRC)) {
     !sessionsJs.includes('not-focused') ||
     !sessionsJs.includes('computerFocused') ||
     !cdpJs.includes("status: 'not-focused'") ||
-    !cdpJs.includes('focused: Boolean(isFocused)') ||
+    !cdpJs.includes('data-composer-id') ||
+    !cdpJs.includes('SHOWN_COMPOSER_ID') ||
+    !cdpJs.includes('focused: isFocused') ||
     !js.includes('function applyRemoteDraft') ||
     !js.includes('function pushDraft') ||
     !js.includes('draftLeader') ||

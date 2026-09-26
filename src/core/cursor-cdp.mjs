@@ -723,21 +723,50 @@ function richTextFromPlain(text) {
   });
 }
 
+/** Which chat the window is showing — same idea as FACTS.threadId. */
+const SHOWN_COMPOSER_ID = `(() => {
+  const pane =
+    document.querySelector('#workbench\\\\.parts\\\\.auxiliarybar') ||
+    document.querySelector('#workbench\\\\.parts\\\\.editor') ||
+    document;
+  const ids = new Set();
+  for (const el of pane.querySelectorAll('[data-composer-id]')) {
+    const rects = el.getClientRects?.() || [];
+    if (!rects.length && el.offsetParent === null) continue;
+    const id = el.getAttribute('data-composer-id');
+    if (id) ids.add(id);
+  }
+  if (ids.size === 1) return [...ids][0];
+  // Agents sidebar names the open chat when the pane holds more than one id.
+  for (const el of document.querySelectorAll('[data-sidebar-item-key]')) {
+    const key = el.getAttribute('data-sidebar-item-key') || '';
+    const m = /^row:(.+)$/.exec(key);
+    if (!m) continue;
+    const on =
+      el.getAttribute('aria-selected') === 'true' ||
+      /\b(?:selected|active|focused)\b/i.test(String(el.className || ''));
+    if (on) return m[1];
+  }
+  return ids.size === 1 ? [...ids][0] : null;
+})()`;
+
 /** What each loaded chat has waiting in its box. The open editor wins over disk. */
 const LIVE_COMPOSER_DRAFTS = `(() => {
   const chat = globalThis.__autoChat;
   const dataSvc = chat?._composerDataService;
   if (!dataSvc?.getComposerDataIfLoaded) return null;
   const ids = dataSvc.loadedComposers?.ids || [];
-  const focused = globalThis.__SSG_COMPOSER_PROVIDER__?.getStates?.().find((row) => row.state === 'focused');
-  const box = document.querySelector('.tiptap.ProseMirror.ui-prompt-input-editor__input');
+  const shownId = ${SHOWN_COMPOSER_ID};
+  const box = document.querySelector(
+    ".tiptap.ProseMirror.ui-prompt-input-editor__input, div.aislash-editor-input[contenteditable='true']",
+  );
   const visible = box ? String(box.innerText || '').replace(/\\n$/, '') : null;
   return ids.map((id) => {
     const data = dataSvc.getComposerDataIfLoaded(id);
     const stored = String(data?.text ?? '');
-    const isFocused = focused?.id === id;
+    const isFocused = Boolean(shownId && shownId === id);
     const text = isFocused && visible != null ? visible : stored;
-    return { threadId: id, text, focused: Boolean(isFocused) };
+    return { threadId: id, text, focused: isFocused };
   });
 })()`;
 
@@ -768,8 +797,8 @@ function syncComposerDraftExpression({ threadId, text, force = false }) {
     if (handle && typeof handle.then === 'function') handle = await handle;
     if (!handle) return { status: 'unknown-thread', reason: 'chat is not loaded' };
     const before = String(dataSvc.getComposerDataIfLoaded(req.threadId)?.text ?? '');
-    const focused = globalThis.__SSG_COMPOSER_PROVIDER__?.getStates?.().find((row) => row.state === 'focused');
-    if (focused?.id !== req.threadId) {
+    const shownId = ${SHOWN_COMPOSER_ID};
+    if (!shownId || shownId !== req.threadId) {
       return { status: 'not-focused', text: before };
     }
     const richText = req.text ? req.richText : ${JSON.stringify(richTextFromPlain(''))};
@@ -777,7 +806,9 @@ function syncComposerDraftExpression({ threadId, text, force = false }) {
       dataSvc.updateComposerData(handle, { text: req.text, richText });
     }
     events?.fireShouldForceText?.({ composerId: req.threadId });
-    const box = document.querySelector('.tiptap.ProseMirror.ui-prompt-input-editor__input');
+    const box = document.querySelector(
+      ".tiptap.ProseMirror.ui-prompt-input-editor__input, div.aislash-editor-input[contenteditable='true']",
+    );
     if (box) {
       const editor = box.editor || box.pmViewDesc?.editor || box.__editor;
       if (editor?.commands?.setContent) editor.commands.setContent(req.text || '', false);
