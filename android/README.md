@@ -4,6 +4,11 @@ Thin `WebView` wrapper for Auto's existing web UI. The Auto host still runs
 on the computer (`:4331`); this app only opens that URL and routes
 `<input type=file>` through the system picker.
 
+## Icon
+
+Studio mark from `../src/web/rs-logo.png`, padded so launchers do not crop
+it (`scripts/android-icons.ps1`).
+
 ## Build
 
 Needs JDK 17 and an Android SDK (API 35).

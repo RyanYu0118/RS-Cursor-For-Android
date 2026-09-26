@@ -14,7 +14,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T09:20:00Z }
+generated: { by: agent, at: 2026-09-26T09:45:00Z }
 ---
 
 # Android shell
@@ -34,6 +34,13 @@ existing composer attachments path keeps working.
 
 It does **not** rewrite the chat UI, and it does **not** run the Auto host
 on the pad.
+
+## Icon
+
+Launcher uses the studio mark [`src/web/rs-logo.png`](/src/web/rs-logo.png),
+letterboxed onto a white tile with safe padding (legacy ~58%, adaptive
+foreground ~52%) so round / squircle masks do not crop the R. Regenerate
+with `powershell -File scripts/android-icons.ps1`.
 
 ## First launch
 
