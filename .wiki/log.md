@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Update**: Android transcript loads older history on scroll-up via `transcript.more`. See [Android shell](concepts/android-shell.md).
 * **Fix**: Android WebSocket ignores stale closes so "重连中" no longer flashes every second. See [Android shell](concepts/android-shell.md).
 * **Update**: Cursor desktop approvals are no longer mirrored to clients (queue watch stays); Android Enter sends, Shift+Enter newlines. See [Approvals](concepts/approvals.md) and [Android shell](concepts/android-shell.md).
 * **Update**: Android rail mirrors Agents — Pinned / Recent / Repositories, `desktop.continue`, per-folder new session. See [Android shell](concepts/android-shell.md).

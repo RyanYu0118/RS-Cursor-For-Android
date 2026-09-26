@@ -95,6 +95,8 @@ class HostRepository {
                 draft = "",
                 attachments = emptyList(),
                 queue = emptyList(),
+                earlierCount = 0,
+                loadingEarlier = false,
             ),
         )
         send(
@@ -276,6 +278,23 @@ class HostRepository {
         send(JSONObject().put("op", "projects.list"))
     }
 
+    /** Same as web: scroll near top or tap the earlier row. */
+    fun loadEarlier() {
+        if (_state.loadingEarlier) return
+        if (_state.earlierCount <= 0) return
+        val id = _state.sessionId ?: return
+        val before = reducer.tailOldestSequence
+        if (before <= 0L) return
+        publish(_state.copy(loadingEarlier = true))
+        send(
+            JSONObject()
+                .put("op", "transcript.more")
+                .put("sessionId", id)
+                .put("beforeSeq", before)
+                .put("limit", 60),
+        )
+    }
+
     fun imageUrl(part: ImagePart): String? {
         if (!part.data.isNullOrBlank()) {
             return "data:${part.mimeType};base64,${part.data}"
@@ -427,8 +446,31 @@ class HostRepository {
             "host.restarting" -> {
                 publish(_state.copy(banner = "主机重启中…", reconnecting = true))
             }
+            "transcript.more" -> onTranscriptMore(msg)
             else -> { /* browser / terminals ignored in v1 */ }
         }
+    }
+
+    private fun onTranscriptMore(msg: JSONObject) {
+        if (msg.optString("sessionId") != _state.sessionId) {
+            publish(_state.copy(loadingEarlier = false))
+            return
+        }
+        val records = TranscriptReducer.jsonArrayOf(msg.optJSONArray("records"))
+        val added = reducer.prependAll(records)
+        val remaining =
+            when {
+                msg.has("remaining") -> msg.optInt("remaining").coerceAtLeast(0)
+                added == 0 -> 0
+                else -> (_state.earlierCount - added).coerceAtLeast(0)
+            }
+        publish(
+            _state.copy(
+                items = reducer.snapshot(),
+                earlierCount = remaining,
+                loadingEarlier = false,
+            ),
+        )
     }
 
     private fun onAttached(msg: JSONObject) {
@@ -441,10 +483,15 @@ class HostRepository {
         val head = TranscriptReducer.jsonArrayOf(msg.optJSONArray("head"))
         val records = TranscriptReducer.jsonArrayOf(msg.optJSONArray("records"))
         if (replaced) reducer.clear()
-        reducer.ingestAll(head + records, replace = replaced)
+        reducer.ingestAttached(head, records, replace = false)
         for (p in TranscriptReducer.jsonArrayOf(msg.optJSONArray("pending"))) {
             reducer.apply(p.put("kind", p.optString("kind").ifBlank { "permission_request" }))
         }
+        val earlier =
+            when {
+                msg.has("omitted") -> msg.optInt("omitted").coerceAtLeast(0)
+                else -> msg.optInt("earlier").coerceAtLeast(0)
+            }
         val draftText = msg.optJSONObject("draft")?.optString("text").orEmpty()
         ingestSidebar(msg)
         // Keep the active chat's repo expanded so attach never hides it.
@@ -477,6 +524,8 @@ class HostRepository {
                 sessions = sessions,
                 railPinned = pinned,
                 railRepos = repos,
+                earlierCount = earlier,
+                loadingEarlier = false,
             ),
         )
         send(JSONObject().put("op", "queue.list").put("sessionId", sessionId))

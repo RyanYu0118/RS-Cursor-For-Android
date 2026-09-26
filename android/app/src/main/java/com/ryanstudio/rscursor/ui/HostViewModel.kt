@@ -63,6 +63,8 @@ class HostViewModel(app: Application) : AndroidViewModel(app) {
 
     fun skipQuestion(askId: String) = repo.skipQuestion(askId)
 
+    fun loadEarlier() = repo.loadEarlier()
+
     fun setRailOpen(open: Boolean) = repo.setRailOpen(open)
 
     fun removeAttachment(index: Int) = repo.removeAttachment(index)

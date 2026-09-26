@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T14:20:00Z }
+generated: { by: agent, at: 2026-09-26T14:30:00Z }
 ---
 
 # Android shell
@@ -53,6 +53,9 @@ Tapping an Auto session attaches; tapping a desktop-only chat sends
 
 The WebSocket bumps a generation on each connect so a replaced socket's late
 `onClosed` cannot schedule another reconnect and flash "重连中" every second.
+Attach paints a short tail; scrolling to the top (or tapping the earlier row)
+asks `transcript.more` and prepends older history without jumping the viewport.
+Composer Enter sends; Shift+Enter inserts a newline.
 
 ## Why it exists
 
@@ -78,7 +81,8 @@ flash.
 - Side rail: Agents-style Pinned / Recent / Repositories, attach or
   `desktop.continue`, new session (global or per folder)
 - Transcript: user / assistant text, image thumbs, tool rows, permission
-  and question cards, queue strip
+  and question cards, queue strip; scroll-up loads older history
+  (`transcript.more`)
 - Composer: text, send / stop, draft sync, attachments
 - Plus menu: mode, Files (system gallery), model list (trimmed)
 

@@ -158,4 +158,7 @@ data class HostUiState(
     val railOpen: Boolean = true,
     val railPinned: List<RailPinned> = emptyList(),
     val railRepos: List<RailRepo> = emptyList(),
+    /** How many transcript records sit above what is painted (host attach window). */
+    val earlierCount: Int = 0,
+    val loadingEarlier: Boolean = false,
 )

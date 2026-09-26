@@ -64,6 +64,7 @@ fun AppScaffold(
     onPermission: (String, String) -> Unit,
     onAnswer: (String, String) -> Unit,
     onSkipQuestion: (String) -> Unit,
+    onLoadEarlier: () -> Unit,
     onRailOpen: (Boolean) -> Unit,
     imageUrl: (ImagePart) -> String?,
 ) {
@@ -183,6 +184,9 @@ fun AppScaffold(
                         items = state.items,
                         queue = state.queue,
                         busy = state.busy,
+                        earlierCount = state.earlierCount,
+                        loadingEarlier = state.loadingEarlier,
+                        onLoadEarlier = onLoadEarlier,
                         imageUrl = imageUrl,
                         onPermission = onPermission,
                         onAnswer = onAnswer,

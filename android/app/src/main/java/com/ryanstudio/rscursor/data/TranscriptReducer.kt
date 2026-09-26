@@ -10,8 +10,13 @@ class TranscriptReducer {
     private var streamBuf = StringBuilder()
     private var streamThought = false
     private var lastSeq = 0L
+    private var oldestSeq = 0L
+    private var tailOldestSeq = 0L
+    private val knownSeqs = mutableSetOf<Long>()
 
     val sequence: Long get() = lastSeq
+    /** Oldest seq in the attach tail — `beforeSeq` for transcript.more. */
+    val tailOldestSequence: Long get() = tailOldestSeq
     fun snapshot(): List<ChatItem> = items.values.toList()
 
     fun clear() {
@@ -20,6 +25,9 @@ class TranscriptReducer {
         streamBuf = StringBuilder()
         streamThought = false
         lastSeq = 0L
+        oldestSeq = 0L
+        tailOldestSeq = 0L
+        knownSeqs.clear()
     }
 
     fun ingestAll(records: List<JSONObject>, replace: Boolean) {
@@ -27,9 +35,57 @@ class TranscriptReducer {
         for (rec in records) apply(rec)
     }
 
+    /** Ingest attach head then tail; only the tail's oldest seq drives load-more. */
+    fun ingestAttached(head: List<JSONObject>, tail: List<JSONObject>, replace: Boolean) {
+        if (replace) clear()
+        for (rec in head) apply(rec)
+        val beforeTail = lastSeq
+        for (rec in tail) apply(rec)
+        tailOldestSeq =
+            tail.map { it.optLong("seq", 0L) }.filter { it > 0L }.minOrNull()
+                ?: if (beforeTail > 0) beforeTail + 1 else oldestSeq
+    }
+
+    /**
+     * Paint an older window above what is already shown, keeping keys stable so
+     * Compose can hold the scroll anchor on the previously top-visible row.
+     */
+    fun prependAll(records: List<JSONObject>): Int {
+        val fresh =
+            records.filter { rec ->
+                val seq = rec.optLong("seq", 0L)
+                seq <= 0L || knownSeqs.add(seq)
+            }
+        if (fresh.isEmpty()) return 0
+        flushStream()
+        val side = TranscriptReducer()
+        for (rec in fresh) side.apply(rec)
+        side.flushStream()
+        val merged = linkedMapOf<String, ChatItem>()
+        for ((k, v) in side.items) merged[k] = v
+        for ((k, v) in items) if (k !in merged) merged[k] = v
+        items.clear()
+        items.putAll(merged)
+        knownSeqs += side.knownSeqs
+        if (side.oldestSeq > 0 && (oldestSeq == 0L || side.oldestSeq < oldestSeq)) {
+            oldestSeq = side.oldestSeq
+        }
+        val newTailOldest =
+            fresh.map { it.optLong("seq", 0L) }.filter { it > 0L }.minOrNull()
+        if (newTailOldest != null && (tailOldestSeq == 0L || newTailOldest < tailOldestSeq)) {
+            tailOldestSeq = newTailOldest
+        }
+        if (side.lastSeq > lastSeq) lastSeq = side.lastSeq
+        return fresh.size
+    }
+
     fun apply(rec: JSONObject) {
         val seq = rec.optLong("seq", 0L)
-        if (seq > lastSeq) lastSeq = seq
+        if (seq > 0L) {
+            knownSeqs += seq
+            if (seq > lastSeq) lastSeq = seq
+            if (oldestSeq == 0L || seq < oldestSeq) oldestSeq = seq
+        }
         when (rec.optString("kind")) {
             "user_message" -> {
                 flushStream()

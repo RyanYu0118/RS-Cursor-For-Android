@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
                     onPermission = vm::resolvePermission,
                     onAnswer = vm::answerQuestion,
                     onSkipQuestion = vm::skipQuestion,
+                    onLoadEarlier = vm::loadEarlier,
                     onRailOpen = vm::setRailOpen,
                     imageUrl = vm::imageUrl,
                 )

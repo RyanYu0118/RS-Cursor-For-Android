@@ -1,6 +1,7 @@
 package com.ryanstudio.rscursor.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,10 +45,12 @@ import com.ryanstudio.rscursor.data.ImagePart
 import com.ryanstudio.rscursor.data.QueueItem
 import com.ryanstudio.rscursor.ui.shell.TranscriptSkeleton
 import com.ryanstudio.rscursor.ui.theme.GlassBubbleUserBrush
+import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsAllow
 import com.ryanstudio.rscursor.ui.theme.RsDeny
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import com.ryanstudio.rscursor.ui.theme.RsText
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
 fun TranscriptScreen(
@@ -49,6 +58,9 @@ fun TranscriptScreen(
     items: List<ChatItem>,
     queue: List<QueueItem>,
     busy: Boolean,
+    earlierCount: Int,
+    loadingEarlier: Boolean,
+    onLoadEarlier: () -> Unit,
     imageUrl: (ImagePart) -> String?,
     onPermission: (requestId: String, optionId: String) -> Unit,
     onAnswer: (askId: String, optionId: String) -> Unit,
@@ -61,9 +73,69 @@ fun TranscriptScreen(
     }
 
     val listState = rememberLazyListState()
-    LaunchedEffect(items.size, items.lastOrNull()?.key) {
-        if (items.isNotEmpty()) {
-            listState.animateScrollToItem(items.lastIndex)
+    var stickBottom by remember { mutableStateOf(true) }
+    var anchorKey by remember { mutableStateOf<String?>(null) }
+    var anchorOffset by remember { mutableIntStateOf(0) }
+    var prevSize by remember { mutableIntStateOf(items.size) }
+    var prevFirstKey by remember { mutableStateOf(items.firstOrNull()?.key) }
+
+    fun headerCount(): Int =
+        (if (earlierCount > 0 || loadingEarlier) 1 else 0) +
+            (if (queue.isNotEmpty()) 1 else 0)
+
+    LaunchedEffect(items.size, items.firstOrNull()?.key) {
+        val first = items.firstOrNull()?.key
+        val grew = items.size > prevSize
+        val prepended = grew && first != null && first != prevFirstKey && !stickBottom
+        if (prepended && anchorKey != null) {
+            val idx = items.indexOfFirst { it.key == anchorKey }
+            if (idx >= 0) {
+                listState.scrollToItem(idx + headerCount(), anchorOffset)
+            }
+        }
+        prevSize = items.size
+        prevFirstKey = first
+    }
+
+    LaunchedEffect(items.size, items.lastOrNull()?.key, busy) {
+        if (stickBottom && items.isNotEmpty()) {
+            val last = headerCount() + items.lastIndex + if (busy) 1 else 0
+            listState.animateScrollToItem(last.coerceAtLeast(0))
+        }
+    }
+
+    LaunchedEffect(listState, earlierCount, loadingEarlier) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val nearBottom = total == 0 || lastVisible >= total - 2
+            val nearTop = listState.firstVisibleItemIndex <= 1
+            val anchor =
+                info.visibleItemsInfo.firstOrNull {
+                    val k = it.key
+                    k != "earlier" && k != "queue" && k != "working"
+                }
+            Triple(nearTop, nearBottom, anchor?.let { it.key.toString() to it.offset })
+        }
+            .distinctUntilChanged()
+            .collect { (nearTop, nearBottom, anchor) ->
+                stickBottom = nearBottom
+                if (anchor != null) {
+                    anchorKey = anchor.first
+                    anchorOffset = anchor.second
+                }
+                if (nearTop && earlierCount > 0 && !loadingEarlier) {
+                    onLoadEarlier()
+                }
+            }
+    }
+
+    // Still at the top after a chunk landed — keep pulling until the gap is gone
+    // or the user scrolls away.
+    LaunchedEffect(earlierCount, loadingEarlier, items.size) {
+        if (!loadingEarlier && earlierCount > 0 && listState.firstVisibleItemIndex <= 1) {
+            onLoadEarlier()
         }
     }
 
@@ -73,6 +145,15 @@ fun TranscriptScreen(
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (earlierCount > 0 || loadingEarlier) {
+            item(key = "earlier") {
+                EarlierBanner(
+                    count = earlierCount,
+                    loading = loadingEarlier,
+                    onClick = onLoadEarlier,
+                )
+            }
+        }
         if (queue.isNotEmpty()) {
             item(key = "queue") {
                 QueueCard(queue)
@@ -95,6 +176,32 @@ fun TranscriptScreen(
             }
         }
     }
+}
+
+@Composable
+private fun EarlierBanner(
+    count: Int,
+    loading: Boolean,
+    onClick: () -> Unit,
+) {
+    val label =
+        when {
+            loading -> "正在加载更早的消息…"
+            count > 0 -> "${"%,d".format(count)} 条更早 · 上滑或点此加载"
+            else -> "加载更早的消息"
+        }
+    Text(
+        text = label,
+        color = if (loading) RsMuted else RsAccent,
+        fontSize = 12.sp,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .clickable(enabled = !loading && count > 0, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+    )
 }
 
 @Composable
