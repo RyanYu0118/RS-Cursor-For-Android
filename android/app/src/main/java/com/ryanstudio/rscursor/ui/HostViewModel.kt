@@ -63,6 +63,12 @@ class HostViewModel(app: Application) : AndroidViewModel(app) {
 
     fun skipQuestion(askId: String) = repo.skipQuestion(askId)
 
+    fun queueNow(itemId: String) = repo.queueNow(itemId)
+
+    fun queueDrop(itemId: String) = repo.queueDrop(itemId)
+
+    fun queueEdit(itemId: String, text: String) = repo.queueEdit(itemId, text)
+
     fun loadEarlier() = repo.loadEarlier()
 
     fun setRailOpen(open: Boolean) = repo.setRailOpen(open)

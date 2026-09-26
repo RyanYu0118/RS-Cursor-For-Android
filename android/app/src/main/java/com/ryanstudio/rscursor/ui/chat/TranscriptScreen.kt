@@ -67,7 +67,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.ryanstudio.rscursor.data.ChatItem
 import com.ryanstudio.rscursor.data.ImagePart
-import com.ryanstudio.rscursor.data.QueueItem
 import com.ryanstudio.rscursor.data.ToolLanes
 import com.ryanstudio.rscursor.ui.shell.TranscriptSkeleton
 import com.ryanstudio.rscursor.ui.theme.GlassBubbleUserBrush
@@ -83,7 +82,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 fun TranscriptScreen(
     ready: Boolean,
     items: List<ChatItem>,
-    queue: List<QueueItem>,
     busy: Boolean,
     earlierCount: Int,
     loadingEarlier: Boolean,
@@ -109,9 +107,8 @@ fun TranscriptScreen(
     var prevSize by remember { mutableIntStateOf(items.size) }
     var prevFirstKey by remember { mutableStateOf(items.firstOrNull()?.key) }
 
-    fun headerCount(): Int =
-        (if (earlierCount > 0 || loadingEarlier) 1 else 0) +
-            (if (queue.isNotEmpty()) 1 else 0)
+        fun headerCount(): Int =
+            (if (earlierCount > 0 || loadingEarlier) 1 else 0)
 
     LaunchedEffect(items.size, items.firstOrNull()?.key) {
         val first = items.firstOrNull()?.key
@@ -150,7 +147,7 @@ fun TranscriptScreen(
             val anchor =
                 info.visibleItemsInfo.firstOrNull {
                     val k = it.key
-                    k != "earlier" && k != "queue"
+                    k != "earlier"
                 }
             Triple(nearTop, nearBottom, anchor?.let { it.key.toString() to it.offset })
         }
@@ -186,11 +183,6 @@ fun TranscriptScreen(
                     loading = loadingEarlier,
                     onClick = onLoadEarlier,
                 )
-            }
-        }
-        if (queue.isNotEmpty()) {
-            item(key = "queue") {
-                QueueCard(queue)
             }
         }
         items(
@@ -399,28 +391,6 @@ private fun EarlierBanner(
                 .clickable(enabled = !loading && count > 0, onClick = onClick)
                 .padding(horizontal = 10.dp, vertical = 7.dp),
     )
-}
-
-@Composable
-private fun QueueCard(queue: List<QueueItem>) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(RsSpace.cornerSm))
-                .background(Color.White.copy(alpha = 0.06f))
-                .padding(8.dp),
-    ) {
-        Text("排队中", color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        queue.forEach { q ->
-            Text(
-                text = q.text.ifBlank { "(附件)" },
-                color = RsText,
-                maxLines = 2,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-    }
 }
 
 @Composable

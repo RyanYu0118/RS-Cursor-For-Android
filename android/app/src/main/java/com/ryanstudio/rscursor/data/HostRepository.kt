@@ -264,6 +264,37 @@ class HostRepository {
         )
     }
 
+    fun queueNow(itemId: String) {
+        val id = _state.sessionId ?: return
+        send(
+            JSONObject()
+                .put("op", "queue.now")
+                .put("sessionId", id)
+                .put("itemId", itemId),
+        )
+    }
+
+    fun queueDrop(itemId: String) {
+        val id = _state.sessionId ?: return
+        send(
+            JSONObject()
+                .put("op", "queue.drop")
+                .put("sessionId", id)
+                .put("itemId", itemId),
+        )
+    }
+
+    fun queueEdit(itemId: String, text: String) {
+        val id = _state.sessionId ?: return
+        send(
+            JSONObject()
+                .put("op", "queue.edit")
+                .put("sessionId", id)
+                .put("itemId", itemId)
+                .put("text", text),
+        )
+    }
+
     fun setRailOpen(open: Boolean) {
         publish(_state.copy(railOpen = open))
     }
@@ -414,15 +445,21 @@ class HostRepository {
             }
             "queue" -> {
                 if (msg.optString("sessionId") != _state.sessionId) return
-                val waiting = msg.optJSONArray("waiting")
+                // Host shape: { waiting: number, items: [{id,text}], owner, hidden }
+                val items = msg.optJSONArray("items")
+                val legacy = msg.optJSONArray("waiting")
+                val src = items ?: legacy
                 val queue = ArrayList<QueueItem>()
-                if (waiting != null) {
-                    for (i in 0 until waiting.length()) {
-                        val o = waiting.optJSONObject(i) ?: continue
+                if (src != null) {
+                    for (i in 0 until src.length()) {
+                        val o = src.optJSONObject(i) ?: continue
+                        val id = o.optString("id").ifBlank { o.optString("itemId") }
+                        val text = o.optString("text")
+                        if (id.isBlank() && text.isBlank()) continue
                         queue +=
                             QueueItem(
-                                id = o.optString("id").ifBlank { o.optString("itemId") },
-                                text = o.optString("text"),
+                                id = id.ifBlank { text },
+                                text = text,
                             )
                     }
                 }

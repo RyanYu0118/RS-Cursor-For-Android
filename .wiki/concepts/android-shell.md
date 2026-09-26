@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T15:05:00Z }
+generated: { by: agent, at: 2026-09-26T15:10:00Z }
 ---
 
 # Android shell
@@ -92,7 +92,8 @@ flash.
 - Side rail: Agents-style Pinned / Repositories, attach or
   `desktop.continue`, new session (global or per folder)
 - Transcript: user / assistant text, image thumbs, tool rows, permission
-  and question cards, queue strip; scroll-up loads older history
+  and question cards; Cursor-style **N Queued** card above the composer
+  (Start Multitasking / × / tap to edit); scroll-up loads older history
   (`transcript.more`)
 - Composer: text, send / stop, draft sync, attachments
 - Plus menu: mode, Files (system gallery), model list (trimmed)

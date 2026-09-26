@@ -42,6 +42,7 @@ import com.ryanstudio.rscursor.data.HostUiState
 import com.ryanstudio.rscursor.data.ImagePart
 import com.ryanstudio.rscursor.data.RailChat
 import com.ryanstudio.rscursor.data.RailPinned
+import com.ryanstudio.rscursor.ui.chat.QueueStrip
 import com.ryanstudio.rscursor.ui.chat.TranscriptScreen
 import com.ryanstudio.rscursor.ui.composer.ComposerBar
 import com.ryanstudio.rscursor.ui.rail.SessionRail
@@ -76,6 +77,9 @@ fun AppScaffold(
     onPermission: (String, String) -> Unit,
     onAnswer: (String, String) -> Unit,
     onSkipQuestion: (String) -> Unit,
+    onQueueNow: (String) -> Unit,
+    onQueueDrop: (String) -> Unit,
+    onQueueEdit: (String, String) -> Unit,
     onLoadEarlier: () -> Unit,
     onRailOpen: (Boolean) -> Unit,
     imageUrl: (ImagePart) -> String?,
@@ -118,6 +122,9 @@ fun AppScaffold(
                         onPermission = onPermission,
                         onAnswer = onAnswer,
                         onSkipQuestion = onSkipQuestion,
+                        onQueueNow = onQueueNow,
+                        onQueueDrop = onQueueDrop,
+                        onQueueEdit = onQueueEdit,
                         onLoadEarlier = onLoadEarlier,
                         onRailOpen = onRailOpen,
                         imageUrl = imageUrl,
@@ -147,6 +154,9 @@ private fun MainShell(
     onPermission: (String, String) -> Unit,
     onAnswer: (String, String) -> Unit,
     onSkipQuestion: (String) -> Unit,
+    onQueueNow: (String) -> Unit,
+    onQueueDrop: (String) -> Unit,
+    onQueueEdit: (String, String) -> Unit,
     onLoadEarlier: () -> Unit,
     onRailOpen: (Boolean) -> Unit,
     imageUrl: (ImagePart) -> String?,
@@ -235,7 +245,6 @@ private fun MainShell(
                     TranscriptScreen(
                         ready = ready,
                         items = state.items,
-                        queue = state.queue,
                         busy = state.busy,
                         earlierCount = state.earlierCount,
                         loadingEarlier = state.loadingEarlier,
@@ -247,6 +256,12 @@ private fun MainShell(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+                QueueStrip(
+                    queue = state.queue,
+                    onNow = onQueueNow,
+                    onDrop = onQueueDrop,
+                    onEdit = onQueueEdit,
+                )
                 ComposerBar(
                     draft = state.draft,
                     attachments = state.attachments,
