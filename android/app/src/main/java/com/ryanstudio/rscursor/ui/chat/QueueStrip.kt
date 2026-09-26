@@ -1,5 +1,6 @@
 package com.ryanstudio.rscursor.ui.chat
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,9 +14,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,7 +37,8 @@ import com.ryanstudio.rscursor.ui.theme.RsText
 
 /**
  * Cursor-style queue card above the composer: "N Queued" / Start Multitasking / ×,
- * message body underneath (tap to reword).
+ * message body underneath (tap to reword). Outer edges match the composer row
+ * (+ / Send); header actions share one horizontal centerline.
  */
 @Composable
 fun QueueStrip(
@@ -52,8 +52,16 @@ fun QueueStrip(
     val countLabel = "${queue.size} Queued"
     var editingId by remember(queue.map { it.id }) { mutableStateOf<String?>(null) }
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = RsSpace.chatPadH, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(
+                    // Same outer inset as ComposerBar so left/right edges sit
+                    // on the + / Send column lines.
+                    horizontal = RsSpace.composerPadH,
+                    vertical = 2.dp,
+                ),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         queue.forEach { item ->
             QueuedCard(
@@ -84,7 +92,7 @@ private fun QueuedCard(
     onNow: () -> Unit,
     onDrop: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(10.dp)
     var draft by remember(item.id, item.text, editing) {
         mutableStateOf(item.text)
     }
@@ -93,12 +101,14 @@ private fun QueuedCard(
             Modifier
                 .fillMaxWidth()
                 .clip(shape)
-                .border(1.dp, Color.White.copy(alpha = 0.14f), shape)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+                .background(Color(0xFF1A1A1A).copy(alpha = 0.92f))
+                .border(1.dp, Color.White.copy(alpha = 0.16f), shape)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
@@ -106,42 +116,61 @@ private fun QueuedCard(
                 color = RsMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
+                lineHeight = 16.sp,
                 modifier = Modifier.weight(1f),
             )
             if (editing) {
-                TextButton(onClick = { onSaveEdit(draft.trim()) }) {
-                    Text("✓", color = RsAccent, fontSize = 14.sp)
-                }
-                IconButton(onClick = onCancelEdit, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "取消", tint = RsMuted, modifier = Modifier.size(16.dp))
-                }
+                Text(
+                    text = "✓",
+                    color = RsAccent,
+                    fontSize = 13.sp,
+                    lineHeight = 16.sp,
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onSaveEdit(draft.trim()) }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "取消",
+                    tint = RsMuted,
+                    modifier =
+                        Modifier
+                            .size(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable(onClick = onCancelEdit),
+                )
             } else {
                 Text(
                     text = "Start Multitasking",
                     color = RsMuted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
+                    lineHeight = 16.sp,
                     modifier =
                         Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(4.dp))
                             .clickable(onClick = onNow)
-                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                            .padding(horizontal = 2.dp, vertical = 2.dp),
                 )
-                IconButton(onClick = onDrop, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "移出排队",
-                        tint = RsMuted,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "移出排队",
+                    tint = RsMuted,
+                    modifier =
+                        Modifier
+                            .size(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable(onClick = onDrop),
+                )
             }
         }
         if (editing) {
             BasicTextField(
                 value = draft,
                 onValueChange = { draft = it },
-                textStyle = TextStyle(color = RsText, fontSize = 14.sp, lineHeight = 20.sp),
+                textStyle = TextStyle(color = RsText, fontSize = 13.sp, lineHeight = 18.sp),
                 cursorBrush = SolidColor(RsAccent),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -149,8 +178,8 @@ private fun QueuedCard(
             Text(
                 text = item.text.ifBlank { "(empty)" },
                 color = RsText,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
                 modifier =
                     Modifier
                         .fillMaxWidth()
