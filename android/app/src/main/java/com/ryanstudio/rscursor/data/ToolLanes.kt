@@ -287,13 +287,12 @@ object ToolLanes {
 
     /**
      * Collapse consecutive tool rows into Cursor work folds; leave everything
-     * else alone. While [busy], the open fold shows a present-tense live step,
-     * or a Thinking / Planning strip when no tools have started yet.
+     * else alone. Only folds with in-progress tools (and a trailing live strip
+     * when the turn is busy with none) get the gleam — never historical folds.
      */
     fun project(items: List<ChatItem>, busy: Boolean): List<Row> {
         val out = ArrayList<Row>()
         var i = 0
-        var emittedToolFold = false
         while (i < items.size) {
             val item = items[i]
             if (item is ChatItem.Tool) {
@@ -304,50 +303,40 @@ object ToolLanes {
                     i++
                 }
                 if (batch.isEmpty()) continue
-                val live = busy && batch.any { it.status == "in_progress" || it.status == "pending" }
+                val running = batch.any { it.status == "in_progress" || it.status == "pending" }
                 val steps =
                     batch.filter { stepShown(it) }.map {
                         WorkStep(key = it.key, label = displayLabel(it), status = it.status)
                     }
                 val liveStep =
-                    if (busy) {
-                        batch.asReversed().firstOrNull {
-                            it.status == "in_progress" || it.status == "pending"
-                        }?.let { liveStepLabel(it) }
-                            ?: if (live || busy) "Planning next moves" else null
-                    } else {
-                        null
-                    }
+                    batch.asReversed()
+                        .firstOrNull { it.status == "in_progress" || it.status == "pending" }
+                        ?.let { liveStepLabel(it) }
                 out +=
                     Row.Fold(
                         WorkFold(
                             key = "fold-${batch.first().toolCallId}",
-                            summary = workSummary(batch, live = busy),
+                            summary = workSummary(batch, live = running),
                             steps = steps,
                             liveStep = liveStep,
-                            live = busy,
+                            live = running,
                         ),
                     )
-                emittedToolFold = true
             } else {
                 out += Row.Item(item)
                 i++
             }
         }
-        if (busy && !emittedToolFold) {
-            val thinking = items.any { it is ChatItem.Assistant && it.thought }
-            out += Row.LiveStrip(if (thinking) "Thinking" else "Planning next moves")
-        } else if (busy && emittedToolFold) {
-            val last = out.lastOrNull()
-            if (last is Row.Fold && last.fold.liveStep == null) {
-                val thinking = items.any { it is ChatItem.Assistant && it.thought }
-                out[out.lastIndex] =
-                    Row.Fold(
-                        last.fold.copy(
-                            liveStep = if (thinking) "Thinking" else "Planning next moves",
-                            live = true,
-                        ),
-                    )
+        if (busy) {
+            val gleaming =
+                out.any { row ->
+                    row is Row.Fold && !row.fold.liveStep.isNullOrBlank()
+                }
+            if (!gleaming) {
+                val afterUser = items.indexOfLast { it is ChatItem.User }.let { if (it < 0) 0 else it }
+                val thinking =
+                    items.drop(afterUser).any { it is ChatItem.Assistant && it.thought }
+                out += Row.LiveStrip(if (thinking) "Thinking" else "Planning next moves")
             }
         }
         return out
