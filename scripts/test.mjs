@@ -23,7 +23,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { basename, join, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -2853,6 +2853,14 @@ if (existsSync(SRC)) {
     fail('composer + / model popovers must be wired in app.js');
     failed = true;
   }
+  if (!js.includes('function setPlusMcp') || !js.includes('/api/mcp') || html.includes('data-plus-act="mcp" disabled')) {
+    fail('MCP in the + menu must open a real server list from /api/mcp');
+    failed = true;
+  }
+  if (!js.includes('part?.path') || !js.includes('/api/image?session=')) {
+    fail('user bubbles must be able to show desktop attachment paths via /api/image');
+    failed = true;
+  }
   if (!/<select[^>]*id="mode"[^>]*class="[^"]*sr-only/.test(html) && !/id="mode"[^>]*\bsr-only\b/.test(html)) {
     fail('tablet Agent mode select must be visually hidden; modes live in the + menu');
     failed = true;
@@ -5644,6 +5652,19 @@ if (existsSync(SRC)) {
       const put = store.prepare('INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)');
       const bubbles = [
         { bubbleId: 'b1', type: 1, text: 'hello from the IDE' },
+        {
+          bubbleId: 'b1img',
+          type: 1,
+          text: 'with a picture',
+          context: {
+            selectedImages: [
+              {
+                uuid: 'img-1',
+                path: 'C:\\Users\\test\\AppData\\Roaming\\Cursor\\User\\workspaceStorage\\abc\\images\\shot.png',
+              },
+            ],
+          },
+        },
         { bubbleId: 'b2', type: 2, thinking: { text: 'considering' } },
         { bubbleId: 'b3', type: 2, toolFormerData: { name: 'read_file', status: 'completed' } },
         { bubbleId: 'b4', type: 2, text: 'answered' },
@@ -5664,8 +5685,12 @@ if (existsSync(SRC)) {
       const threads = await import(`../src/core/desktop-threads.mjs?t=${Date.now()}`);
       const read = threads.readThread(thread);
       const shape = read.messages.map((m) => `${m.role}:${m.kind}`).join(' ');
-      if (shape !== 'user:text assistant:thinking assistant:tool assistant:text') {
+      if (shape !== 'user:text user:text assistant:thinking assistant:tool assistant:text') {
         fail(`desktop thread read back as "${shape}"`);
+      }
+      const pictured = read.messages.find((m) => m.id === 'b1img');
+      if (!pictured?.images?.length || !pictured.images[0].path?.includes('shot.png')) {
+        fail('desktop user bubbles must carry selectedImages paths for the tablet');
       }
       if (read.visited.includes('b5')) fail('an unfilled bubble should not count as seen');
       if (read.generating) fail('a thread with no generation id is not running');
@@ -5729,7 +5754,7 @@ if (existsSync(SRC)) {
       }
 
       // Only what the caller has not seen comes back.
-      const rest = threads.readThread(thread, { seen: new Set(['b1', 'b2', 'b3']) });
+      const rest = threads.readThread(thread, { seen: new Set(['b1', 'b1img', 'b2', 'b3']) });
       if (rest.messages.length !== 1 || rest.messages[0].text !== 'answered') {
         fail(`seen bubbles should be skipped, got ${JSON.stringify(rest.messages)}`);
       }
@@ -6810,6 +6835,22 @@ try {
           }
           if (refused.length) fail(`/api/image served what it should refuse: ${refused.join('; ')}`);
           else ok('route /api/image serves a chat’s own images and refuses the rest');
+        }
+        // Desktop attachments live under Cursor's workspaceStorage — the tablet
+        // has to be able to draw those paths too.
+        {
+          const appdata = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
+          const deskDir = join(appdata, 'Cursor', 'User', 'workspaceStorage', 'auto-image-test', 'images');
+          mkdirSync(deskDir, { recursive: true });
+          const deskFile = join(deskDir, 'pad-sync.png');
+          writeFileSync(deskFile, Buffer.from('89504e470d0a1a0a', 'hex'));
+          try {
+            const desk = await ask(deskFile);
+            if (!desk.ok) fail(`/api/image should serve a Cursor workspaceStorage attachment: ${desk.status}`);
+            else ok('route /api/image serves desktop chat attachments from workspaceStorage');
+          } finally {
+            rmSync(deskFile, { force: true });
+          }
         }
         }
       } catch (e) {

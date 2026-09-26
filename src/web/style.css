@@ -2333,6 +2333,39 @@ button.composer-chip.model-summary.loading .composer-chevron {
   min-width: 0;
 }
 
+.composer-pop-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-pop-back:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+
+#plus-pop > .composer-pop-panel {
+  min-width: 260px;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: min(70vh, 520px);
+  overflow: auto;
+}
+
+#plus-pop > .composer-pop-flyout {
+  min-width: 220px;
+}
+
 .model-pop {
   display: flex;
   flex-direction: row;

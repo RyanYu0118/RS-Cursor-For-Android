@@ -31,7 +31,7 @@ import { TerminalRegistry } from './terminals.mjs';
 import { sendMessage } from './desktop-bridge.mjs';
 import { CursorCdp } from './cursor-cdp.mjs';
 import { DesktopOutbox } from './desktop-outbox.mjs';
-import { ThreadWatcher, readThread, readDisplayHints, readContextUsage, readModelControls, realTitle, UNTITLED_THREAD, SETTLE_LOOKS, isHarnessPrompt } from './desktop-threads.mjs';
+import { ThreadWatcher, readThread, readDisplayHints, readContextUsage, readModelControls, readComposerAttachments, mimeOfImagePath, realTitle, UNTITLED_THREAD, SETTLE_LOOKS, isHarnessPrompt } from './desktop-threads.mjs';
 import { controlsFor, storedParameterValue } from '../web/model-parameters.js';
 import { accountUsage } from './cursor-usage.mjs';
 import { labelsForAnswer, indexesForAnswer } from './questions.mjs';
@@ -1109,13 +1109,15 @@ export class SessionManager extends EventEmitter {
    * @param {string} id
    * @param {object} p
    * @param {string} p.text
-   * @param {Array<{mimeType:string,data:string}>} [p.images] base64 image blocks
+   * @param {Array<{mimeType:string,data?:string,path?:string}>} [p.images] base64
+   *   and/or host paths (desktop attachments mirrored to the tablet)
    * @param {boolean} [p.shown]  the message is already in the transcript, as a
    *   prompt that waited for its turn is
    */
   async prompt(id, { text, images = [], shown = false } = {}) {
     const meta = this.meta.get(id);
     if (!meta) throw new Error(`Unknown session ${id}`);
+    images = this.#hydrateImages(images);
     // A desktop chat mid-turn is not a reason to refuse: Cursor queues a
     // message typed while it works, exactly as it does for the chat box, and
     // if it will not, the outbox holds it. Our own agent has no such queue, so
@@ -1139,6 +1141,7 @@ export class SessionManager extends EventEmitter {
     const content = [];
     if (text?.trim()) content.push({ type: 'text', text });
     for (const img of images) {
+      if (!img?.data) continue;
       content.push({ type: 'image', mimeType: img.mimeType, data: img.data });
     }
     if (content.length === 0) return null;
@@ -1782,26 +1785,40 @@ export class SessionManager extends EventEmitter {
       }
 
       if (computerText != null) {
+        const imageParts = this.#composerImageParts(meta.desktopThreadId);
+        const imageKey = imageParts.map((i) => i.path || i.uuid || '').join('\0');
         if (runtime.lastSeenComputerText === undefined) {
           runtime.lastSeenComputerText = computerText;
+          runtime.lastSeenComputerImages = imageKey;
           this.live.set(meta.id, runtime);
-        } else if (computerText !== runtime.lastSeenComputerText) {
-          runtime.lastSeenComputerText = computerText;
-          // Our own phone write landing is not a computer claim.
-          if (computerText === runtime.lastWrittenText) {
-            this.live.set(meta.id, runtime);
-          } else {
-            this.#stopPhoneDraftWrites(meta.id);
-            const nextDraft = { text: computerText, at: now, source: 'computer' };
-            this.drafts.set(meta.id, nextDraft);
-            const r = this.live.get(meta.id) || {};
-            r.lastSeenComputerText = computerText;
-            r.lastWrittenText = computerText;
-            r.lastForcePushAt = now;
-            r.computerFocused = true;
-            this.live.set(meta.id, r);
-            this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true, leader: 'computer' });
-            continue;
+        } else {
+          const textChanged = computerText !== runtime.lastSeenComputerText;
+          const imagesChanged = runtime.lastSeenComputerImages !== imageKey;
+          if (textChanged || imagesChanged) {
+            runtime.lastSeenComputerText = computerText;
+            runtime.lastSeenComputerImages = imageKey;
+            // Our own phone write landing is not a computer claim.
+            if (textChanged && computerText === runtime.lastWrittenText && !imagesChanged) {
+              this.live.set(meta.id, runtime);
+            } else {
+              this.#stopPhoneDraftWrites(meta.id);
+              const nextDraft = {
+                text: computerText,
+                at: now,
+                source: 'computer',
+                imageParts,
+              };
+              this.drafts.set(meta.id, nextDraft);
+              const r = this.live.get(meta.id) || {};
+              r.lastSeenComputerText = computerText;
+              r.lastSeenComputerImages = imageKey;
+              r.lastWrittenText = computerText;
+              r.lastForcePushAt = now;
+              r.computerFocused = true;
+              this.live.set(meta.id, r);
+              this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true, leader: 'computer' });
+              continue;
+            }
           }
         }
       }
@@ -1824,13 +1841,28 @@ export class SessionManager extends EventEmitter {
       }
 
       if (owned.source === 'computer' && computerText != null) {
-        const nextDraft = { text: computerText, at: now, source: 'computer' };
+        const imageParts = this.#composerImageParts(meta.desktopThreadId);
+        const nextDraft = {
+          text: computerText,
+          at: now,
+          source: 'computer',
+          ...(imageParts.length ? { imageParts } : { imageParts: [] }),
+        };
         this.drafts.set(meta.id, nextDraft);
         runtime.lastForcePushAt = now;
         runtime.computerFocused = true;
         this.live.set(meta.id, runtime);
         this.emit('draft', { sessionId: meta.id, ...nextDraft, force: true, leader: 'computer' });
       }
+    }
+  }
+
+  /** Desktop chat-box attachments Cursor has not sent yet. */
+  #composerImageParts(threadId) {
+    try {
+      return readComposerAttachments(threadId) || [];
+    } catch {
+      return [];
     }
   }
 
@@ -2247,8 +2279,14 @@ export class SessionManager extends EventEmitter {
     if (message.role === 'user') {
       if (isHarnessPrompt(message.text)) return;
       // Already in the transcript (our send, or a bubble we caught up on).
-      if (this.#shouldSkipDesktopUser(id, message)) return;
-      this.#record(id, KIND.userMessage, { text: message.text, desktopBubbleId: message.id });
+      if (this.#shouldSkipDesktopUser(id, message)) {
+        this.#backfillDesktopUserImages(id, message);
+        return;
+      }
+      this.#record(id, KIND.userMessage, {
+        ...this.#userMessageFields(message.text, message.images || []),
+        desktopBubbleId: message.id,
+      });
       return;
     }
     if (message.kind === 'thinking') {
@@ -2811,6 +2849,7 @@ export class SessionManager extends EventEmitter {
       // were showing the placeholder we locked at attach.
       const patch = adoptDesktopTitle(meta, state?.title);
       if (patch) this.#update(meta.id, patch);
+      this.#backfillThreadImages(meta.id);
       if (this.#watchDesktop(meta.id, seed.seen, { resumeTurn: seed.openTurn })) watched += 1;
     }
     return watched;
@@ -2855,16 +2894,103 @@ export class SessionManager extends EventEmitter {
 
   /**
    * What a user_message record carries so the web can draw the pictures again.
-   * Count stays for older clients and echo matching; imageParts is the pixels.
+   * Count stays for older clients and echo matching; imageParts is the pixels
+   * (base64 from the phone) or a host path (desktop attachment under
+   * workspaceStorage).
    */
   #userMessageFields(text, images = []) {
     return {
       text,
       images: images.length || undefined,
       imageParts: images.length
-        ? images.map((img) => ({ mimeType: img.mimeType, data: img.data }))
+        ? images.map((img) => {
+            const part = {
+              mimeType: img.mimeType || 'image/png',
+              ...(img.name ? { name: img.name } : {}),
+              ...(img.url && !img.path && !img.data ? { url: img.url } : {}),
+            };
+            // Prefer a host path (desktop attachment) over embedding base64.
+            if (img.path) part.path = img.path;
+            else if (img.data) part.data = img.data;
+            return part;
+          })
         : undefined,
     };
+  }
+
+  /**
+   * A tablet may only have the desktop path for an attachment. Paste and ACP
+   * both need the bytes — read them once here.
+   */
+  #hydrateImages(images = []) {
+    if (!Array.isArray(images) || !images.length) return [];
+    const out = [];
+    for (const img of images) {
+      if (!img || typeof img !== 'object') continue;
+      if (img.data) {
+        out.push(img);
+        continue;
+      }
+      const path = String(img.path || '').trim();
+      if (!path) continue;
+      try {
+        const data = readFileSync(path).toString('base64');
+        out.push({
+          ...img,
+          path,
+          data,
+          mimeType: img.mimeType || mimeOfImagePath(path),
+          name: img.name || path.split(/[\\/]/).pop() || 'image',
+        });
+      } catch (err) {
+        this.emit('log', `image hydrate: ${err.message}`);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * An older catch-up wrote the words without the pictures. When the desktop
+   * bubble still has selectedImages, emit a replace so the tablet can draw them.
+   */
+  #backfillDesktopUserImages(id, message) {
+    if (!message?.id || !message.images?.length) return;
+    const t = this.transcripts.open.get(id);
+    if (!t) return;
+    let found = null;
+    for (const rec of t.readFrom(0, { limit: 400 })) {
+      if (rec.kind !== KIND.userMessage) continue;
+      if (rec.desktopBubbleId !== message.id) continue;
+      found = rec;
+      break;
+    }
+    if (!found) return;
+    if (found.imageParts?.length) return;
+    this.#record(id, KIND.userMessage, {
+      ...this.#userMessageFields(message.text, message.images),
+      desktopBubbleId: message.id,
+      replace: true,
+    });
+  }
+
+  /**
+   * After restart, older user bubbles may still lack imageParts. One pass
+   * over the recent thread fills them in.
+   */
+  #backfillThreadImages(id) {
+    const meta = this.meta.get(id);
+    if (!meta?.desktopThreadId) return;
+    let state;
+    try {
+      state = readThread(meta.desktopThreadId, { tail: 40 });
+    } catch {
+      return;
+    }
+    if (!state?.messages?.length) return;
+    for (const message of state.messages) {
+      if (message.role !== 'user' || !message.images?.length) continue;
+      this.#backfillDesktopUserImages(id, message);
+    }
   }
 
   #consumeEcho(id, text) {

@@ -17,7 +17,7 @@ sources:
   - id: clipboard
     resource: /src/core/clipboard.mjs
     title: Image paste via clipboard
-generated: { by: agent, at: 2026-09-25T16:40:00Z }
+generated: { by: agent, at: 2026-09-26T08:40:00Z }
 ---
 
 # The Cursor window
@@ -192,6 +192,12 @@ box before the next one goes. Whatever text was on the clipboard is put
 back. An existing image on the clipboard cannot be restored. Words are sent
 even if the picture would not attach, with a note saying what was left
 behind. The outbox holds words only.
+
+A picture attached on the computer is stored on the user bubble as
+`context.selectedImages` with an absolute path under
+`workspaceStorage/…/images`. Auto copies that path into the transcript so
+the tablet can draw the same thumbnail via `/api/image`. Unsent pictures
+waiting in the focused chat box sync into the tablet composer the same way.
 
 ## Launching Cursor
 

@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, realpathSync, statSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -24,6 +24,7 @@ import { listProjects, workspaceIdFor, foldersByWorkspaceId } from '../core/proj
 import { sidebarSnapshot } from '../core/glass-sidebar.mjs';
 import { listDirectories } from '../core/fs-browse.mjs';
 import { desktopChats, recentDesktopChats } from '../core/desktop-chats.mjs';
+import { listMcpServers } from '../core/mcp-config.mjs';
 import {
   assertSwitches,
   gateState,
@@ -686,6 +687,12 @@ function imageRoots(sessionId) {
   const roots = [join(tmpdir(), 'cursor'), STATE_DIR];
   const folder = sessionId && sessions.get(sessionId)?.folder;
   if (folder) roots.push(folder);
+  // Desktop attachments Cursor keeps under workspaceStorage/.../images.
+  const appdata = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
+  roots.push(join(appdata, 'Cursor', 'User', 'workspaceStorage'));
+  // Local AppData mirror (some Cursor builds park images there).
+  const local = process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local');
+  roots.push(join(local, 'Cursor', 'User', 'workspaceStorage'));
   return roots.map(realOrNull).filter(Boolean);
 }
 
@@ -882,6 +889,13 @@ async function route(req, res) {
 
   if (pathname === '/api/image' && req.method === 'GET') {
     return serveImage(req, res, new URL(req.url, 'http://localhost'));
+  }
+
+  if (pathname === '/api/mcp' && req.method === 'GET') {
+    const asked = new URL(req.url, 'http://localhost');
+    const sessionId = asked.searchParams.get('session') || sessions.activeId;
+    const folder = sessionId && sessions.get(sessionId)?.folder;
+    return json(res, { servers: listMcpServers({ folder }) });
   }
 
   if (pathname === '/api/session/active' && req.method === 'POST') {

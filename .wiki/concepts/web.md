@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-26T03:20:00Z }
+generated: { by: agent, at: 2026-09-26T08:40:00Z }
 ---
 
 # Web app
@@ -286,8 +286,9 @@ is the way to start somewhere Cursor has never opened — see
   fenced on every side rather than trusting the path in the message: raster
   formats only (**no SVG** — it is a script document, and served from this
   origin a tab opened straight at it would run inside Auto), inside a known
-  root only (the chat's own folder, where Cursor drops its screenshots, and
-  Auto's `state/`), and checked by **real** path so a symlink cannot point out
+  root only (the chat's own folder, where Cursor drops its screenshots, Auto's
+  `state/`, and Cursor's `workspaceStorage/…/images` for pictures attached on
+  the desktop), and checked by **real** path so a symlink cannot point out
   of the repo and `..` is spent before the check rather than after. Telegram
   cannot show these — a bot photo is a separate message and would arrive apart
   from the reply it belongs to — so there `![what it shows](…)` reads as
@@ -329,9 +330,15 @@ send. There is no Agent/mode chip on the pill — modes live in the **+**
 menu (Plan / Debug / Multitask / Ask; tap the active one again for Agent).
 **Files** in that menu is a `label[for=file]` so Android WebView and iOS
 open the image picker; **Model** opens the same nested model popover as
-the chip; **MCP** is listed but not wired (servers stay in Cursor).
-Attachment thumbnails sit above the row inside the same border. The text
-field stays **16px** so iOS Safari does not zoom the page.
+the chip; **MCP** opens a nested list of servers from Cursor's
+`mcp.json` (user and this folder) — tap one to insert an `@name` mention.
+Desktop-sent pictures are kept on the user bubble as host paths under
+Cursor's `workspaceStorage/…/images` and drawn on the tablet through
+`/api/image` (same fence as answer images, with that storage root allowed).
+Unsent pictures waiting in Cursor's box sync into the tablet composer the
+same way while that chat is focused. Attachment thumbnails sit above the
+row inside the same border. The text field stays **16px** so iOS Safari
+does not zoom the page.
 
 The model chip opens a Cursor-style popover first. With a named model it
 shows Fast (toggle), Context / Effort (nested choice lists), then

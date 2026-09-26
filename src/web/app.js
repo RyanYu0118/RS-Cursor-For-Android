@@ -96,9 +96,13 @@ const els = {
   modelParametersGroup: $('model-parameters-group'),
   modelStatus: $('model-status'),
   plusPop: $('plus-pop'),
+  plusMain: $('plus-main'),
   plusFilter: $('plus-filter'),
   plusModes: $('plus-modes'),
   plusModelValue: $('plus-model-value'),
+  plusMcp: $('plus-mcp'),
+  plusMcpList: $('plus-mcp-list'),
+  plusMcpBack: $('plus-mcp-back'),
   modelPop: $('model-pop'),
   modelPopParams: $('model-pop-params'),
   modelPopList: $('model-pop-list'),
@@ -1609,6 +1613,7 @@ function div(cls, html) {
 
 function renderUser(rec) {
   const node = div('msg user');
+  if (rec.desktopBubbleId) node.dataset.bubble = rec.desktopBubbleId;
   if (rec.text) {
     const text = document.createElement('div');
     text.className = 'user-text';
@@ -1623,19 +1628,23 @@ function renderUser(rec) {
       if (!src) continue;
       const img = document.createElement('img');
       img.src = src;
-      img.alt = 'Attached image';
+      img.alt = part.name || 'Attached image';
       img.loading = 'lazy';
       img.onclick = () => openLightbox(src);
       thumbs.append(img);
     }
-    node.append(thumbs);
+    if (thumbs.childNodes.length) node.append(thumbs);
   } else if (imageCount(rec)) {
     const cap = div('cap');
     const n = imageCount(rec);
     cap.textContent = `${n} image${n === 1 ? '' : 's'} attached`;
     node.append(cap);
   }
-  add(node);
+  return node;
+}
+
+function addUser(rec) {
+  add(renderUser(rec));
 }
 
 /** Parts carried on the record, or a bare count for older transcripts. */
@@ -1650,6 +1659,9 @@ function imagePartsOf(rec) {
 function srcOfPart(part) {
   if (part?.url) return part.url;
   if (part?.data) return `data:${part.mimeType || 'image/png'};base64,${part.data}`;
+  if (part?.path && state.sessionId) {
+    return `/api/image?session=${encodeURIComponent(state.sessionId)}&path=${encodeURIComponent(part.path)}`;
+  }
   return '';
 }
 
@@ -1791,8 +1803,41 @@ function applyRemoteDraft(draft) {
   if (draft.source === 'computer' || leader === 'computer') {
     state.draftLeader = 'computer';
   }
+  const remoteParts = Array.isArray(draft.imageParts) ? draft.imageParts : null;
+  const applyRemoteImages = () => {
+    if (!remoteParts) return;
+    state.draftApplying = true;
+    state.attachments = remoteParts
+      .map((part) => {
+        const mimeType = part.mimeType || part.mime || 'image/png';
+        const data = part.data || '';
+        const path = part.path || '';
+        const url =
+          part.url ||
+          (data ? `data:${mimeType};base64,${data}` : '') ||
+          (path && state.sessionId
+            ? `/api/image?session=${encodeURIComponent(state.sessionId)}&path=${encodeURIComponent(path)}`
+            : '');
+        if (!data && !url && !path) return null;
+        return { mimeType, data, path, url, name: part.name || 'image' };
+      })
+      .filter(Boolean);
+    state.draftApplying = false;
+    renderAttachments();
+  };
   if (els.box.value === text) {
+    applyRemoteImages();
     state.draftAt = Math.max(state.draftAt, at);
+    if (state.sessionId) {
+      if (!text && !state.attachments.length) state.drafts.delete(state.sessionId);
+      else {
+        state.drafts.set(state.sessionId, {
+          text,
+          attachments: state.attachments.slice(),
+        });
+      }
+    }
+    els.send.disabled = !(els.box.value.trim() || state.attachments.length);
     return;
   }
   // Keep the caret where it was when the remote change is only a longer
@@ -1804,6 +1849,7 @@ function applyRemoteDraft(draft) {
   els.box.value = text;
   state.draftAt = Math.max(at, Date.now());
   state.draftApplying = false;
+  applyRemoteImages();
   if (document.activeElement === els.box) {
     const stillPrefix = text.startsWith(was) || was.startsWith(text);
     if (stillPrefix) {
@@ -2999,9 +3045,15 @@ function fillComposer({ text = '', imageParts = [] } = {}) {
     .map((part) => {
       const mimeType = part.mimeType || part.mime || 'image/png';
       const data = part.data || '';
-      const url = part.url || (data ? `data:${mimeType};base64,${data}` : '');
-      if (!data && !url) return null;
-      return { mimeType, data, url, name: part.name || 'image' };
+      const path = part.path || '';
+      const url =
+        part.url ||
+        (data ? `data:${mimeType};base64,${data}` : '') ||
+        (path && state.sessionId
+          ? `/api/image?session=${encodeURIComponent(state.sessionId)}&path=${encodeURIComponent(path)}`
+          : '');
+      if (!data && !url && !path) return null;
+      return { mimeType, data, path, url, name: part.name || 'image' };
     })
     .filter(Boolean);
   renderAttachments();
@@ -3045,7 +3097,16 @@ function render(rec) {
       // A later real send means the restored draft from an older interrupt
       // should not land in the box after replay finishes.
       if (state.replaying && !rec.echoed && !rec.waiting) state.pendingRestore = null;
-      if (!rec.echoed && !rec.waiting && !takePendingEcho(rec)) renderUser(rec);
+      if (rec.replace && rec.desktopBubbleId) {
+        const old = els.transcript.querySelector(
+          `.msg.user[data-bubble="${CSS.escape(rec.desktopBubbleId)}"]`,
+        );
+        if (old) {
+          old.replaceWith(renderUser(rec));
+          break;
+        }
+      }
+      if (!rec.echoed && !rec.waiting && !takePendingEcho(rec)) addUser(rec);
       break;
     case 'agent_delta':
     case 'agent_thought':
@@ -4158,16 +4219,89 @@ function setPlusPop(open) {
   if (!els.plusPop) return;
   if (!open) {
     els.plusPop.hidden = true;
+    setPlusMcp(false);
     els.attach?.setAttribute('aria-expanded', 'false');
     return;
   }
   setModelPop(false);
+  setPlusMcp(false);
   if (els.plusFilter) els.plusFilter.value = '';
   renderPlusMenu();
   els.plusPop.hidden = false;
   els.attach?.setAttribute('aria-expanded', 'true');
   if (window.matchMedia('(hover: hover)').matches) {
     setTimeout(() => els.plusFilter?.focus(), 0);
+  }
+}
+
+function setPlusMcp(open) {
+  if (!els.plusMcp) return;
+  if (!open) {
+    els.plusMcp.hidden = true;
+    if (els.plusMain) els.plusMain.hidden = false;
+    return;
+  }
+  if (els.plusMain) els.plusMain.hidden = true;
+  els.plusMcp.hidden = false;
+  renderPlusMcp();
+}
+
+async function renderPlusMcp() {
+  if (!els.plusMcpList) return;
+  els.plusMcpList.innerHTML = '';
+  const tip = document.createElement('div');
+  tip.className = 'composer-pop-tip';
+  tip.textContent = 'Loading…';
+  els.plusMcpList.append(tip);
+  let servers = [];
+  try {
+    const q = state.sessionId ? `?session=${encodeURIComponent(state.sessionId)}` : '';
+    const res = await fetch(`/api/mcp${q}`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      const body = await res.json();
+      servers = Array.isArray(body?.servers) ? body.servers : [];
+    }
+  } catch {
+    servers = [];
+  }
+  els.plusMcpList.innerHTML = '';
+  if (!servers.length) {
+    const empty = document.createElement('div');
+    empty.className = 'composer-pop-tip';
+    empty.textContent =
+      'No MCP servers in Cursor’s mcp.json. Add them in Cursor Settings → MCP; the agent can use them from there.';
+    els.plusMcpList.append(empty);
+    return;
+  }
+  for (const server of servers) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'composer-pop-row';
+    row.setAttribute('role', 'option');
+    const where = server.source === 'workspace' ? 'this folder' : 'user';
+    row.innerHTML = `
+      <span class="composer-pop-copy"><strong>${esc(server.name)}</strong><span class="composer-pop-desc">${esc(where)}${server.disabled ? ' · disabled' : ''}</span></span>
+    `;
+    row.onclick = () => {
+      // Mention the server the way Cursor’s @ list does, then close.
+      const mention = `@${server.name} `;
+      const start = els.box.selectionStart ?? els.box.value.length;
+      const end = els.box.selectionEnd ?? start;
+      const before = els.box.value.slice(0, start);
+      const after = els.box.value.slice(end);
+      els.box.value = `${before}${mention}${after}`;
+      const tip = before.length + mention.length;
+      try {
+        els.box.setSelectionRange(tip, tip);
+      } catch {
+        /* ignore */
+      }
+      autosize();
+      saveDraft();
+      setPlusPop(false);
+      focusComposer();
+    };
+    els.plusMcpList.append(row);
   }
 }
 
@@ -5248,7 +5382,13 @@ function addImage(file) {
 
 function submit(text) {
   const body = (text ?? els.box.value).trim();
-  const images = state.attachments.map(({ mimeType, data, url }) => ({ mimeType, data, url }));
+  const images = state.attachments.map(({ mimeType, data, url, path, name }) => ({
+    mimeType,
+    data,
+    url,
+    path,
+    name,
+  }));
   // A turn already running is no reason to refuse: the host queues it.
   if (!body && !images.length) return;
   state.lastPrompt = body;
@@ -6585,8 +6725,14 @@ els.plusPop?.addEventListener('click', (e) => {
     e.preventDefault();
     setPlusPop(false);
     setModelPop(true, { list: false });
+    return;
+  }
+  if (act === 'mcp') {
+    e.preventDefault();
+    setPlusMcp(true);
   }
 });
+els.plusMcpBack?.addEventListener('click', () => setPlusMcp(false));
 document.addEventListener('pointerdown', (e) => {
   const inPlus = els.plusPop && !els.plusPop.hidden && els.plusPop.contains(e.target);
   const inModel = els.modelPop && !els.modelPop.hidden && els.modelPop.contains(e.target);

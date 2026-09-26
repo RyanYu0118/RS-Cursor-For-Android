@@ -27,6 +27,41 @@ const IDE_DB = join(APPDATA, 'Cursor', 'User', 'globalStorage', 'state.vscdb');
 const BUBBLE_USER = 1;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Raster mime for a path Cursor stored under workspaceStorage/images. */
+export function mimeOfImagePath(path) {
+  const ext = String(path || '')
+    .split('.')
+    .pop()
+    ?.toLowerCase();
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'avif') return 'image/avif';
+  if (ext === 'bmp') return 'image/bmp';
+  return 'image/png';
+}
+
+/**
+ * Pictures a person attached on the desktop. Cursor keeps them on the bubble
+ * as `context.selectedImages` with absolute paths under workspaceStorage.
+ */
+export function selectedImagesOf(bubble) {
+  const list = bubble?.context?.selectedImages;
+  if (!Array.isArray(list) || !list.length) return [];
+  const out = [];
+  for (const img of list) {
+    const path = String(img?.path || '').trim();
+    if (!path) continue;
+    out.push({
+      path,
+      mimeType: mimeOfImagePath(path),
+      name: path.split(/[\\/]/).pop() || 'image',
+      ...(img.uuid ? { uuid: String(img.uuid) } : {}),
+    });
+  }
+  return out;
+}
+
 /**
  * Cursor's agent harness, not a person. The IDE keeps these off the chat —
  * they are how a background command tells the agent it finished. Auto used
@@ -427,6 +462,7 @@ function messageOf(bubble, { generating = false, grouping = null } = {}) {
   }
 
   const text = String(bubble.text || '').trim();
+  const images = role === 'user' ? selectedImagesOf(bubble) : [];
   // An answer is written into its bubble as it is spoken, so what is there
   // mid-turn is a prefix, not the message. Reading it once and calling it done
   // published whatever happened to be written at that instant — a long reply
@@ -440,7 +476,19 @@ function messageOf(bubble, { generating = false, grouping = null } = {}) {
     if (role === 'user' && isHarnessPrompt(text)) {
       return { role, kind: 'harness', text: '', pending: false };
     }
-    return { role, kind: 'text', text, pending: growing };
+    return {
+      role,
+      kind: 'text',
+      text,
+      pending: growing,
+      ...(images.length ? { images } : {}),
+    };
+  }
+
+  // A send that is only pictures still has to reach the phone — otherwise
+  // the tablet shows an empty bubble while Cursor is showing the image.
+  if (images.length) {
+    return { role, kind: 'text', text: '', pending: false, images };
   }
 
   const thinking = String(bubble.thinking?.text || '').trim();
@@ -519,6 +567,30 @@ export function readThread(threadId, { seen, tail } = {}) {
       visited,
       total: headers.length,
     };
+  });
+}
+
+/**
+ * Pictures waiting in Cursor's chat box for this thread — the same list the
+ * + → Files path writes into `composerData.context.selectedImages`.
+ *
+ * @param {string} threadId
+ * @returns {{ path: string, mimeType: string, name: string, uuid?: string }[]}
+ */
+export function readComposerAttachments(threadId) {
+  if (!threadId) return [];
+  return withDb((db) => {
+    const row = db
+      .prepare('SELECT value, typeof(value) value_t FROM cursorDiskKV WHERE key = ?')
+      .get(`composerData:${threadId}`);
+    if (!row) return [];
+    let data;
+    try {
+      data = JSON.parse(textOf(row));
+    } catch {
+      return [];
+    }
+    return selectedImagesOf({ context: data.context || {} });
   });
 }
 

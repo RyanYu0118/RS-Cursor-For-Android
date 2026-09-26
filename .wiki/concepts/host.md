@@ -14,7 +14,7 @@ sources:
   - id: supervise
     resource: /scripts/supervise.mjs
     title: Supervisor
-generated: { by: agent, at: 2026-08-20T16:50:00Z }
+generated: { by: agent, at: 2026-09-26T08:40:00Z }
 ---
 
 # Host
@@ -44,6 +44,8 @@ label.
 | `GET /api/session` | Sessions plus `activeId` |
 | `GET /api/projects` | Folders as Cursor sees them, plus Auto's |
 | `GET /api/desktop-chats?folder=` | That folder's desktop chats |
+| `GET /api/mcp?session=` | MCP servers from Cursor's user/workspace `mcp.json` |
+| `GET /api/image?session=&path=` | Raster image under an allowed root for that chat |
 | `POST /api/session` | Point the active session at a folder (creates if needed) |
 | `POST /api/session/active` | Switch by id, title, or folder |
 | `POST /api/restart` | Answer first, wait for ACP work, then exit |

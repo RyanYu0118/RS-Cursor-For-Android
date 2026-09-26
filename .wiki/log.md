@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Update**: Composer **+** MCP opens servers from Cursor's `mcp.json`; desktop-attached pictures sync to the tablet (transcript + unsent composer) via `workspaceStorage` paths and `/api/image`. See [Web](concepts/web.md), [Cursor window](concepts/cursor-window.md), and [Host](concepts/host.md).
 * **Fix**: Thought / Ran / Planning are siblings under the work fold — Planning is no longer a parent of the list, and thoughts are not nested under the live status strip. See [Tool lanes](concepts/tool-lanes.md).
 * **Fix**: Live subtask text uses Cursor's present-tense labels (Reading / Running / Grepping), not past-tense fold labels. See [Tool lanes](concepts/tool-lanes.md).
 * **Fix**: Ending a turn clears the live-subtask gleam so a finished fold does not keep flashing Thinking. See [Tool lanes](concepts/tool-lanes.md).
