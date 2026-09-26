@@ -321,6 +321,8 @@ class HostRepository {
 
     private fun scheduleReconnect(reason: String) {
         if (hostUrl.isEmpty()) return
+        // Already connected again (stale close from a replaced socket) — ignore.
+        if (ws.isOpen && _state.phase == ConnPhase.Connected && !_state.reconnecting) return
         publish(
             _state.copy(
                 phase = if (_state.sessionsReady) ConnPhase.Reconnecting else ConnPhase.Connecting,
@@ -332,7 +334,10 @@ class HostRepository {
         main.postDelayed(
             {
                 reconnectPosted.set(false)
-                if (hostUrl.isNotEmpty()) connect()
+                if (hostUrl.isEmpty()) return@postDelayed
+                // A newer connect already succeeded while we waited.
+                if (ws.isOpen && _state.phase == ConnPhase.Connected) return@postDelayed
+                connect()
             },
             1000L,
         )

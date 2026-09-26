@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T14:15:00Z }
+generated: { by: agent, at: 2026-09-26T14:20:00Z }
 ---
 
 # Android shell
@@ -49,9 +49,10 @@ the host `sidebar` snapshot (plus Auto sessions and recent desktop chats).
 Tapping an Auto session attaches; tapping a desktop-only chat sends
 `desktop.continue`. Repo **+** starts `session.create` in that folder.
 
-Composer Enter sends; Shift+Enter inserts a newline (same as the web
-composer). Permission cards from Cursor's desktop approvals are not shown —
-answer those in the IDE.
+## Connection
+
+The WebSocket bumps a generation on each connect so a replaced socket's late
+`onClosed` cannot schedule another reconnect and flash "重连中" every second.
 
 ## Why it exists
 
