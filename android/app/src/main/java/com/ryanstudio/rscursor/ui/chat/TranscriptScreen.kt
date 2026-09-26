@@ -45,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,11 +54,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -207,7 +209,11 @@ fun TranscriptScreen(
                     Box(modifier = rowMod) {
                         when (val item = row.item) {
                             is ChatItem.User -> UserBubble(item, imageUrl)
-                            is ChatItem.Assistant -> AssistantBubble(item)
+                            is ChatItem.Assistant ->
+                                AssistantBubble(
+                                    item = item,
+                                    liveThought = item.thought && isLiveThought(items, item.key, busy),
+                                )
                             is ChatItem.Tool -> ToolCard(item)
                             is ChatItem.Permission -> PermissionCard(item, onPermission)
                             is ChatItem.Question -> QuestionCard(item, onAnswer, onSkipQuestion)
@@ -330,35 +336,41 @@ private fun GleamLine(text: String) {
             ),
         label = "gleam-phase",
     )
+    var lineWidth by remember { mutableFloatStateOf(0f) }
+    // Same idea as web `.live-step-line.shimmer`: muted fill + white glint
+    // clipped to the glyphs (Compose TextStyle brush), not a background wash.
+    val brush =
+        remember(phase, lineWidth) {
+            val w = lineWidth.coerceAtLeast(1f)
+            val span = w * 2.2f
+            val start = w - phase * (w + span)
+            Brush.linearGradient(
+                colorStops =
+                    arrayOf(
+                        0.00f to RsMuted,
+                        0.42f to RsMuted,
+                        0.50f to Color.White.copy(alpha = 0.92f),
+                        0.58f to RsMuted,
+                        1.00f to RsMuted,
+                    ),
+                start = Offset(start, 0f),
+                end = Offset(start + span, 0f),
+            )
+        }
     Text(
         text = text,
-        color = RsMuted,
-        fontSize = 13.sp,
+        style =
+            TextStyle(
+                brush = brush,
+                fontSize = 13.sp,
+            ),
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         modifier =
             Modifier
                 .fillMaxWidth()
-                .drawWithContent {
-                    drawContent()
-                    val w = size.width
-                    val band = w * 0.35f
-                    val x = -band + (w + band * 2) * phase
-                    drawRect(
-                        brush =
-                            Brush.linearGradient(
-                                colors =
-                                    listOf(
-                                        Color.Transparent,
-                                        Color.White.copy(alpha = 0.35f),
-                                        Color.Transparent,
-                                    ),
-                                start = Offset(x, 0f),
-                                end = Offset(x + band, size.height),
-                            ),
-                    )
-                }
-                .padding(start = 20.dp, top = 1.dp, bottom = 1.dp),
+                .padding(start = 20.dp, top = 1.dp, bottom = 1.dp)
+                .onSizeChanged { lineWidth = it.width.toFloat() },
     )
 }
 
@@ -449,15 +461,81 @@ private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
 }
 
 @Composable
-private fun AssistantBubble(item: ChatItem.Assistant) {
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-        if (item.thought) {
-            Text("Thought", color = RsMuted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 2.dp))
+private fun AssistantBubble(
+    item: ChatItem.Assistant,
+    liveThought: Boolean = false,
+) {
+    if (!item.thought) {
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+            Box(modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
+                MarkdownText(markdown = item.text)
+            }
         }
-        Box(modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
-            MarkdownText(markdown = item.text, muted = item.thought)
+        return
+    }
+
+    // Finished thoughts collapse; the live trailing thought stays open.
+    var expanded by remember(item.key) { mutableStateOf(liveThought) }
+    LaunchedEffect(liveThought) {
+        if (liveThought) expanded = true else expanded = false
+    }
+    val preview =
+        item.text
+            .lineSequence()
+            .firstOrNull { it.isNotBlank() }
+            ?.take(72)
+            .orEmpty()
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(RsSpace.cornerSm))
+                .background(Color.White.copy(alpha = 0.04f))
+                .animateContentSize()
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = RsMuted,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = if (expanded || preview.isEmpty()) "Thought" else "Thought · $preview",
+                color = RsMuted,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .widthIn(max = 720.dp)
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, top = 4.dp),
+            ) {
+                MarkdownText(markdown = item.text, muted = true)
+            }
         }
     }
+}
+
+/** Trailing thought block while the turn is still busy — keep it open. */
+private fun isLiveThought(items: List<ChatItem>, key: String, busy: Boolean): Boolean {
+    if (!busy) return false
+    val idx = items.indexOfFirst { it.key == key }
+    if (idx < 0) return false
+    return items.drop(idx + 1).all { it is ChatItem.Assistant && it.thought }
 }
 
 @Composable

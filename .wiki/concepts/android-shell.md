@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T14:50:00Z }
+generated: { by: agent, at: 2026-09-26T14:52:00Z }
 ---
 
 # Android shell
@@ -61,7 +61,10 @@ Composer Enter sends; Shift+Enter inserts a newline.
 
 Tool calls paint as Cursor's **work fold** (summary + expandable steps + live
 subtask gleam), using the same lane table as the [web](web.md) /
-[tool lanes](tool-lanes.md).
+[tool lanes](tool-lanes.md). The gleam is a white highlight swept across the
+**glyphs** (Compose `TextStyle` brush), not a background wash. Only the live
+fold / trailing Thinking strip gleams; finished **Thought** blocks auto-fold
+and expand on tap.
 
 ## Why it exists
 
