@@ -5096,6 +5096,12 @@ if (existsSync(SRC)) {
     if (!css.includes('translateY(-22px)') || !js.includes("rail.style.transition = 'none'")) {
       fail('subtask changes must scroll up, and finish without a snap-down');
     }
+    // Gleam is a highlight over grey — not a full-text colour wipe that flashes black.
+    const gleamAt = css.indexOf('.live-step-line.shimmer');
+    const gleamCss = gleamAt < 0 ? '' : css.slice(gleamAt, gleamAt + 700);
+    if (!gleamCss.includes('background-color: var(--muted)') || gleamCss.includes('#111')) {
+      fail('live-step gleam must keep a grey base and only sweep a highlight');
+    }
     if (!js.includes('quietThinking') || !js.includes('reuseQuiet')) {
       fail('quiet must fold the turn’s thinking spells into one block');
     }
