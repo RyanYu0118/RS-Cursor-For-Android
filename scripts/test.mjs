@@ -5096,6 +5096,9 @@ if (existsSync(SRC)) {
     if (!css.includes('translateY(-22px)') || !js.includes("rail.style.transition = 'none'")) {
       fail('subtask changes must scroll up, and finish without a snap-down');
     }
+    if (!js.includes('function clearLiveStep') || !/dropLiveStatus[\s\S]*clearLiveStep/.test(js)) {
+      fail('ending a turn must clear the live-step gleam so history does not keep flashing');
+    }
     // Gleam is a highlight over grey — not a full-text colour wipe that flashes black.
     const gleamAt = css.indexOf('.live-step-line.shimmer');
     const gleamCss = gleamAt < 0 ? '' : css.slice(gleamAt, gleamAt + 700);

@@ -1345,9 +1345,36 @@ function liveStepHost() {
   return null;
 }
 
+/** Strip gleam + current-step line from a host (or every known live surface). */
+function clearLiveStep(host) {
+  const hosts = host
+    ? [host]
+    : [
+        state.bundle?.card?.querySelector('.live-step'),
+        state.liveFold?.querySelector('.live-step'),
+      ];
+  for (const el of hosts) {
+    if (!el) continue;
+    el.hidden = true;
+    el.dataset.step = '';
+    const rail = el.querySelector('.live-step-rail') || el;
+    rail.replaceChildren();
+    rail.classList.remove('sliding');
+    rail.style.transform = '';
+    rail.style.removeProperty('transition');
+  }
+  state.liveFold?.querySelector(':scope > summary > .label')?.classList.remove('shimmer');
+}
+
 /** Paint / scroll the shimmering current-step line under the summary. */
 function syncLiveStep() {
-  if (state.replaying || !state.turn) return;
+  if (state.replaying) return;
+  // A finished turn must not keep gleaming — settled cards used to early-out
+  // and leave "Thinking" flashing in the history.
+  if (!state.turn || state.bundle?.settled) {
+    clearLiveStep();
+    return;
+  }
   // Before any tool fold, the summary itself gleams (Thinking / Planning).
   const foldLabel = state.liveFold?.querySelector(':scope > summary > .label');
   if (foldLabel) {
@@ -1358,9 +1385,7 @@ function syncLiveStep() {
   const text = currentStepText();
   const rail = host.querySelector('.live-step-rail') || host;
   if (!text) {
-    host.hidden = true;
-    rail.replaceChildren();
-    host.dataset.step = '';
+    clearLiveStep(host);
     return;
   }
   host.hidden = false;
@@ -1433,6 +1458,7 @@ function paintLiveStatus() {
 
 function dropLiveStatus() {
   stopTurnClock();
+  clearLiveStep();
   if (state.bundle?.card && !state.replaying) {
     state.bundle.card.querySelectorAll('.beat.planning').forEach((n) => n.remove());
     if (!state.bundle.settled) {

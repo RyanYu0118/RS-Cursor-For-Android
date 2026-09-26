@@ -11,7 +11,7 @@ sources:
   - id: core
     resource: /src/core/desktop-tool-ui.mjs
     title: Node re-export for Telegram
-generated: { by: agent, at: 2026-09-26T03:28:00Z }
+generated: { by: agent, at: 2026-09-26T03:30:00Z }
 ---
 
 # Tool lanes
@@ -43,7 +43,9 @@ While a turn is still going, that line stays present at the front —
 Under the summary sits a second line for the **current subtask** (the tool
 running now, or Thinking / Planning next moves). The text stays muted grey;
 a white highlight sweeps across it the way Cursor's IDE does. When the step
-changes, that line scrolls up to the new one. **Thinking** and **Planning
+changes, that line scrolls up to the new one. When the turn ends the gleam
+and the current-step line are cleared — a finished fold must not keep
+flashing. **Thinking** and **Planning
 next moves** are also rows under that line in the opened fold: one line
 until tapped, then the text scrolls. Planning is the gap between steps.
 Before any step, the bottom summary itself is Thinking or Planning next
