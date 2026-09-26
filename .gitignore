@@ -8,3 +8,12 @@ node_modules/
 .wikirc.yaml
 .env
 supervise.pid
+
+# Android shell
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+android/.cxx/

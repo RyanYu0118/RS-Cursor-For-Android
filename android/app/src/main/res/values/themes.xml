@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RSCursor" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/rs_accent</item>
+        <item name="colorPrimaryVariant">@color/rs_bg</item>
+        <item name="colorOnPrimary">@color/rs_bg</item>
+        <item name="colorSecondary">@color/rs_accent</item>
+        <item name="android:statusBarColor">@color/rs_bg</item>
+        <item name="android:navigationBarColor">@color/rs_bg</item>
+        <item name="android:windowBackground">@color/rs_bg</item>
+        <item name="android:textColorPrimary">@color/rs_text</item>
+    </style>
+</resources>

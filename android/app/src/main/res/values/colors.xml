@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="rs_bg">#0F1115</color>
+    <color name="rs_surface">#181B22</color>
+    <color name="rs_text">#E8EAED</color>
+    <color name="rs_muted">#9AA0A6</color>
+    <color name="rs_accent">#8AB4F8</color>
+</resources>

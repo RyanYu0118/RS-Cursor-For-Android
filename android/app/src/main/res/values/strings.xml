@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RS Cursor</string>
+    <string name="settings_title">主机地址</string>
+    <string name="host_hint">http://100.x.y.z:4331</string>
+    <string name="host_label">Auto 主机 URL</string>
+    <string name="host_help">填电脑上 Auto 的地址（Tailscale IP + 端口 4331）。主机仍跑在电脑，本 App 只是壳。</string>
+    <string name="save">保存并打开</string>
+    <string name="menu_settings">主机设置</string>
+    <string name="menu_reload">刷新</string>
+    <string name="open_settings">设置主机</string>
+    <string name="missing_host">还没有主机地址。先填电脑上 Auto 的 URL。</string>
+    <string name="load_error">打不开这个地址。检查 Auto 是否在跑，以及平板是否连着同一 Tailscale。</string>
+</resources>

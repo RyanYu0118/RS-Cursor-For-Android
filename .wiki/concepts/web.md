@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-26T09:00:00Z }
+generated: { by: agent, at: 2026-09-26T09:20:00Z }
 ---
 
 # Web app
@@ -66,6 +66,10 @@ has nothing to replay yet; opening Auto at `/` (the PWA start URL) reads the
 same id from the browser. Telegram `/switch` does not steal the tab.
 
 Open `http://<tailscale-ip>:4331/`. It is a PWA: `display: standalone`, an
+installable Home Screen icon, and offline-capable chrome. On Android, the
+installed PWA often cannot open the system image picker from Files — use
+the [Android shell](android-shell.md) APK instead when you need attachments
+from the pad.
 SVG tab icon (transparent glyph, cropped tight so it fills a PC tab), and PNG
 icons (180 / 192 / 512) so a phone can put it on the Home Screen. Home-screen
 `any` rasters keep the mark at natural size on a full-bleed dark tile;
@@ -329,11 +333,13 @@ middle, then the Auto/model chip, optional voice, and a white circular
 send. There is no Agent/mode chip on the pill — modes live in the **+**
 menu (Plan / Debug / Multitask / Ask; tap the active one again for Agent).
 **Files** covers the row with a transparent `<input type="file">` (opacity 0,
-full size) — a clipped `sr-only` target is ignored by Android WebView, so the
-OS picker never opened. The menu stays up through the gesture; it closes after
-a pick or an outside tap. **Model** opens the same nested model popover as
-the chip; **MCP** opens a nested list of servers from Cursor's `mcp.json`
-(user and this folder) — tap one to insert an `@name` mention.
+full size). On an installed Home Screen PWA that control is still often
+ignored — use the [Android shell](android-shell.md) APK so the system
+gallery opens through `onShowFileChooser`. The menu stays up through the
+gesture; it closes after a pick or an outside tap. **Model** opens the
+same nested model popover as the chip; **MCP** opens a nested list of
+servers from Cursor's `mcp.json` (user and this folder) — tap one to
+insert an `@name` mention.
 Desktop-sent pictures are kept on the user bubble as host paths under
 Cursor's `workspaceStorage/…/images` and drawn on the tablet through
 `/api/image` (same fence as answer images, with that storage root allowed).
