@@ -257,8 +257,6 @@
             <button id="send" class="composer-send" title="Send" aria-label="Send">↑</button>
           </div>
         </div>
-        <!-- Visually hidden, not `hidden`: a label[for] must reach a pickable input. -->
-        <input id="file" class="sr-only" type="file" accept="image/*" multiple />
         <input id="model-auto" class="sr-only" type="checkbox" role="switch" aria-label="Auto-select" />
         <!-- Anchored to the pill (not #composer padding), so menus sit flush above it. -->
         <div id="plus-pop" class="composer-pop" hidden role="dialog" aria-label="Add">
@@ -267,11 +265,18 @@
             <div id="plus-modes" class="composer-pop-section"></div>
             <div class="composer-pop-rule" aria-hidden="true"></div>
             <div id="plus-actions" class="composer-pop-section">
+              <!--
+                File input lives inside the label (and for= still points at it).
+                A separate sr-only sibling outside the menu used to open on
+                desktop, but closing the dialog in the same gesture cancelled
+                the chooser on Android WebView.
+              -->
               <label class="composer-pop-row" for="file" data-plus-act="files">
                 <span class="composer-pop-ico" aria-hidden="true">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                 </span>
                 <span class="composer-pop-copy"><strong>Files</strong></span>
+                <input id="file" class="sr-only" type="file" accept="image/*" multiple />
               </label>
               <button type="button" class="composer-pop-row" data-plus-act="model">
                 <span class="composer-pop-ico" aria-hidden="true">

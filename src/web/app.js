@@ -5773,6 +5773,7 @@ window.addEventListener('drop', (e) => { if (dragHasFiles(e)) e.preventDefault()
 els.file.onchange = () => {
   [...els.file.files].forEach(addImage);
   els.file.value = '';
+  setPlusPop(false);
 };
 
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -6717,8 +6718,13 @@ els.plusPop?.addEventListener('click', (e) => {
   const act = e.target.closest('[data-plus-act]')?.getAttribute('data-plus-act');
   if (!act) return;
   if (act === 'files') {
-    // label[for=file] opens the picker; close the menu after.
-    setTimeout(() => setPlusPop(false), 0);
+    // The label[for=file] opens the OS picker. Do not hide the + menu in
+    // this turn — tearing down the activating control cancels the chooser on
+    // Android WebView (and some iOS builds). Dismiss when focus returns, or
+    // after a short grace, or when files are chosen (see onchange).
+    const dismiss = () => setPlusPop(false);
+    window.addEventListener('focus', dismiss, { once: true });
+    setTimeout(dismiss, 1500);
     return;
   }
   if (act === 'model') {

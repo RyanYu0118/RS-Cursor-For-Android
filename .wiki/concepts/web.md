@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-26T08:40:00Z }
+generated: { by: agent, at: 2026-09-26T08:55:00Z }
 ---
 
 # Web app
@@ -328,10 +328,12 @@ The composer is a single pill: **+** on the left, the text field in the
 middle, then the Auto/model chip, optional voice, and a white circular
 send. There is no Agent/mode chip on the pill — modes live in the **+**
 menu (Plan / Debug / Multitask / Ask; tap the active one again for Agent).
-**Files** in that menu is a `label[for=file]` so Android WebView and iOS
-open the image picker; **Model** opens the same nested model popover as
-the chip; **MCP** opens a nested list of servers from Cursor's
-`mcp.json` (user and this folder) — tap one to insert an `@name` mention.
+**Files** in that menu is a `label[for=file]` with the file input nested
+inside it so Android WebView and iOS open the image picker; the menu stays
+open through that gesture (closing it mid-tap cancels the chooser). **Model**
+opens the same nested model popover as the chip; **MCP** opens a nested list
+of servers from Cursor's `mcp.json` (user and this folder) — tap one to
+insert an `@name` mention.
 Desktop-sent pictures are kept on the user bubble as host paths under
 Cursor's `workspaceStorage/…/images` and drawn on the tablet through
 `/api/image` (same fence as answer images, with that storage root allowed).

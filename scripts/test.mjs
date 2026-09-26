@@ -2849,6 +2849,14 @@ if (existsSync(SRC)) {
     fail('Files in the + menu must be a label[for=file] so Android/iOS open the image picker');
     failed = true;
   }
+  if (!/<label[^>]*for="file"[^>]*>[\s\S]*?<input[^>]*id="file"/.test(html)) {
+    fail('file input must sit inside the Files label so the chooser survives the + menu');
+    failed = true;
+  }
+  if (!js.includes("act === 'files'") || js.includes("setTimeout(() => setPlusPop(false), 0)")) {
+    fail('Files must not close the + menu in the same turn as the picker opens');
+    failed = true;
+  }
   if (!js.includes('function setPlusPop') || !js.includes('function setModelPop') || !js.includes('PLUS_MODE_ROWS')) {
     fail('composer + / model popovers must be wired in app.js');
     failed = true;
