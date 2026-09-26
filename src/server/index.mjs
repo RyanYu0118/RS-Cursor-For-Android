@@ -212,7 +212,7 @@ function syncScreencast() {
  * is read from its end, so the end is what gets sent; the rest stays on disk
  * and is still there to ask for by sequence number.
  */
-const REPLAY_LIMIT = 1200;
+const REPLAY_LIMIT = 60;
 
 const OPS = {
   async attach(ws, state, msg) {
@@ -263,6 +263,27 @@ const OPS = {
     if (!sessions.catalogFor(sessions.get(id)?.agent).models.length) {
       sessions.ensureLive(id).catch((err) => console.error(`[catalog] ${err.message}`));
     }
+  },
+
+  /**
+   * Older stretch above the painted tail — phone scrolls up / taps the
+   * omission notice. Keeps attach itself to a viewport-sized window.
+   */
+  async 'transcript.more'(ws, state, msg) {
+    const id = msg.sessionId || state.sessionId;
+    if (!sessions.get(id)) throw new Error(`Unknown session ${id}`);
+    const beforeSeq = Number(msg.beforeSeq) || 0;
+    const limit = Math.min(Math.max(Number(msg.limit) || REPLAY_LIMIT, 1), REPLAY_LIMIT);
+    const records = await sessions.historyBefore(id, beforeSeq, limit);
+    const oldest = records[0]?.seq || beforeSeq;
+    const remaining = Math.max(0, oldest - 1);
+    send(ws, {
+      type: 'transcript.more',
+      sessionId: id,
+      beforeSeq,
+      records,
+      remaining,
+    });
   },
 
   async prompt(ws, state, msg) {

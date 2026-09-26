@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-25T16:40:00Z }
+generated: { by: agent, at: 2026-09-26T03:10:00Z }
 ---
 
 # Web app
@@ -49,11 +49,13 @@ A projection of the host's [transcript](transcripts.md). It attaches over
 the WebSocket, replays from a sequence number, and renders records as they
 stream. A reload or a dropped connection does not lose history.
 
-The last ~1200 records are cached in memory (switching chats in this tab)
-and IndexedDB (hard reload), along with the pinned opening prompt. Boot paints
-the cache first, then the handshake asks for `fromSeq: lastSeq` so only the
-tail is downloaded; the loading overlay is skipped when the cache already
-filled the pane. Switching back to a chat still in memory is the same path.
+The last ~60 records are cached in memory (switching chats in this tab)
+and IndexedDB (hard reload), along with the pinned opening prompt — a
+viewport-sized window, not the whole log. Boot paints the cache first, then
+the handshake asks for `fromSeq: lastSeq` so only the tail is downloaded;
+the loading overlay is skipped when the cache already filled the pane.
+Switching back to a chat still in memory is the same path. Older history
+loads on demand when you scroll to the top or tap the omission notice.
 The host remains authoritative — `replaced` or a gap clears the pane and
 redraws. A long chat always shows the first user message at the top (and on
 the scrub timeline), with an omission notice for the middle stretch.

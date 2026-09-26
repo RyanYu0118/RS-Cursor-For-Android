@@ -12,7 +12,7 @@ the same way — see [Agents](#agents). Any session working in this repo — one
 Auto's own sessions or a manual one — follows the rules below.
 
 These rules apply when this clone is the Auto host you are running. If you
-are only browsing the code, you can ignore the commit loop (`y` / `c` / `n`).
+are only browsing the code, you can ignore the commit-and-push loop.
 
 ## Reporting back
 
@@ -241,21 +241,18 @@ for what it does.
    PTYs, diff rendering, the browser address bar and Telegram rendering,
    validates skill frontmatter, and — if the host is running — checks its
    health and session API. Skill `SKILL.md` files still need tests (frontmatter).
-2. **If tests pass** (or were skipped): ask whether to commit — see
-   `.cursor/rules/agent-git-commit.mdc` and `.cursorrules`.
-   - **`y`** → bilingual commit + push to the branch upstream
-   - **`c`** → bilingual commit only
-   - **`n`** → skip Git
-   Do not commit or push until the user answers. After a commit that
+2. **If tests pass** (or were skipped): bilingual commit and push to the
+   branch upstream — see `.cursor/rules/agent-git-commit.mdc` and
+   `.cursorrules`. Do not ask `y` / `c` / `n`; auto-commit and push unless
+   the user said not to for this turn. After a commit that
    changed `src/`, restart the host so the change takes effect (see below).
    Docs, wiki, and rules need no restart.
 3. **If tests fail**: revert (`git checkout -- <files>`), tell the user
    which check failed and why, then fix the root cause and start again.
 
 Commit messages are **bilingual Conventional Commits** (Chinese title first,
-English second) per `.cursorrules`. Leaving fixes uncommitted is fine only
-when the user chose **`n`**; otherwise prefer **`y`** so another machine
-can pull them.
+English second) per `.cursorrules`. Prefer pushing so another machine can
+pull the fix.
 
 **Testing a send goes to a scratch chat, not this one.** A message delivered
 into the session you are working in becomes a prompt: it interrupts the turn
@@ -306,5 +303,4 @@ session by id or title.
 Skills live in `.claude/skills/<name>/SKILL.md` and load in every session in
 this repo. To create or update one, follow the `create-skill` skill. Skills
 go through the same workflow as any change: `npm test` (frontmatter), then
-ask `y` / `c` / `n` before the bilingual commit (and push on `y`). No restart
-needed.
+the bilingual commit and push (no `y` / `c` / `n` ask). No restart needed.

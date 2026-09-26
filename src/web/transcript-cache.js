@@ -10,7 +10,7 @@
  */
 
 /** Must stay in step with the host's REPLAY_LIMIT in src/server/index.mjs. */
-export const CACHE_LIMIT = 1200;
+export const CACHE_LIMIT = 60;
 
 const DB_NAME = 'auto.transcripts';
 const DB_VERSION = 1;
@@ -247,15 +247,20 @@ export async function diskClear(sessionId) {
   }
 }
 
-/** Memory first, then IndexedDB. Warms memory on a disk hit. */
+/** Memory first, then IndexedDB. Warms memory on a disk hit. Re-trims old snaps. */
 export async function loadCache(sessionId) {
   if (!sessionId) return null;
   const warm = memoryGet(sessionId);
-  if (warm?.records?.length || warm?.head?.length) return warm;
+  if (warm?.records?.length || warm?.head?.length) {
+    const snap = makeSnap(warm.records, warm.omitted ?? warm.earlier ?? 0, warm.head || []);
+    memoryPut(sessionId, snap);
+    return snap;
+  }
   const cold = await diskGet(sessionId);
   if (cold?.records?.length || cold?.head?.length) {
-    memoryPut(sessionId, cold);
-    return cold;
+    const snap = makeSnap(cold.records, cold.omitted ?? cold.earlier ?? 0, cold.head || []);
+    memoryPut(sessionId, snap);
+    return snap;
   }
   return null;
 }

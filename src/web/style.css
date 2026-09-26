@@ -1443,8 +1443,9 @@ details.think .body {
 .turn-live { margin: 2px 0 6px; }
 .turn-live > summary {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
   min-height: 22px;
   padding: 3px 2px;
   cursor: pointer;
@@ -1460,16 +1461,95 @@ details.think .body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .turn-live > summary .n { color: var(--text); font-variant-numeric: tabular-nums; }
-.turn-live > summary::after {
+.turn-live > summary .label::after {
   content: "▸";
   flex: none;
+  margin-left: auto;
   color: var(--faint);
   line-height: 1;
 }
-.turn-live[open] > summary::after { content: "▾"; }
+.turn-live[open] > summary .label::after { content: "▾"; }
+.turn-live > summary::after { content: none; }
 .turn-live > .beats { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 6px 12px; }
+
+/* Current subtask under the work summary — gleams like Cursor's IDE. */
+.tool.bundle.work > summary {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+.live-step {
+  display: block;
+  height: 22px;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 2px 0 2px;
+  pointer-events: none;
+}
+.live-step[hidden] { display: none; }
+.live-step-rail {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.live-step-rail.sliding {
+  transform: translateY(-22px);
+}
+.live-step-line {
+  height: 22px;
+  line-height: 22px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+}
+.turn-live > summary .label.shimmer,
+.live-step-line.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    var(--muted) 35%,
+    #fff 50%,
+    var(--muted) 65%,
+    var(--muted) 100%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: live-step-gleam 1.6s ease-in-out infinite;
+}
+.turn-live > summary .label.shimmer .n {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+html[data-theme='light'] .turn-live > summary .label.shimmer,
+html[data-theme='light'] .live-step-line.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    var(--muted) 35%,
+    #111 48%,
+    #fff 52%,
+    var(--muted) 65%,
+    var(--muted) 100%
+  );
+}
+@keyframes live-step-gleam {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
 
 .think.beat,
 .beat {
@@ -1835,6 +1915,21 @@ details.think .body {
   color: var(--faint);
   text-align: center;
   font-family: var(--mono);
+}
+
+.notice.earlier-load {
+  cursor: pointer;
+  padding: 10px 12px;
+  margin: 4px 0 8px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg-3) 70%, transparent);
+}
+
+.notice.earlier-load:hover,
+.notice.earlier-load:focus-visible {
+  color: var(--text);
+  outline: none;
 }
 
 .notice.error {

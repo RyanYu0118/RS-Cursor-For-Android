@@ -192,6 +192,37 @@ export class Transcript extends EventEmitter {
   }
 
   /**
+   * Newest `limit` records with `seq` strictly less than `beforeSeq`.
+   * Used when the phone scrolls up and asks for the stretch above the tail.
+   */
+  readBefore(beforeSeq, { limit = 0 } = {}) {
+    const before = Number(beforeSeq) || 0;
+    if (before <= 1) return [];
+    const cut = (records) =>
+      limit > 0 && records.length > limit ? records.slice(-limit) : records;
+
+    const inMem = this.tail.filter((r) => r.seq < before);
+    // Memory ends at before-1 → the stretch we want is already in RAM (or the
+    // log simply starts later). Avoid rereading megabytes of JSONL.
+    if (inMem.length && inMem.at(-1).seq === before - 1) {
+      if (limit <= 0 || inMem.length >= limit || inMem[0].seq <= 1) return cut(inMem);
+    }
+    if (!existsSync(this.path)) return cut(inMem);
+
+    const out = [];
+    for (const line of readFileSync(this.path, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const rec = JSON.parse(line);
+        if (typeof rec.seq === 'number' && rec.seq < before) out.push(rec);
+      } catch {
+        /* skip torn line */
+      }
+    }
+    return cut(out);
+  }
+
+  /**
    * Records from the start of the log through the first real user message.
    * Reads only as far as needed so a multi-megabyte transcript is not loaded
    * just to find the opening prompt.

@@ -11,7 +11,7 @@ sources:
   - id: core
     resource: /src/core/desktop-tool-ui.mjs
     title: Node re-export for Telegram
-generated: { by: agent, at: 2026-09-24T15:10:00Z }
+generated: { by: agent, at: 2026-09-26T03:20:00Z }
 ---
 
 # Tool lanes
@@ -40,9 +40,13 @@ shows the `hide` lane.
 While a turn is still going, that line stays present at the front —
 "Editing 9 files, explored 14 files, 11 searches, 11 browser actions, ran
 19 commands" — with a chevron on the right. Opening it shows the steps.
-**Thinking** and **Planning next moves** are rows under that line: one line
-until tapped, then the text scrolls. Planning is the gap between steps.
-Before any step, the bottom line itself is Thinking or Planning next moves.
+Under the summary sits a second line for the **current subtask** (the tool
+running now, or Thinking / Planning next moves), with a white gleam sweeping
+across the text the way Cursor's IDE does. When the step changes, that line
+scrolls up to the new one. **Thinking** and **Planning next moves** are also
+rows under that line in the opened fold: one line until tapped, then the
+text scrolls. Planning is the gap between steps. Before any step, the
+bottom summary itself is Thinking or Planning next moves.
 Browser tools (`browser_*`) count as browser actions and stay in the fold.
 
 Cursor names its tools (`edit_file_v2`, `ripgrep_raw_search`). An ACP agent

@@ -1,5 +1,5 @@
 ---
-description: Agent 提交 Git 时用双语 Conventional Commits；仅在用户选 y/c/n 后提交或推送
+description: Agent 提交 Git 时用双语 Conventional Commits；开发完成后自动提交并推送
 alwaysApply: true
 ---
 
@@ -9,19 +9,10 @@ alwaysApply: true
 
 ## 何时提交
 
-- **仅当用户明确同意**才执行 `git commit` / `git push`；不要静默自动 push。
-- 完成一轮**代码/配置/文档**开发（且按 `AGENTS.md` 该跑的 `npm test` 已通过或已跳过）后，必须征求用户意见：
-  - 优先用 **AskQuestion** 弹出可点击选项（不要只让用户打字）：
-    - **提交并推送 (y)**（Recommended）→ `git commit` + `git push`
-    - **只提交 (c)** → 仅 `git commit`
-    - **暂不提交 (n)** → 跳过
-  - 若当前环境没有 AskQuestion，在回复里用同样三项列出，并等待用户选择。
-- 用户若已回复，以下**单行简写视为等同点击**（不区分大小写）：
-  - `y` / `yes` / `提交并推送` → **提交并推送**
-  - `c` / `commit` / `只提交` → 只提交
-  - `n` / `no` / `跳过` → 不提交
-
-**说明：** 用户随时发 `y` 即可触发提交并推送，无需打完整句子。
+- 完成一轮**代码/配置/文档**开发（且按 `AGENTS.md` 该跑的 `npm test` 已通过或已跳过）后，**自动**执行双语 `git commit` 并 `git push` 到当前分支 upstream。
+- **不要**再征求 `y` / `c` / `n`，也不要弹出 AskQuestion 问是否提交。
+- 用户若明确说「先别提交」「不要 push」「只改不提交」等，则本轮例外，跳过 Git。
+- 测试失败：按 `AGENTS.md` 处理，**不要**带着红测提交。
 
 ## 推送到哪里
 
@@ -42,7 +33,7 @@ alwaysApply: true
 
 ### 2. 噪声与敏感文件
 
-- **不要**提交敏感文件：`.env`、`auth.json`、`bot-token.txt`、密钥、凭证；若 `git status` 出现应先警告。
+- **不要**提交敏感文件：`.env`、`auth.json`、`bot-token.txt`、密钥、凭证；若 `git status` 出现应先警告并排除。
 - `state/`、`*.log`、`node_modules/` 等已在 `.gitignore` 中；不要强行 `git add -f`。
 - 若有意纳入的生成物/产物（例如已发布的 APK），在正文末尾一条带过即可。
 
@@ -52,6 +43,8 @@ alwaysApply: true
 2. 需要工作区干净时再 `git add -A`（尊重 `.gitignore`）
 3. 提交前 `git status` 确认无敏感文件、无意外文件
 4. 用 HEREDOC 或 UTF-8 临时文件写入**双语** commit message
+5. `git push` 到 upstream
+6. `git status` 验证
 
 ## 提交信息怎么写
 
@@ -63,13 +56,11 @@ alwaysApply: true
 
 1. 该跑测试则 `npm test`；失败则按 `AGENTS.md` 处理，不要带着红测提交。
 2. `git status` / `git diff` 核对开发改动。
-3. 征求 `y` / `c` / `n`（AskQuestion 或等价列表）。
-4. `y` 或 `c`：暂存 → 双语 commit → `git status` 验证。
-5. 仅 `y` 时再 `git push` 到正确 upstream。
-6. 若改动了 `src/`，按 `AGENTS.md` / `auto-restart` 重启主机（`POST /api/restart`）；纯规则/文档/wiki 不必重启。
+3. 暂存 → 双语 commit → `git push` → `git status` 验证。
+4. 若改动了 `src/`，按 `AGENTS.md` / `auto-restart` 重启主机（`POST /api/restart`）；纯规则/文档/wiki 不必重启。
+5. 回复里用一行点出已推送的 commit（短 hash / 分支即可），不必再问是否提交。
 
 ## 与 AGENTS.md 的关系
 
 - `AGENTS.md` 的测试与重启要求仍然有效。
-- **提交/推送不再自动执行**；以本规则的 `y` / `c` / `n` 为准。
-- 用户规则里「未要求不要提交」与本规则一致：默认先问，用户回 `y`/`c` 再动 Git。
+- **提交并推送是默认收尾**；以本规则为准，覆盖「先问再提交」的旧习惯。

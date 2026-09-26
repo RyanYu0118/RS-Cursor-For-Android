@@ -41,10 +41,12 @@ import {
 } from './desktop-tool-ui.js';
 import {
   appendLive,
+  CACHE_LIMIT,
   flushDiskSave,
   loadCache,
   makeSnap,
   memoryGet,
+  memoryPut,
   mergeRecords,
   saveCache,
   scheduleDiskSave,
@@ -186,6 +188,8 @@ const state = {
   statusEl: null,
   /** true while history is being painted, so finished turns do not flash Working */
   replaying: false,
+  /** true while an older transcript window is being fetched */
+  loadingEarlier: false,
   /** prompt to put back in the box once replay finishes (latest interrupt only) */
   pendingRestore: null,
   /** turn was pulled back into the composer — skip the "Worked for…" line */
@@ -343,13 +347,109 @@ function cacheAttachSeq(snap) {
 /**
  * The "N earlier records are not shown." row, or null when nothing is omitted.
  * Tagged so ensureOpening can tell it apart from real conversation nodes.
+ * Tappable — the phone only paints a short tail; older history loads on demand.
  */
 function earlierNotice(count) {
   if (!count || count <= 0) return null;
-  const note = div('notice');
+  const note = div('notice earlier-load');
   note.dataset.earlier = '1';
-  note.textContent = `${count.toLocaleString()} earlier records are not shown.`;
+  note.setAttribute('role', 'button');
+  note.tabIndex = 0;
+  note.title = 'Load earlier messages';
+  note.textContent = `${count.toLocaleString()} earlier · tap to load`;
+  note.addEventListener('click', () => loadEarlier());
+  note.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      loadEarlier();
+    }
+  });
   return note;
+}
+
+/** Ask the host for the stretch above what is already painted. */
+function loadEarlier() {
+  if (!state.sessionId || state.loadingEarlier) return;
+  if (state.liveEarlier <= 0) return;
+  const beforeSeq = state.liveRecords[0]?.seq;
+  if (!beforeSeq) return;
+  state.loadingEarlier = true;
+  const note = els.transcript.querySelector('[data-earlier="1"]');
+  if (note) note.textContent = 'Loading earlier…';
+  sendOp({
+    op: 'transcript.more',
+    sessionId: state.sessionId,
+    beforeSeq,
+    limit: CACHE_LIMIT,
+  });
+}
+
+/**
+ * Prepend an older window above the current tail without jumping the scroll.
+ */
+function applyEarlierChunk(msg) {
+  state.loadingEarlier = false;
+  if (msg.sessionId && msg.sessionId !== state.sessionId) return;
+  const headEnd = state.liveHead.at(-1)?.seq || 0;
+  const known = new Set(state.liveRecords.map((r) => r.seq));
+  const body = (msg.records || []).filter(
+    (r) => r && typeof r.seq === 'number' && r.seq > headEnd && !known.has(r.seq),
+  );
+  const oldNote = els.transcript.querySelector('[data-earlier="1"]');
+  if (!body.length) {
+    state.liveEarlier = 0;
+    oldNote?.remove();
+    persistLive(state.sessionId);
+    return;
+  }
+
+  const t = els.transcript;
+  const prevHeight = t.scrollHeight;
+  const prevTop = t.scrollTop;
+  const beforeCount = t.childNodes.length;
+
+  state.replaying = true;
+  for (const rec of body) render(rec);
+  state.replaying = false;
+
+  const extras = [];
+  while (t.childNodes.length > beforeCount) {
+    extras.unshift(t.lastChild);
+    t.removeChild(t.lastChild);
+  }
+  const frag = document.createDocumentFragment();
+  for (const n of extras) frag.appendChild(n);
+
+  let insertBefore = oldNote;
+  if (!insertBefore && state.liveHead.length) {
+    let seen = 0;
+    for (const n of t.childNodes) {
+      if (n.nodeType !== 1) continue;
+      seen += 1;
+      if (seen >= state.liveHead.length) {
+        insertBefore = n.nextSibling;
+        break;
+      }
+    }
+  }
+  if (!insertBefore) insertBefore = t.firstChild;
+
+  const remaining = Math.max(
+    0,
+    msg.remaining != null ? Number(msg.remaining) : state.liveEarlier - body.length,
+  );
+  state.liveEarlier = remaining;
+  state.liveRecords = mergeRecords(body, state.liveRecords);
+
+  const newNote = earlierNotice(remaining);
+  if (newNote) t.insertBefore(newNote, insertBefore);
+  t.insertBefore(frag, insertBefore);
+  oldNote?.remove();
+
+  decorate(t);
+  t.scrollTop = prevTop + (t.scrollHeight - prevHeight);
+  persistLive(state.sessionId);
+  markScrubDirty();
 }
 
 /** Paint opening + optional omission notice + tail into an empty transcript. */
@@ -1043,6 +1143,7 @@ function closeThinking() {
   state.thinking.open = false;
   state.thinking = null;
   syncPhase();
+  syncLiveStep();
 }
 
 function nSpan(n) {
@@ -1163,6 +1264,7 @@ function syncPhase() {
   } else {
     list.append(plan);
   }
+  syncLiveStep();
 }
 
 function ensureLiveFold() {
@@ -1170,7 +1272,8 @@ function ensureLiveFold() {
   if (state.liveFold?.isConnected) return state.liveFold;
   const el = document.createElement('details');
   el.className = 'turn-live live';
-  el.innerHTML = '<summary><span class="label"></span></summary><div class="beats"></div>';
+  el.innerHTML =
+    '<summary><span class="label"></span><span class="live-step" hidden><span class="live-step-rail"></span></span></summary><div class="beats"></div>';
   state.liveFold = el;
   state.statusEl = el;
   return el;
@@ -1219,17 +1322,97 @@ function retireLiveFold() {
 }
 
 /**
+ * The subtask line under the work summary — Cursor shows the tool that is
+ * running now with a white gleam sweeping across it, and scrolls to the next
+ * one when the step changes.
+ */
+function currentStepText() {
+  if (!state.turn || state.replaying) return '';
+  const items = state.bundle?.items || [];
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const s = items[i].rec?.status || 'completed';
+    if (s === 'in_progress' || s === 'pending') return displayLabel(items[i].rec);
+  }
+  if (!state.bundle?.card?.isConnected || state.bundle.settled) return '';
+  if (state.thinking) return 'Thinking';
+  return 'Planning next moves';
+}
+
+function liveStepHost() {
+  if (state.bundle?.card?.isConnected && !state.bundle.settled) {
+    return state.bundle.card.querySelector('.live-step');
+  }
+  if (state.liveFold?.isConnected) return state.liveFold.querySelector('.live-step');
+  return null;
+}
+
+/** Paint / scroll the shimmering current-step line under the summary. */
+function syncLiveStep() {
+  if (state.replaying || !state.turn) return;
+  // Before any tool fold, the summary itself gleams (Thinking / Planning).
+  const foldLabel = state.liveFold?.querySelector(':scope > summary > .label');
+  if (foldLabel) {
+    foldLabel.classList.toggle('shimmer', !state.bundle?.card?.isConnected);
+  }
+  const host = liveStepHost();
+  if (!host) return;
+  const text = currentStepText();
+  const rail = host.querySelector('.live-step-rail') || host;
+  if (!text) {
+    host.hidden = true;
+    rail.replaceChildren();
+    host.dataset.step = '';
+    return;
+  }
+  host.hidden = false;
+  if (host.dataset.step === text) {
+    rail.querySelector('.live-step-line')?.classList.add('shimmer');
+    return;
+  }
+  const prev = host.dataset.step || '';
+  host.dataset.step = text;
+  const next = document.createElement('div');
+  next.className = 'live-step-line shimmer';
+  next.textContent = text;
+  if (!prev || !rail.querySelector('.live-step-line')) {
+    rail.replaceChildren(next);
+    rail.style.transform = '';
+    return;
+  }
+  // Scroll the previous step up; the new one rises into place.
+  const old = rail.querySelector('.live-step-line');
+  old.classList.remove('shimmer');
+  old.classList.add('exit');
+  next.classList.add('enter');
+  rail.append(next);
+  rail.classList.remove('sliding');
+  void rail.offsetWidth;
+  rail.classList.add('sliding');
+  const done = () => {
+    rail.classList.remove('sliding');
+    old.remove();
+    next.classList.remove('enter');
+    rail.style.transform = '';
+    rail.removeEventListener('transitionend', done);
+  };
+  rail.addEventListener('transitionend', done);
+  setTimeout(done, 400);
+}
+
+/**
  * The line that says the turn is still going.
  *
  * Cursor writes "Worked for 7m 3s" / "Thought for 1s" above the answer. While
  * the turn is live the bottom line is the work summary ("Editing 9 files, …")
- * with a chevron, or "Thinking" / "Planning next moves" before any step.
+ * with a chevron, or "Thinking" / "Planning next moves" before any step. Under
+ * that sits the current subtask with a white gleam, matching the IDE.
  */
 function paintLiveStatus() {
   if (state.replaying || !state.turn) return;
   if (state.bundle?.card?.isConnected) {
     paintBundle(state.bundle);
     syncPhase();
+    syncLiveStep();
     parkBundle(state.bundle);
     retireLiveFold();
     scrollDown();
@@ -1238,6 +1421,7 @@ function paintLiveStatus() {
   const el = ensureLiveFold();
   paintParts(el.querySelector('.label'), liveSummaryParts());
   syncPhase();
+  syncLiveStep();
   els.transcript.appendChild(el);
   scrollDown();
 }
@@ -1645,6 +1829,7 @@ function renderStreaming(rec) {
         state.stream = d.querySelector('.body');
         state.streamBody = null;
         syncPhase();
+        syncLiveStep();
       } else {
         const d = document.createElement('details');
         d.className = 'think beat';
@@ -1666,6 +1851,7 @@ function renderStreaming(rec) {
         if (list) list.appendChild(d);
         else add(d, { keepStream: true });
         syncPhase();
+        syncLiveStep();
         state.stream = d.querySelector('.body');
         state.streamBody = null;
         state.stream.dataset.raw = '';
@@ -1916,6 +2102,7 @@ function paintBundle(bundle) {
   const stateEl = card.querySelector('summary .state');
   if (stateEl) stateEl.textContent = status === 'in_progress' ? 'running…' : '';
   syncPhase();
+  syncLiveStep();
 }
 
 function flushBundle() {
@@ -1933,6 +2120,7 @@ function startBundle(lane) {
         <span class="stat"></span>
         <span class="state">running…</span>
       </span>
+      <span class="live-step" hidden><span class="live-step-rail"></span></span>
     </summary>
     <div class="body bundle-list"></div>`;
   card.querySelector('summary').addEventListener('click', () => {
@@ -4412,9 +4600,15 @@ function attach(sessionId) {
   loadDraft(sessionId);
   setRail(false);
 
-  // Memory is sync — paint it before the old chat can linger as the wrong one.
-  const warm = memoryGet(sessionId);
-  if (warm?.records?.length || warm?.head?.length) {
+  // Memory is sync — paint a trimmed snap before the old chat can linger.
+  const warmRaw = memoryGet(sessionId);
+  if (warmRaw?.records?.length || warmRaw?.head?.length) {
+    const warm = makeSnap(
+      warmRaw.records,
+      warmRaw.omitted ?? warmRaw.earlier ?? 0,
+      warmRaw.head || [],
+    );
+    memoryPut(sessionId, warm);
     paintFromCache(warm);
     setHistoryLoading(false);
     sendOp({ op: 'attach', sessionId, fromSeq: cacheAttachSeq(warm) });
@@ -4551,6 +4745,11 @@ function connect() {
         // a model), so remember what it settled on once it comes back.
         if (state.modelUpdating && mine.model) rememberModel(mine.agent || 'cursor', mine.model);
       }
+      return;
+    }
+
+    if (msg.type === 'transcript.more') {
+      applyEarlierChunk(msg);
       return;
     }
 
@@ -5404,6 +5603,7 @@ if (SpeechRec && els.voice) {
 els.transcript.addEventListener('scroll', () => {
   syncToBottom();
   onTranscriptScroll();
+  if (els.transcript.scrollTop < 80) loadEarlier();
 }, { passive: true });
 els.toBottom.onclick = () => {
   scrollDownSmooth();

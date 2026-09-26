@@ -761,6 +761,12 @@ export class SessionManager extends EventEmitter {
     return replayWindow(opening, records, fromSeq);
   }
 
+  /** Older records just above what the client already has painted. */
+  async historyBefore(id, beforeSeq, limit = 0) {
+    const t = await this.transcripts.get(id);
+    return t.readBefore(beforeSeq, { limit });
+  }
+
   /**
    * Sessions with an agent process actually running.
    *

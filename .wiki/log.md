@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-09-26
+* **Update**: Live turn shows Cursor's current-subtask line under the work summary, with a white gleam and a scroll-up when the step changes. See [Tool lanes](concepts/tool-lanes.md).
+* **Perf**: Chat attach paints only the newest ~60 records (viewport-sized); older history loads when you scroll up or tap the omission notice. See [Web](concepts/web.md).
+
 ## 2026-09-25
 * **Fix**: Draft sync used Cursor's `getStates()` "focused" row, but that API returns `loadedComposers` — so every chat looked unfocused and phone drafts never reached the computer. Sync now keys off the on-screen `data-composer-id` (same as FACTS). See [Cursor window](concepts/cursor-window.md).
 * **Fix**: Draft sync pauses while Cursor is on another chat; each side keeps its text locally and syncs again when that same chat is focused. See [Cursor window](concepts/cursor-window.md).

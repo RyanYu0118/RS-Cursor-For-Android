@@ -2463,8 +2463,8 @@ if (existsSync(SRC)) {
       saveCache,
     } = await import('../src/web/transcript-cache.js');
     memoryClear();
-    if (CACHE_LIMIT !== 1200) {
-      fail(`CACHE_LIMIT must match the host REPLAY_LIMIT (1200), got ${CACHE_LIMIT}`);
+    if (CACHE_LIMIT !== 60) {
+      fail(`CACHE_LIMIT must match the host REPLAY_LIMIT (60), got ${CACHE_LIMIT}`);
       failed = true;
     }
     const trimmed = trimTail(
@@ -2556,6 +2556,10 @@ if (existsSync(SRC)) {
     }
     if (!app.includes('paintedFromCache') || !app.includes('fromCache')) {
       fail('attached must restore tool tabs after a cache paint even on catch-up');
+      failed = true;
+    }
+    if (!app.includes('transcript.more') || !app.includes('function loadEarlier') || !app.includes('function applyEarlierChunk')) {
+      fail('scrolling up must load an older transcript window on demand');
       failed = true;
     }
     if (!failed) ok('v2 web: transcript client cache');
@@ -5055,6 +5059,7 @@ if (existsSync(SRC)) {
     // Wiring: web control + op, Telegram command, server op.
     const html = readFileSync(join(ROOT, 'src/web/index.html'), 'utf8');
     const js = readFileSync(join(ROOT, 'src/web/app.js'), 'utf8');
+    const css = readFileSync(join(ROOT, 'src/web/style.css'), 'utf8');
     const server = readFileSync(join(ROOT, 'src/server/index.mjs'), 'utf8');
     const tg = readFileSync(join(ROOT, 'src/core/telegram.mjs'), 'utf8');
     if (!html.includes('id="verbosity-seg"') || !html.includes('data-verbosity-choice="quiet"')) {
@@ -5068,6 +5073,9 @@ if (existsSync(SRC)) {
     }
     if (!js.includes('Planning next moves') || !js.includes('function paintLiveStatus')) {
       fail('the web must show the live work summary, not only Working');
+    }
+    if (!js.includes('function syncLiveStep') || !js.includes('live-step-line') || !css.includes('live-step-gleam')) {
+      fail('the live turn must show the current subtask with a gleam, like Cursor');
     }
     if (!js.includes('quietThinking') || !js.includes('reuseQuiet')) {
       fail('quiet must fold the turn’s thinking spells into one block');
@@ -6808,13 +6816,12 @@ try {
       if (!full.replaced) {
         fail('a replay from the start must say it replaces what the client has');
       }
-      // The number here is the host's, not ours; what matters is that there is
-      // one. A session that had run for two days replayed 28,000 records and
-      // 27MB in a single message, and the browser never finished with it.
-      if (full.records.length > 2000) {
-        fail(`attach sent ${full.records.length} records; a replay must be bounded`);
-      } else if (full.bytes > 8_000_000) {
-        fail(`attach sent ${full.bytes} bytes; a replay must be bounded`);
+      // Viewport-sized window (~60). A two-day chat used to dump tens of
+      // thousands of records in one message and freeze the tablet.
+      if (full.records.length > 80) {
+        fail(`attach sent ${full.records.length} records; a replay must stay near one screen`);
+      } else if (full.bytes > 1_500_000) {
+        fail(`attach sent ${full.bytes} bytes; a replay must stay near one screen`);
       } else {
         ok(`web: attach replays ${full.records.length} records (${Math.round(full.bytes / 1024)}KB)`);
       }
