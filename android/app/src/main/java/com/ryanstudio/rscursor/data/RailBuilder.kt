@@ -126,6 +126,7 @@ object RailBuilder {
             title = pickTitle(cursorTitle, s.title, folder),
             folder = folder,
             at = s.updatedAt,
+            busy = s.status == "busy" || s.status == "starting",
         )
     }
 

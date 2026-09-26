@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Feature**: Android rail shows a spinner + left→right title gleam on busy / starting chats. See [Android shell](concepts/android-shell.md).
 * **Fix**: Android composer keeps Send while busy so mid-turn messages queue (Stop stays beside it). See [Android shell](concepts/android-shell.md) and [Queue](concepts/queue.md).
 * **Feature**: Android sent-image thumbs open a full-screen viewer (pinch zoom). See [Android shell](concepts/android-shell.md).
 * **Feature**: Android rail long-press Pin / Unpin / Archive (Cursor `composerHeaders` + Auto session). See [Android shell](concepts/android-shell.md).

@@ -122,6 +122,7 @@ data class RailChat(
     val title: String,
     val folder: String = "",
     val at: Long = 0L,
+    val busy: Boolean = false,
 )
 
 data class RailRepo(

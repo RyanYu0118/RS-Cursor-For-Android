@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -56,6 +57,7 @@ import com.ryanstudio.rscursor.data.RailBuilder
 import com.ryanstudio.rscursor.data.RailChat
 import com.ryanstudio.rscursor.data.RailPinned
 import com.ryanstudio.rscursor.data.RailRepo
+import com.ryanstudio.rscursor.ui.theme.GleamText
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import com.ryanstudio.rscursor.ui.theme.RsSpace
@@ -72,6 +74,7 @@ fun SessionRail(
     repos: List<RailRepo>,
     activeSessionId: String?,
     activeDesktopThreadId: String?,
+    busyKeys: Set<String> = emptySet(),
     onOpenChat: (RailChat) -> Unit,
     onOpenPinned: (RailPinned) -> Unit,
     onPinChat: (RailChat) -> Unit,
@@ -201,6 +204,7 @@ fun SessionRail(
                         selected =
                             pin.id == activeDesktopThreadId ||
                                 (activeDesktopThreadId.isNullOrBlank() && pin.id == activeSessionId),
+                        busy = pin.id in busyKeys,
                         onClick = { onOpenPinned(pin) },
                         onUnpin = { onUnpinPinned(pin) },
                         onArchive = { onArchivePinned(pin) },
@@ -269,6 +273,10 @@ fun SessionRail(
                                 selected = isSelected(chat, activeSessionId, activeDesktopThreadId),
                                 indented = true,
                                 pinned = !chat.chatId.isNullOrBlank() && chat.chatId in pinnedIds,
+                                busy =
+                                    chat.busy ||
+                                        chat.sessionId in busyKeys ||
+                                        (!chat.chatId.isNullOrBlank() && chat.chatId in busyKeys),
                                 onClick = { onOpenChat(chat) },
                                 onPin = { onPinChat(chat) },
                                 onUnpin = { onUnpinChat(chat) },
@@ -350,6 +358,7 @@ private fun RailAction(
 private fun PinnedRow(
     pin: RailPinned,
     selected: Boolean,
+    busy: Boolean,
     onClick: () -> Unit,
     onUnpin: () -> Unit,
     onArchive: () -> Unit,
@@ -361,6 +370,7 @@ private fun PinnedRow(
         } else {
             Color.Transparent
         }
+    val title = pin.name.ifBlank { "Untitled chat" }
     Box {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -376,20 +386,12 @@ private fun PinnedRow(
                     )
                     .padding(horizontal = RsSpace.railRowH, vertical = RsSpace.railRowV),
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(pinColor(pin.color.ifBlank { pin.name })),
-            )
+            RailLeading(busy = busy, selected = selected, pinTint = pinColor(pin.color.ifBlank { pin.name }))
             Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                pin.name,
-                color = if (selected) RsAccent else RsText,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            RailTitle(
+                text = title,
+                busy = busy,
+                selected = selected,
                 modifier = Modifier.weight(1f),
             )
             val age = RailBuilder.relTime(pin.at)
@@ -484,6 +486,7 @@ private fun ChatRow(
     selected: Boolean,
     indented: Boolean,
     pinned: Boolean,
+    busy: Boolean,
     onClick: () -> Unit,
     onPin: () -> Unit,
     onUnpin: () -> Unit,
@@ -496,6 +499,7 @@ private fun ChatRow(
             else -> Color.Transparent
         }
     val canPin = !chat.chatId.isNullOrBlank()
+    val title = chat.title.ifBlank { "Untitled chat" }
     Box {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -516,21 +520,12 @@ private fun ChatRow(
                         bottom = RsSpace.railRowV,
                     ),
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(if (selected) RsAccent else RsMuted.copy(alpha = 0.55f)),
-            )
+            RailLeading(busy = busy, selected = selected, pinTint = null)
             Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                chat.title.ifBlank { "Untitled chat" },
-                color = if (selected) RsAccent else RsText,
-                fontSize = 13.sp,
-                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            RailTitle(
+                text = title,
+                busy = busy,
+                selected = selected,
                 modifier = Modifier.weight(1f),
             )
             val age = RailBuilder.relTime(chat.at)
@@ -556,6 +551,67 @@ private fun ChatRow(
                 },
             )
         }
+    }
+}
+
+/** Dot when idle; spinner left of the title while the turn runs. */
+@Composable
+private fun RailLeading(
+    busy: Boolean,
+    selected: Boolean,
+    pinTint: Color?,
+) {
+    if (busy) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(12.dp),
+            color = if (selected) RsAccent else RsMuted,
+            strokeWidth = 1.6.dp,
+        )
+    } else if (pinTint != null) {
+        Box(
+            modifier =
+                Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(pinTint),
+        )
+    } else {
+        Box(
+            modifier =
+                Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) RsAccent else RsMuted.copy(alpha = 0.55f)),
+        )
+    }
+}
+
+@Composable
+private fun RailTitle(
+    text: String,
+    busy: Boolean,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (busy) {
+        GleamText(
+            text = text,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            baseColor = if (selected) RsAccent else RsText,
+            modifier = modifier,
+        )
+    } else {
+        Text(
+            text,
+            color = if (selected) RsAccent else RsText,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier,
+        )
     }
 }
 

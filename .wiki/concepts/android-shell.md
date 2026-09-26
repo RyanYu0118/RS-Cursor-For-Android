@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T15:30:00Z }
+generated: { by: agent, at: 2026-09-26T15:45:00Z }
 ---
 
 # Android shell
@@ -54,7 +54,9 @@ Tapping an Auto session attaches; tapping a desktop-only chat sends
 `desktop.continue`. Repo **+** starts `session.create` in that folder.
 Long-press a chat (or Pinned row) for **Pin** / **Unpin** / **Archive** —
 writes Cursor's `composerHeaders` (`projectAppearance` / `isArchived`) and
-refreshes the sidebar.
+refreshes the sidebar. While a session is `busy` / `starting`, that row (and
+its Pinned twin) shows a spinner left of the title and the same left→right
+white **gleam** on the title glyphs as the live-step line.
 
 ## Connection
 
@@ -93,7 +95,8 @@ flash.
 
 - Host URL settings ([SettingsActivity](/android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt))
 - Side rail: Agents-style Pinned / Repositories, attach or
-  `desktop.continue`, new session (global or per folder)
+  `desktop.continue`, new session (global or per folder); busy chats get a
+  spinner + title gleam
 - Transcript: user / assistant text, image thumbs (tap to view full size),
   tool rows, permission and question cards; Cursor-style **N Queued** card
   above the composer (Start Multitasking / × / tap to edit); scroll-up loads

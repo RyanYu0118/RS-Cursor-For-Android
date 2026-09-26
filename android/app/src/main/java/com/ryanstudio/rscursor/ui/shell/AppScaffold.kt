@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -209,11 +210,28 @@ private fun MainShell(
                 enter = RsMotion.railEnter,
                 exit = RsMotion.railExit,
             ) {
+                val busyKeys =
+                    remember(state.sessions, state.busy, state.sessionId, state.meta?.desktopThreadId) {
+                        buildSet {
+                            for (s in state.sessions) {
+                                if (s.status == "busy" || s.status == "starting") {
+                                    add(s.id)
+                                    if (s.desktopThreadId.isNotBlank()) add(s.desktopThreadId)
+                                }
+                            }
+                            // Active turn can briefly lead the sessions list.
+                            if (state.busy) {
+                                state.sessionId?.takeIf { it.isNotBlank() }?.let { add(it) }
+                                state.meta?.desktopThreadId?.takeIf { it.isNotBlank() }?.let { add(it) }
+                            }
+                        }
+                    }
                 SessionRail(
                     pinned = state.railPinned,
                     repos = state.railRepos,
                     activeSessionId = state.sessionId,
                     activeDesktopThreadId = state.meta?.desktopThreadId,
+                    busyKeys = busyKeys,
                     onOpenChat = onOpenChat,
                     onOpenPinned = onOpenPinned,
                     onPinChat = onPinChat,

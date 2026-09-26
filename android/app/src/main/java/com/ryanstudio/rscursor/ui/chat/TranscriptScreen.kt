@@ -2,12 +2,6 @@ package com.ryanstudio.rscursor.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -45,7 +39,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,12 +47,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,6 +59,7 @@ import com.ryanstudio.rscursor.data.ImagePart
 import com.ryanstudio.rscursor.data.ToolLanes
 import com.ryanstudio.rscursor.ui.shell.TranscriptSkeleton
 import com.ryanstudio.rscursor.ui.theme.GlassBubbleUserBrush
+import com.ryanstudio.rscursor.ui.theme.GleamText
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsAllow
 import com.ryanstudio.rscursor.ui.theme.RsDeny
@@ -317,53 +307,14 @@ private fun LiveStatusStrip(text: String) {
 
 @Composable
 private fun GleamLine(text: String) {
-    val transition = rememberInfiniteTransition(label = "gleam")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(1600, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "gleam-phase",
-    )
-    var lineWidth by remember { mutableFloatStateOf(0f) }
-    // Same idea as web `.live-step-line.shimmer`: muted fill + white glint
-    // clipped to the glyphs (Compose TextStyle brush), not a background wash.
-    val brush =
-        remember(phase, lineWidth) {
-            val w = lineWidth.coerceAtLeast(1f)
-            val span = w * 2.2f
-            // Sweep left → right (highlight enters from the left edge).
-            val start = -span + phase * (w + span)
-            Brush.linearGradient(
-                colorStops =
-                    arrayOf(
-                        0.00f to RsMuted,
-                        0.42f to RsMuted,
-                        0.50f to Color.White.copy(alpha = 0.92f),
-                        0.58f to RsMuted,
-                        1.00f to RsMuted,
-                    ),
-                start = Offset(start, 0f),
-                end = Offset(start + span, 0f),
-            )
-        }
-    Text(
+    GleamText(
         text = text,
-        style =
-            TextStyle(
-                brush = brush,
-                fontSize = 13.sp,
-            ),
+        fontSize = 13.sp,
         maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, top = 1.dp, bottom = 1.dp)
-                .onSizeChanged { lineWidth = it.width.toFloat() },
+                .padding(start = 20.dp, top = 1.dp, bottom = 1.dp),
     )
 }
 
