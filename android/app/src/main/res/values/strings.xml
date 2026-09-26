@@ -2,9 +2,10 @@
 <resources>
     <string name="app_name">RS Cursor</string>
     <string name="settings_title">主机地址</string>
+    <string name="web_shell_title">网页版</string>
     <string name="host_hint">http://100.x.y.z:4331</string>
     <string name="host_label">Auto 主机 URL</string>
-    <string name="host_help">填电脑上 Auto 的地址（Tailscale IP + 端口 4331）。主机仍跑在电脑，本 App 只是壳。</string>
+    <string name="host_help">填电脑上 Auto 的地址（Tailscale IP + 端口 4331）。主机仍跑在电脑；本 App 用原生界面连接。</string>
     <string name="save">保存并打开</string>
     <string name="menu_settings">主机设置</string>
     <string name="menu_reload">刷新</string>

@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Update**: Android pad is native Jetpack Compose (rail, transcript, composer, + / Files / model) with a low-fi skeleton until WebSocket `attached`; WebView kept as 网页版 fallback. See [Android shell](concepts/android-shell.md).
 * **Fix**: Android launcher uses the studio `rs-logo.png` with safe-zone padding (no crop under round/squircle masks). See [Android shell](concepts/android-shell.md).
 * **Update**: Android thin WebView shell (`android/`) loads Auto's web UI and opens the system image picker via `onShowFileChooser` — Home Screen PWA Files stays unreliable. See [Android shell](concepts/android-shell.md) and [Web](concepts/web.md).
 * **Fix**: Files in the + menu uses a full-row opacity-0 file input — a clipped `sr-only` target never opened the OS picker on Android WebView. See [Web](concepts/web.md).

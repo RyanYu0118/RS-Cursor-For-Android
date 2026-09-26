@@ -11,7 +11,7 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [Access](concepts/access.md) - Tailscale-only reachability, setup checklist, no Auto login
 * [Cursor window](concepts/cursor-window.md) - Typing, pressing, and paste over the debug port; phone and computer share model and unsent draft from the back end
 * [Web](concepts/web.md) - PWA that attaches to a session; shares the chat-box draft with Cursor; + and model nested menus
-* [Android shell](concepts/android-shell.md) - Thin WebView APK; native file chooser for pad attachments
+* [Android shell](concepts/android-shell.md) - Native Compose pad client; skeleton until WS ready; WebView kept as fallback
 * [Desktop chats](concepts/desktop-chats.md) - Carry on a Cursor IDE chat from the phone
 * [Desktop bridge](concepts/desktop-bridge.md) - Background submit without focusing the chat; gate and outbox
 * [Desktop threads](concepts/desktop-threads.md) - Reading replies from `state.vscdb`
