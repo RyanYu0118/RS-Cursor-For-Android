@@ -395,6 +395,7 @@ private fun EarlierBanner(
 
 @Composable
 private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
+    var viewing by remember { mutableStateOf<Pair<String, String>?>(null) }
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         Box(
             modifier =
@@ -417,7 +418,10 @@ private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
                                     modifier =
                                         Modifier
                                             .size(72.dp)
-                                            .clip(RoundedCornerShape(10.dp)),
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .clickable {
+                                                viewing = url to part.name.ifBlank { "image" }
+                                            },
                                 )
                             }
                         }
@@ -428,6 +432,13 @@ private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
                 }
             }
         }
+    }
+    viewing?.let { (url, title) ->
+        ImageLightbox(
+            url = url,
+            title = title,
+            onDismiss = { viewing = null },
+        )
     }
 }
 
