@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,15 +37,11 @@ import com.ryanstudio.rscursor.data.ChatItem
 import com.ryanstudio.rscursor.data.ImagePart
 import com.ryanstudio.rscursor.data.QueueItem
 import com.ryanstudio.rscursor.ui.shell.TranscriptSkeleton
-import com.ryanstudio.rscursor.ui.theme.GlassBubbleAssistBrush
 import com.ryanstudio.rscursor.ui.theme.GlassBubbleUserBrush
-import com.ryanstudio.rscursor.ui.theme.GlassBorderBrush
 import com.ryanstudio.rscursor.ui.theme.RsAllow
 import com.ryanstudio.rscursor.ui.theme.RsDeny
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import com.ryanstudio.rscursor.ui.theme.RsText
-import com.ryanstudio.rscursor.ui.theme.glassPanel
-import androidx.compose.foundation.border
 
 @Composable
 fun TranscriptScreen(
@@ -73,8 +70,8 @@ fun TranscriptScreen(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (queue.isNotEmpty()) {
             item(key = "queue") {
@@ -106,8 +103,9 @@ private fun QueueCard(queue: List<QueueItem>) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .glassPanel(shape = RoundedCornerShape(18.dp), strong = true)
-                .padding(14.dp),
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .padding(10.dp),
     ) {
         Text("排队中", color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         queue.forEach { q ->
@@ -127,11 +125,10 @@ private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
         Box(
             modifier =
                 Modifier
-                    .widthIn(max = 520.dp)
-                    .clip(RoundedCornerShape(22.dp))
+                    .widthIn(max = 560.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(GlassBubbleUserBrush)
-                    .border(1.dp, GlassBorderBrush, RoundedCornerShape(22.dp))
-                    .padding(14.dp),
+                    .padding(12.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (item.images.isNotEmpty()) {
@@ -146,14 +143,14 @@ private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
                                     modifier =
                                         Modifier
                                             .size(72.dp)
-                                            .clip(RoundedCornerShape(12.dp)),
+                                            .clip(RoundedCornerShape(10.dp)),
                                 )
                             }
                         }
                     }
                 }
                 if (item.text.isNotBlank()) {
-                    Text(item.text, color = RsText, fontSize = 15.sp)
+                    MarkdownText(markdown = item.text)
                 }
             }
         }
@@ -166,20 +163,8 @@ private fun AssistantBubble(item: ChatItem.Assistant) {
         if (item.thought) {
             Text("Thought", color = RsMuted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 2.dp))
         }
-        Box(
-            modifier =
-                Modifier
-                    .widthIn(max = 640.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(GlassBubbleAssistBrush)
-                    .border(1.dp, GlassBorderBrush, RoundedCornerShape(22.dp))
-                    .padding(14.dp),
-        ) {
-            Text(
-                text = item.text,
-                color = if (item.thought) RsMuted else RsText,
-                fontSize = 15.sp,
-            )
+        Box(modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
+            MarkdownText(markdown = item.text, muted = item.thought)
         }
     }
 }
@@ -190,8 +175,9 @@ private fun ToolCard(item: ChatItem.Tool) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .glassPanel(shape = RoundedCornerShape(16.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = 0.05f))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -199,6 +185,7 @@ private fun ToolCard(item: ChatItem.Tool) {
             color = RsText,
             modifier = Modifier.weight(1f),
             maxLines = 2,
+            fontSize = 13.sp,
         )
         Text(item.status, color = RsMuted, fontSize = 12.sp)
     }
@@ -214,8 +201,9 @@ private fun PermissionCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .glassPanel(shape = RoundedCornerShape(18.dp), strong = true)
-                .padding(14.dp),
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.07f))
+                .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("需要许可", color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
@@ -256,8 +244,9 @@ private fun QuestionCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .glassPanel(shape = RoundedCornerShape(18.dp), strong = true)
-                .padding(14.dp),
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.07f))
+                .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(item.title, color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
@@ -288,7 +277,7 @@ private fun NoticeLine(item: ChatItem.Notice) {
         text = item.text,
         color = if (item.error) RsDeny else RsMuted,
         fontSize = 13.sp,
-        modifier = Modifier.padding(vertical = 4.dp),
+        modifier = Modifier.padding(vertical = 2.dp),
     )
 }
 

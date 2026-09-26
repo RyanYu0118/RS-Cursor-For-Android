@@ -1,5 +1,6 @@
 package com.ryanstudio.rscursor.ui.rail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,7 +37,6 @@ import com.ryanstudio.rscursor.data.SessionMeta
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import com.ryanstudio.rscursor.ui.theme.RsText
-import com.ryanstudio.rscursor.ui.theme.glassPanel
 
 @Composable
 fun SessionRail(
@@ -49,19 +51,18 @@ fun SessionRail(
     Column(
         modifier =
             modifier
-                .width(280.dp)
+                .width(248.dp)
                 .fillMaxHeight()
-                .padding(start = 10.dp, top = 4.dp, bottom = 10.dp, end = 6.dp)
-                .glassPanel(shape = RoundedCornerShape(24.dp), strong = true)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(start = 4.dp, top = 0.dp, bottom = 4.dp, end = 4.dp)
+                .padding(horizontal = 6.dp, vertical = 4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "RS Cursor",
                 color = RsText,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp,
-                modifier = Modifier.weight(1f),
+                fontSize = 16.sp,
+                modifier = Modifier.weight(1f).padding(start = 6.dp),
             )
             IconButton(onClick = onClose) {
                 Icon(Icons.Default.Close, contentDescription = "关闭侧栏", tint = RsMuted)
@@ -70,12 +71,12 @@ fun SessionRail(
         Text(
             text = "会话",
             color = RsMuted,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp, start = 4.dp),
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 8.dp),
         )
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             items(sessions, key = { it.id }) { session ->
                 SessionRow(
@@ -85,16 +86,16 @@ fun SessionRail(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         TextButton(onClick = onNew, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = RsAccent)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("新建会话", color = RsText)
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = RsAccent)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("新建会话", color = RsText, fontSize = 13.sp)
         }
         TextButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp), tint = RsMuted)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("主机设置", color = RsMuted)
+            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp), tint = RsMuted)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("主机设置", color = RsMuted, fontSize = 13.sp)
         }
     }
 }
@@ -105,13 +106,15 @@ private fun SessionRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val bg = if (selected) Color.White.copy(alpha = 0.1f) else Color.Transparent
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .glassPanel(shape = RoundedCornerShape(16.dp), strong = selected)
+                .clip(RoundedCornerShape(8.dp))
+                .background(bg)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         Text(
             text = session.title,
@@ -120,6 +123,7 @@ private fun SessionRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium,
+            fontSize = 14.sp,
         )
         val sub =
             buildString {

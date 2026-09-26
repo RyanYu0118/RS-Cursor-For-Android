@@ -43,7 +43,6 @@ import com.ryanstudio.rscursor.data.LocalAttachment
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import com.ryanstudio.rscursor.ui.theme.RsText
-import com.ryanstudio.rscursor.ui.theme.glassPanel
 
 @Composable
 fun ComposerBar(
@@ -70,9 +69,7 @@ fun ComposerBar(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-                .glassPanel(shape = RoundedCornerShape(26.dp), strong = true)
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         if (attachments.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -84,9 +81,8 @@ fun ComposerBar(
                             contentScale = ContentScale.Crop,
                             modifier =
                                 Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .glassPanel(shape = RoundedCornerShape(14.dp)),
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(10.dp)),
                         )
                         IconButton(onClick = { onRemoveAttachment(index) }) {
                             Icon(Icons.Default.Close, contentDescription = "移除", tint = RsMuted)
@@ -94,7 +90,7 @@ fun ComposerBar(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
         }
 
         Row(verticalAlignment = Alignment.Bottom) {
@@ -184,19 +180,19 @@ fun ComposerBar(
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("给 Agent 发消息…", color = RsMuted) },
                 maxLines = 6,
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors =
                     OutlinedTextFieldDefaults.colors(
                         focusedTextColor = RsText,
                         unfocusedTextColor = RsText,
-                        focusedBorderColor = RsAccent.copy(alpha = 0.7f),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                        focusedBorderColor = RsAccent.copy(alpha = 0.55f),
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.14f),
                         cursorColor = RsAccent,
-                        focusedContainerColor = Color.White.copy(alpha = 0.06f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
                     ),
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(2.dp))
             if (busy) {
                 IconButton(onClick = onCancel) {
                     Icon(Icons.Default.Stop, contentDescription = "停止", tint = RsAccent)

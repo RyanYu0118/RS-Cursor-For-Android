@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T12:55:00Z }
+generated: { by: agent, at: 2026-09-26T13:20:00Z }
 ---
 
 # Android shell
@@ -35,11 +35,11 @@ the + menu are Compose — not a WebView.
 
 ## Look
 
-The shell uses an **immersive light field** (slow-moving cyan / violet /
-rose orbs over a deep navy base) and **liquid-glass** panels: translucent
-fills, specular borders, large corner radii. Top bar, rail, composer,
-bubbles, and cards share that material. This approximates a HarmonyOS
-glass feel on Android; it is not a system backdrop blur.
+The shell keeps an **immersive light field** behind a **single rounded
+glass chat window** (transcript + composer). The top bar and session rail
+stay compact and flat — closer to the [Web](web.md) layout — without their
+own glass cards. Assistant and user prose render as **Markdown**, not raw
+source.
 
 ## Why it exists
 

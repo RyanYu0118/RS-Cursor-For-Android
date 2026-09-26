@@ -132,10 +132,6 @@ fun AppScaffold(
                             navigationIconContentColor = RsText,
                             actionIconContentColor = RsText,
                         ),
-                    modifier =
-                        Modifier
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                            .glassPanel(shape = RoundedCornerShape(20.dp), strong = true),
                 )
             },
         ) { padding ->
@@ -155,22 +151,22 @@ fun AppScaffold(
                         onClose = { onRailOpen(false) },
                     )
                 }
-                Column(modifier = Modifier.weight(1f).fillMaxSize()) {
+                // Only the chat column is a rounded glass window (web-like compactness elsewhere).
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .padding(start = if (state.railOpen) 0.dp else 8.dp, end = 8.dp, bottom = 8.dp)
+                            .glassPanel(shape = RoundedCornerShape(22.dp), strong = true),
+                ) {
                     if (state.reconnecting && state.banner != null) {
-                        GlassChip(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Text(
-                                state.banner!!,
-                                color = RsAccent,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            )
-                        }
+                        Text(
+                            state.banner!!,
+                            color = RsAccent,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
                     }
                     TranscriptScreen(
                         ready = state.transcriptReady,

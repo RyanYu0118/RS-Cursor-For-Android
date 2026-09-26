@@ -35,21 +35,20 @@ fun SkeletonShell(
     modifier: Modifier = Modifier,
 ) {
     ImmersiveLightBackground(modifier = modifier) {
-        Row(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+        Row(modifier = Modifier.fillMaxSize().padding(8.dp)) {
             if (showRail) {
                 Column(
                     modifier =
                         Modifier
-                            .width(260.dp)
+                            .width(248.dp)
                             .fillMaxHeight()
-                            .glassPanel(shape = RoundedCornerShape(24.dp))
-                            .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                            .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Bone(Modifier.fillMaxWidth(0.55f).height(22.dp))
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Bone(Modifier.fillMaxWidth(0.55f).height(18.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     repeat(6) {
-                        Bone(Modifier.fillMaxWidth().height(40.dp))
+                        Bone(Modifier.fillMaxWidth().height(32.dp))
                     }
                 }
             }
@@ -58,19 +57,16 @@ fun SkeletonShell(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .padding(start = if (showRail) 12.dp else 0.dp)
-                        .glassPanel(shape = RoundedCornerShape(24.dp))
-                        .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                        .glassPanel(shape = RoundedCornerShape(22.dp))
+                        .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Bone(Modifier.fillMaxWidth(0.4f).height(18.dp))
-                Spacer(modifier = Modifier.height(4.dp))
-                Bone(Modifier.fillMaxWidth(0.72f).height(56.dp))
-                Bone(Modifier.fillMaxWidth(0.9f).height(72.dp))
-                Bone(Modifier.fillMaxWidth(0.55f).height(48.dp))
-                Bone(Modifier.fillMaxWidth(0.8f).height(64.dp))
+                Bone(Modifier.fillMaxWidth(0.4f).height(16.dp))
+                Bone(Modifier.fillMaxWidth(0.72f).height(48.dp))
+                Bone(Modifier.fillMaxWidth(0.9f).height(64.dp))
+                Bone(Modifier.fillMaxWidth(0.55f).height(40.dp))
                 Spacer(modifier = Modifier.weight(1f))
-                Bone(Modifier.fillMaxWidth().height(52.dp))
+                Bone(Modifier.fillMaxWidth().height(48.dp))
             }
         }
     }
@@ -79,13 +75,13 @@ fun SkeletonShell(
 @Composable
 fun TranscriptSkeleton(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxSize().padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Bone(Modifier.fillMaxWidth(0.7f).height(56.dp))
-        Bone(Modifier.fillMaxWidth(0.85f).height(80.dp))
-        Bone(Modifier.fillMaxWidth(0.5f).height(40.dp))
-        Bone(Modifier.fillMaxWidth(0.9f).height(64.dp))
+        Bone(Modifier.fillMaxWidth(0.7f).height(48.dp))
+        Bone(Modifier.fillMaxWidth(0.85f).height(72.dp))
+        Bone(Modifier.fillMaxWidth(0.5f).height(36.dp))
+        Bone(Modifier.fillMaxWidth(0.9f).height(56.dp))
     }
 }
 
@@ -114,5 +110,5 @@ private fun Bone(modifier: Modifier = Modifier) {
             startX = shift * 420f - 210f,
             endX = shift * 420f + 210f,
         )
-    Box(modifier = modifier.clip(RoundedCornerShape(14.dp)).background(brush))
+    Box(modifier = modifier.clip(RoundedCornerShape(10.dp)).background(brush))
 }
