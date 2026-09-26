@@ -1,11 +1,17 @@
 package com.ryanstudio.rscursor.ui.chat
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +73,7 @@ import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsAllow
 import com.ryanstudio.rscursor.ui.theme.RsDeny
 import com.ryanstudio.rscursor.ui.theme.RsMuted
+import com.ryanstudio.rscursor.ui.theme.RsSpace
 import com.ryanstudio.rscursor.ui.theme.RsText
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -167,8 +174,8 @@ fun TranscriptScreen(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(horizontal = RsSpace.chatPadH, vertical = RsSpace.chatPadV),
+        verticalArrangement = Arrangement.spacedBy(RsSpace.chatGap),
     ) {
         if (earlierCount > 0 || loadingEarlier) {
             item(key = "earlier") {
@@ -184,37 +191,45 @@ fun TranscriptScreen(
                 QueueCard(queue)
             }
         }
-        items(rows, key = { row ->
-            when (row) {
-                is ToolLanes.Row.Item -> row.item.key
-                is ToolLanes.Row.Fold -> row.fold.key
-                is ToolLanes.Row.LiveStrip -> "live-strip"
-            }
-        }) { row ->
+        items(
+            rows,
+            key = { row ->
+                when (row) {
+                    is ToolLanes.Row.Item -> row.item.key
+                    is ToolLanes.Row.Fold -> row.fold.key
+                    is ToolLanes.Row.LiveStrip -> "live-strip"
+                }
+            },
+        ) { row ->
+            val rowMod = Modifier.animateItem()
             when (row) {
                 is ToolLanes.Row.Item ->
-                    when (val item = row.item) {
-                        is ChatItem.User -> UserBubble(item, imageUrl)
-                        is ChatItem.Assistant -> AssistantBubble(item)
-                        is ChatItem.Tool -> ToolCard(item) // rare; folds cover most
-                        is ChatItem.Permission -> PermissionCard(item, onPermission)
-                        is ChatItem.Question -> QuestionCard(item, onAnswer, onSkipQuestion)
-                        is ChatItem.Notice -> NoticeLine(item)
-                        is ChatItem.Status -> StatusLine(item.text)
+                    Box(modifier = rowMod) {
+                        when (val item = row.item) {
+                            is ChatItem.User -> UserBubble(item, imageUrl)
+                            is ChatItem.Assistant -> AssistantBubble(item)
+                            is ChatItem.Tool -> ToolCard(item)
+                            is ChatItem.Permission -> PermissionCard(item, onPermission)
+                            is ChatItem.Question -> QuestionCard(item, onAnswer, onSkipQuestion)
+                            is ChatItem.Notice -> NoticeLine(item)
+                            is ChatItem.Status -> StatusLine(item.text)
+                        }
                     }
                 is ToolLanes.Row.Fold -> {
                     val open = row.fold.live || row.fold.key in openFolds
-                    WorkFoldCard(
-                        fold = row.fold,
-                        expanded = open,
-                        onToggle = {
-                            openFolds =
-                                if (row.fold.key in openFolds) openFolds - row.fold.key
-                                else openFolds + row.fold.key
-                        },
-                    )
+                    Box(modifier = rowMod) {
+                        WorkFoldCard(
+                            fold = row.fold,
+                            expanded = open,
+                            onToggle = {
+                                openFolds =
+                                    if (row.fold.key in openFolds) openFolds - row.fold.key
+                                    else openFolds + row.fold.key
+                            },
+                        )
+                    }
                 }
-                is ToolLanes.Row.LiveStrip -> LiveStatusStrip(row.text)
+                is ToolLanes.Row.LiveStrip -> Box(modifier = rowMod) { LiveStatusStrip(row.text) }
             }
         }
     }
@@ -230,9 +245,10 @@ private fun WorkFoldCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(RsSpace.cornerSm))
                 .background(Color.White.copy(alpha = 0.05f))
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .animateContentSize()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -240,13 +256,13 @@ private fun WorkFoldCard(
                 Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onToggle)
-                    .padding(vertical = 2.dp),
+                    .padding(vertical = 1.dp),
         ) {
             Icon(
                 if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = RsMuted,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
@@ -257,15 +273,22 @@ private fun WorkFoldCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
+                lineHeight = 16.sp,
             )
         }
         if (!fold.liveStep.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             GleamLine(fold.liveStep)
         }
-        if (expanded && fold.steps.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AnimatedVisibility(
+            visible = expanded && fold.steps.isNotEmpty(),
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
                 fold.steps.forEach { step ->
                     Text(
                         text = step.label,
@@ -273,7 +296,8 @@ private fun WorkFoldCard(
                         fontSize = 12.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 22.dp),
+                        lineHeight = 15.sp,
+                        modifier = Modifier.padding(start = 20.dp),
                     )
                 }
             }
@@ -334,7 +358,7 @@ private fun GleamLine(text: String) {
                             ),
                     )
                 }
-                .padding(start = 22.dp, top = 2.dp, bottom = 2.dp),
+                .padding(start = 20.dp, top = 1.dp, bottom = 1.dp),
     )
 }
 
@@ -357,10 +381,10 @@ private fun EarlierBanner(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(RsSpace.cornerSm))
                 .background(Color.White.copy(alpha = 0.06f))
                 .clickable(enabled = !loading && count > 0, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 7.dp),
     )
 }
 
@@ -370,9 +394,9 @@ private fun QueueCard(queue: List<QueueItem>) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(RsSpace.cornerSm))
                 .background(Color.White.copy(alpha = 0.06f))
-                .padding(10.dp),
+                .padding(8.dp),
     ) {
         Text("排队中", color = RsMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         queue.forEach { q ->
@@ -393,11 +417,11 @@ private fun UserBubble(item: ChatItem.User, imageUrl: (ImagePart) -> String?) {
             modifier =
                 Modifier
                     .widthIn(max = 560.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(GlassBubbleUserBrush)
-                    .padding(12.dp),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (item.images.isNotEmpty()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         item.images.take(4).forEach { part ->
@@ -444,7 +468,7 @@ private fun ToolCard(item: ChatItem.Tool) {
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color.White.copy(alpha = 0.05f))
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

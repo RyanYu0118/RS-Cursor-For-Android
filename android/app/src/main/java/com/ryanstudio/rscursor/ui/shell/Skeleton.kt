@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.ryanstudio.rscursor.ui.theme.ImmersiveLightBackground
 import com.ryanstudio.rscursor.ui.theme.RsSkeleton
+import com.ryanstudio.rscursor.ui.theme.RsSpace
 import com.ryanstudio.rscursor.ui.theme.glassPanel
 
 @Composable
@@ -35,20 +36,20 @@ fun SkeletonShell(
     modifier: Modifier = Modifier,
 ) {
     ImmersiveLightBackground(modifier = modifier) {
-        Row(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Row(modifier = Modifier.fillMaxSize().padding(RsSpace.page)) {
             if (showRail) {
                 Column(
                     modifier =
                         Modifier
-                            .width(248.dp)
+                            .width(RsSpace.railWidth)
                             .fillMaxHeight()
-                            .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                            .padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Bone(Modifier.fillMaxWidth(0.55f).height(18.dp))
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Bone(Modifier.fillMaxWidth(0.55f).height(14.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     repeat(6) {
-                        Bone(Modifier.fillMaxWidth().height(32.dp))
+                        Bone(Modifier.fillMaxWidth().height(28.dp))
                     }
                 }
             }
@@ -57,16 +58,16 @@ fun SkeletonShell(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .glassPanel(shape = RoundedCornerShape(22.dp))
-                        .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .glassPanel(shape = RoundedCornerShape(RsSpace.corner))
+                        .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Bone(Modifier.fillMaxWidth(0.4f).height(16.dp))
-                Bone(Modifier.fillMaxWidth(0.72f).height(48.dp))
-                Bone(Modifier.fillMaxWidth(0.9f).height(64.dp))
-                Bone(Modifier.fillMaxWidth(0.55f).height(40.dp))
+                Bone(Modifier.fillMaxWidth(0.4f).height(14.dp))
+                Bone(Modifier.fillMaxWidth(0.72f).height(40.dp))
+                Bone(Modifier.fillMaxWidth(0.9f).height(56.dp))
+                Bone(Modifier.fillMaxWidth(0.55f).height(32.dp))
                 Spacer(modifier = Modifier.weight(1f))
-                Bone(Modifier.fillMaxWidth().height(48.dp))
+                Bone(Modifier.fillMaxWidth().height(40.dp))
             }
         }
     }
@@ -75,13 +76,13 @@ fun SkeletonShell(
 @Composable
 fun TranscriptSkeleton(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.fillMaxSize().padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier.fillMaxSize().padding(RsSpace.chatPadH),
+        verticalArrangement = Arrangement.spacedBy(RsSpace.chatGap),
     ) {
-        Bone(Modifier.fillMaxWidth(0.7f).height(48.dp))
-        Bone(Modifier.fillMaxWidth(0.85f).height(72.dp))
-        Bone(Modifier.fillMaxWidth(0.5f).height(36.dp))
-        Bone(Modifier.fillMaxWidth(0.9f).height(56.dp))
+        Bone(Modifier.fillMaxWidth(0.7f).height(40.dp))
+        Bone(Modifier.fillMaxWidth(0.85f).height(56.dp))
+        Bone(Modifier.fillMaxWidth(0.5f).height(28.dp))
+        Bone(Modifier.fillMaxWidth(0.9f).height(48.dp))
     }
 }
 

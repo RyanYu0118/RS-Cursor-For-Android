@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Update**: Android UI tighter (48dp title bar, denser rows) with page/rail/row transitions. See [Android shell](concepts/android-shell.md).
 * **Update**: Android paints Cursor-style work folds with live subtask gleam (same lanes as web). See [Android shell](concepts/android-shell.md) and [Tool lanes](concepts/tool-lanes.md).
 * **Update**: Android transcript loads older history on scroll-up via `transcript.more`. See [Android shell](concepts/android-shell.md).
 * **Fix**: Android WebSocket ignores stale closes so "重连中" no longer flashes every second. See [Android shell](concepts/android-shell.md).

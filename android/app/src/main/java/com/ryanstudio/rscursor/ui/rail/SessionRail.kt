@@ -54,9 +54,10 @@ import com.ryanstudio.rscursor.data.RailPinned
 import com.ryanstudio.rscursor.data.RailRepo
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
+import com.ryanstudio.rscursor.ui.theme.RsSpace
 import com.ryanstudio.rscursor.ui.theme.RsText
 
-private val RailCorner = RoundedCornerShape(12.dp)
+private val RailCorner = RoundedCornerShape(RsSpace.cornerSm)
 private val PreviewLimit = 5
 private val RecentLimit = 10
 
@@ -116,9 +117,9 @@ fun SessionRail(
     Column(
         modifier =
             modifier
-                .width(268.dp)
+                .width(RsSpace.railWidth)
                 .fillMaxHeight()
-                .padding(start = 2.dp, end = 2.dp, bottom = 4.dp),
+                .padding(start = 2.dp, end = 2.dp, bottom = 2.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -131,8 +132,8 @@ fun SessionRail(
                 fontSize = 15.sp,
                 modifier = Modifier.weight(1f).padding(start = 8.dp),
             )
-            IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "关闭侧栏", tint = RsMuted, modifier = Modifier.size(18.dp))
+            IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "关闭侧栏", tint = RsMuted, modifier = Modifier.size(16.dp))
             }
         }
 
@@ -157,10 +158,10 @@ fun SessionRail(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
                         .clip(RailCorner)
                         .background(Color.White.copy(alpha = 0.06f))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                 decorationBox = { inner ->
                     if (filter.isEmpty()) {
                         Text("Filter chats…", color = RsMuted, fontSize = 13.sp)
@@ -176,7 +177,7 @@ fun SessionRail(
             muted = true,
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -291,7 +292,7 @@ private fun SectionLabel(text: String) {
         color = RsMuted,
         fontSize = 11.sp,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 4.dp, end = 8.dp),
+        modifier = Modifier.padding(start = 10.dp, top = 6.dp, bottom = 2.dp, end = 8.dp),
     )
 }
 
@@ -308,11 +309,11 @@ private fun RailAction(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 1.dp)
+                .padding(horizontal = 4.dp, vertical = 0.dp)
                 .clip(RailCorner)
                 .background(if (accent) Color.White.copy(alpha = 0.08f) else Color.Transparent)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 7.dp),
+                .padding(horizontal = RsSpace.railRowH, vertical = RsSpace.railRowV),
     ) {
         Icon(
             icon,
@@ -347,11 +348,11 @@ private fun PinnedRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp)
+                .padding(horizontal = 4.dp)
                 .clip(RailCorner)
                 .background(bg)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = RsSpace.railRowH, vertical = RsSpace.railRowV),
     ) {
         Box(
             modifier =
@@ -388,10 +389,10 @@ private fun RepoHead(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 1.dp)
+                .padding(horizontal = 4.dp, vertical = 0.dp)
                 .clip(RailCorner)
                 .clickable(onClick = onToggle)
-                .padding(start = 6.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
+                .padding(start = 4.dp, end = 2.dp, top = 3.dp, bottom = 3.dp),
     ) {
         Icon(
             if (open) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -454,15 +455,15 @@ private fun ChatRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp)
+                .padding(horizontal = 4.dp)
                 .clip(RailCorner)
                 .background(bg)
                 .clickable(onClick = onClick)
                 .padding(
-                    start = if (indented) 28.dp else 10.dp,
-                    end = 10.dp,
-                    top = 6.dp,
-                    bottom = 6.dp,
+                    start = if (indented) 24.dp else RsSpace.railRowH,
+                    end = RsSpace.railRowH,
+                    top = RsSpace.railRowV,
+                    bottom = RsSpace.railRowV,
                 ),
     ) {
         Box(

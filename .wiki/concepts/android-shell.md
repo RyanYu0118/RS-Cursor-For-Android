@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T14:40:00Z }
+generated: { by: agent, at: 2026-09-26T14:50:00Z }
 ---
 
 # Android shell
@@ -38,8 +38,10 @@ the + menu are Compose — not a WebView.
 The shell keeps an **immersive light field** behind a **single rounded
 glass chat window** (transcript + composer). The top bar and session rail
 stay compact and flat — closer to the [Web](web.md) layout — without their
-own glass cards. Assistant and user prose render as **Markdown**, not raw
-source.
+own glass cards. Page changes, rail open/close, and transcript rows use
+short fade/slide transitions; row gaps and the 48dp title bar are tightened
+for a denser pad layout. Assistant and user prose render as **Markdown**,
+not raw source.
 
 ## Side rail
 

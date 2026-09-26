@@ -51,6 +51,7 @@ import com.ryanstudio.rscursor.data.Catalog
 import com.ryanstudio.rscursor.data.LocalAttachment
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
+import com.ryanstudio.rscursor.ui.theme.RsSpace
 import com.ryanstudio.rscursor.ui.theme.RsText
 
 @Composable
@@ -78,7 +79,7 @@ fun ComposerBar(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = RsSpace.composerPadH, vertical = RsSpace.composerPadV),
     ) {
         if (attachments.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -90,8 +91,8 @@ fun ComposerBar(
                             contentScale = ContentScale.Crop,
                             modifier =
                                 Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(10.dp)),
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(RsSpace.cornerSm)),
                         )
                         IconButton(onClick = { onRemoveAttachment(index) }) {
                             Icon(Icons.Default.Close, contentDescription = "移除", tint = RsMuted)
@@ -99,7 +100,7 @@ fun ComposerBar(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
         }
 
         Row(verticalAlignment = Alignment.Bottom) {
@@ -201,7 +202,7 @@ fun ComposerBar(
                         },
                 placeholder = { Text("给 Agent 发消息…", color = RsMuted) },
                 maxLines = 6,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions =
                     KeyboardActions(
