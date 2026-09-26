@@ -195,19 +195,24 @@ fun ComposerBar(
                             if (event.key != Key.Enter && event.key != Key.NumPadEnter) {
                                 return@onPreviewKeyEvent false
                             }
-                            // Shift+Enter keeps the newline; bare Enter sends.
+                            // Shift+Enter keeps the newline; bare Enter sends (or queues when busy).
                             if (event.isShiftPressed) return@onPreviewKeyEvent false
-                            if (!busy && (draft.isNotBlank() || attachments.isNotEmpty())) onSend()
+                            if (draft.isNotBlank() || attachments.isNotEmpty()) onSend()
                             true
                         },
-                placeholder = { Text("给 Agent 发消息…", color = RsMuted) },
+                placeholder = {
+                    Text(
+                        if (busy) "加入排队…" else "给 Agent 发消息…",
+                        color = RsMuted,
+                    )
+                },
                 maxLines = 6,
                 shape = RoundedCornerShape(14.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions =
                     KeyboardActions(
                         onSend = {
-                            if (!busy && (draft.isNotBlank() || attachments.isNotEmpty())) onSend()
+                            if (draft.isNotBlank() || attachments.isNotEmpty()) onSend()
                         },
                     ),
                 colors =
@@ -222,21 +227,27 @@ fun ComposerBar(
                     ),
             )
             Spacer(modifier = Modifier.width(2.dp))
+            // Like the web: Stop stays available while busy, but Send still
+            // works — the host queues the message behind the running turn.
             if (busy) {
                 IconButton(onClick = onCancel) {
                     Icon(Icons.Default.Stop, contentDescription = "停止", tint = RsAccent)
                 }
-            } else {
-                IconButton(
-                    onClick = onSend,
-                    enabled = draft.isNotBlank() || attachments.isNotEmpty(),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "发送",
-                        tint = if (draft.isNotBlank() || attachments.isNotEmpty()) RsAccent else RsMuted,
-                    )
-                }
+            }
+            IconButton(
+                onClick = onSend,
+                enabled = draft.isNotBlank() || attachments.isNotEmpty(),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Send,
+                    contentDescription = if (busy) "加入排队" else "发送",
+                    tint =
+                        if (draft.isNotBlank() || attachments.isNotEmpty()) {
+                            RsAccent
+                        } else {
+                            RsMuted
+                        },
+                )
             }
         }
     }

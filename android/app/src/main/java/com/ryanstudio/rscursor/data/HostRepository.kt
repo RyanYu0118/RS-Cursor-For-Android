@@ -225,6 +225,7 @@ class HostRepository {
         val images = _state.attachments
         if (text.isEmpty() && images.isEmpty()) return
         val id = _state.sessionId ?: return
+        val wasBusy = _state.busy
         val arr = JSONArray()
         for (img in images) {
             arr.put(
@@ -250,6 +251,10 @@ class HostRepository {
                 .put("force", true)
                 .put("claim", true),
         )
+        // Desktop queue lives in Cursor's window — ask again so the card paints.
+        if (wasBusy) {
+            send(JSONObject().put("op", "queue.list").put("sessionId", id))
+        }
     }
 
     fun cancel() {

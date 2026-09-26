@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Fix**: Android composer keeps Send while busy so mid-turn messages queue (Stop stays beside it). See [Android shell](concepts/android-shell.md) and [Queue](concepts/queue.md).
 * **Feature**: Android sent-image thumbs open a full-screen viewer (pinch zoom). See [Android shell](concepts/android-shell.md).
 * **Feature**: Android rail long-press Pin / Unpin / Archive (Cursor `composerHeaders` + Auto session). See [Android shell](concepts/android-shell.md).
 * **Update**: Android paints Cursor's **N Queued** card above the composer (Start Multitasking / × / edit); queue WS payload reads `items`. See [Queue](concepts/queue.md) and [Android shell](concepts/android-shell.md).
