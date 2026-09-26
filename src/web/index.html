@@ -266,17 +266,16 @@
             <div class="composer-pop-rule" aria-hidden="true"></div>
             <div id="plus-actions" class="composer-pop-section">
               <!--
-                File input lives inside the label (and for= still points at it).
-                A separate sr-only sibling outside the menu used to open on
-                desktop, but closing the dialog in the same gesture cancelled
-                the chooser on Android WebView.
+                The file input covers the whole row (opacity 0). A clipped
+                sr-only input + label[for] is ignored by many Android WebViews
+                — the OS picker never appears. Tapping the row hits the input.
               -->
-              <label class="composer-pop-row" for="file" data-plus-act="files">
+              <label class="composer-pop-row file-pick" data-plus-act="files">
                 <span class="composer-pop-ico" aria-hidden="true">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                 </span>
                 <span class="composer-pop-copy"><strong>Files</strong></span>
-                <input id="file" class="sr-only" type="file" accept="image/*" multiple />
+                <input id="file" class="file-pick-input" type="file" accept="image/*" multiple aria-label="Attach images" />
               </label>
               <button type="button" class="composer-pop-row" data-plus-act="model">
                 <span class="composer-pop-ico" aria-hidden="true">

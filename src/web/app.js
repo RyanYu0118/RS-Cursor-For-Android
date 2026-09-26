@@ -5769,7 +5769,8 @@ dropBox.addEventListener('drop', dropImages);
 window.addEventListener('dragover', (e) => { if (dragHasFiles(e)) e.preventDefault(); });
 window.addEventListener('drop', (e) => { if (dragHasFiles(e)) e.preventDefault(); });
 
-// Label[for=file] opens the picker; keep a fallback for older WebViews.
+// The Files row is a full-size transparent <input type=file>. Closing the +
+ // menu here would race the OS picker; onchange / outside tap dismisses it.
 els.file.onchange = () => {
   [...els.file.files].forEach(addImage);
   els.file.value = '';
@@ -6718,13 +6719,9 @@ els.plusPop?.addEventListener('click', (e) => {
   const act = e.target.closest('[data-plus-act]')?.getAttribute('data-plus-act');
   if (!act) return;
   if (act === 'files') {
-    // The label[for=file] opens the OS picker. Do not hide the + menu in
-    // this turn — tearing down the activating control cancels the chooser on
-    // Android WebView (and some iOS builds). Dismiss when focus returns, or
-    // after a short grace, or when files are chosen (see onchange).
-    const dismiss = () => setPlusPop(false);
-    window.addEventListener('focus', dismiss, { once: true });
-    setTimeout(dismiss, 1500);
+    // The transparent input on the row opens the picker. Do nothing else —
+    // preventDefault / hiding the menu / a focus listener all cancel it on
+    // Android WebView.
     return;
   }
   if (act === 'model') {

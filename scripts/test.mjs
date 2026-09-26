@@ -2845,16 +2845,16 @@ if (existsSync(SRC)) {
     fail('attach must open a + menu; model chip must open a nested model popover');
     failed = true;
   }
-  if (!html.includes('for="file"') || !/<label[^>]*for="file"/.test(html)) {
-    fail('Files in the + menu must be a label[for=file] so Android/iOS open the image picker');
+  if (!/<label[^>]*data-plus-act="files"/.test(html) || !html.includes('id="file"') || !html.includes('file-pick-input')) {
+    fail('Files in the + menu must be a full-row transparent file input (Android WebView)');
     failed = true;
   }
-  if (!/<label[^>]*for="file"[^>]*>[\s\S]*?<input[^>]*id="file"/.test(html)) {
-    fail('file input must sit inside the Files label so the chooser survives the + menu');
+  if (!css.includes('.file-pick-input') || !css.includes('opacity: 0')) {
+    fail('file-pick-input must cover the Files row at opacity 0');
     failed = true;
   }
-  if (!js.includes("act === 'files'") || js.includes("setTimeout(() => setPlusPop(false), 0)")) {
-    fail('Files must not close the + menu in the same turn as the picker opens');
+  if (js.includes("window.addEventListener('focus', dismiss") || js.includes('setTimeout(dismiss, 1500)')) {
+    fail('Files must not dismiss the + menu via focus/timeout during the picker gesture');
     failed = true;
   }
   if (!js.includes('function setPlusPop') || !js.includes('function setModelPop') || !js.includes('PLUS_MODE_ROWS')) {
@@ -2873,12 +2873,16 @@ if (existsSync(SRC)) {
     fail('tablet Agent mode select must be visually hidden; modes live in the + menu');
     failed = true;
   }
-  if (html.includes('id="file" type="file"') && /id="file"[^>]*\bhidden\b/.test(html)) {
-    fail('file input must not use the hidden attribute — use .sr-only so label[for] works');
+  if (html.includes('id="file"') && /id="file"[^>]*\bhidden\b/.test(html)) {
+    fail('file input must not use the hidden attribute');
     failed = true;
   }
   if (!css.includes('.sr-only') || !html.includes('class="sr-only"')) {
-    fail('file input must be visually hidden with .sr-only');
+    fail('sr-only must remain available for visually hidden controls (mode, auto)');
+    failed = true;
+  }
+  if (!css.includes('.file-pick') || !/file-pick-input[\s\S]*opacity:\s*0/.test(css)) {
+    fail('Files row needs a full-size opacity-0 file input overlay');
     failed = true;
   }
   if (!/id="attach"[^>]*>\s*\+/.test(html)) {
