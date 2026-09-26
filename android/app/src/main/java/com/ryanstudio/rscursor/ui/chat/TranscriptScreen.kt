@@ -343,7 +343,8 @@ private fun GleamLine(text: String) {
         remember(phase, lineWidth) {
             val w = lineWidth.coerceAtLeast(1f)
             val span = w * 2.2f
-            val start = w - phase * (w + span)
+            // Sweep left → right (highlight enters from the left edge).
+            val start = -span + phase * (w + span)
             Brush.linearGradient(
                 colorStops =
                     arrayOf(
