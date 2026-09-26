@@ -1439,23 +1439,19 @@ details.think .body {
 .bundle-list > .think { margin: 0 12px; }
 .bundle-anchor { display: none; }
 
-/* Live parent: the work sentence, or Thinking / Planning next moves. */
-.turn-live { margin: 2px 0 6px; }
-.turn-live > summary {
+/* Live status strip before a work fold — flat, not a nesting parent. */
+.turn-live {
+  margin: 2px 0 6px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 2px;
   min-height: 22px;
   padding: 3px 2px;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
   font-size: 13px;
   color: var(--faint);
 }
-.turn-live > summary::-webkit-details-marker { display: none; }
-.turn-live > summary .label {
+.turn-live > .label {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -1465,17 +1461,8 @@ details.think .body {
   align-items: center;
   gap: 8px;
 }
-.turn-live > summary .n { color: var(--text); font-variant-numeric: tabular-nums; }
-.turn-live > summary .label::after {
-  content: "▸";
-  flex: none;
-  margin-left: auto;
-  color: var(--faint);
-  line-height: 1;
-}
-.turn-live[open] > summary .label::after { content: "▾"; }
-.turn-live > summary::after { content: none; }
-.turn-live > .beats { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 6px 12px; }
+.turn-live > .label .n { color: var(--text); font-variant-numeric: tabular-nums; }
+.turn-live > .beats { display: none; }
 
 /* Current subtask under the work summary — gleams like Cursor's IDE. */
 .tool.bundle.work > summary {
@@ -1512,7 +1499,7 @@ details.think .body {
   text-overflow: ellipsis;
   flex: none;
 }
-.turn-live > summary .label.shimmer,
+.turn-live > .label.shimmer,
 .live-step-line.shimmer {
   /* Grey stays the fill; the gradient is only a moving highlight. */
   background-color: var(--muted);
@@ -1532,11 +1519,11 @@ details.think .body {
   -webkit-text-fill-color: transparent;
   animation: live-step-gleam 1.6s linear infinite;
 }
-.turn-live > summary .label.shimmer .n {
+.turn-live > .label.shimmer .n {
   color: transparent;
   -webkit-text-fill-color: transparent;
 }
-html[data-theme='light'] .turn-live > summary .label.shimmer,
+html[data-theme='light'] .turn-live > .label.shimmer,
 html[data-theme='light'] .live-step-line.shimmer {
   /* Same grey base; a soft white glint still reads on light chrome. */
   background-image: linear-gradient(
@@ -1560,8 +1547,21 @@ html[data-theme='light'] .live-step-line.shimmer {
   padding-left: 0;
   margin: 0;
 }
+.beat.planning {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 12px;
+  font-size: 13px;
+  color: var(--faint);
+}
+.beat.planning > .line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .think.beat > summary,
-.beat > summary {
+.beat:not(.planning) > summary {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1598,7 +1598,6 @@ html[data-theme='light'] .live-step-line.shimmer {
   max-height: 180px;
   overflow: auto;
 }
-.beat.planning > .body:empty { display: none; }
 
 /* diffs */
 

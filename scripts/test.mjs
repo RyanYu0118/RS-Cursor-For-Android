@@ -5129,6 +5129,17 @@ if (existsSync(SRC)) {
     if (!js.includes('liveStepLabel')) {
       fail('live subtask text must use Cursor present-tense labels, not past-tense fold labels');
     }
+    // Thought / Ran / Planning are siblings — never nest steps under the live status strip.
+    {
+      const phaseAt = js.indexOf('function phaseList');
+      const phaseFn = phaseAt < 0 ? '' : js.slice(phaseAt, js.indexOf('\n}', phaseAt) + 2);
+      if (/liveFold/.test(phaseFn) || /\.beats/.test(phaseFn)) {
+        fail('phaseList must only use the work fold — not nest steps under the live status strip');
+      }
+      if (!js.includes('function takePendingThinks') || !js.includes('turn-live live') || !js.includes('<div class="label"></div>')) {
+        fail('live status before a work fold must be a flat strip, not a details parent');
+      }
+    }
     if (!css.includes('translateY(-22px)') || !js.includes("rail.style.transition = 'none'")) {
       fail('subtask changes must scroll up, and finish without a snap-down');
     }

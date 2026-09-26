@@ -1232,15 +1232,16 @@ function liveSummaryParts() {
 }
 
 function phaseList() {
+  // Only the work fold holds Thought / Ran / Planning as siblings. The live
+  // status strip must not nest them under "Planning next moves".
   if (state.bundle?.card?.isConnected) return state.bundle.card.querySelector('.bundle-list');
-  if (state.liveFold?.isConnected) return state.liveFold.querySelector('.beats');
   return null;
 }
 
 /**
- * Thinking and Planning next moves sit under the work summary. Each is one
- * line until it is opened. Planning shows between steps; a running tool or
- * a live thought takes its place.
+ * Thinking, tools, and Planning next moves are siblings under the work
+ * summary — never nested under each other. Planning only appears as a row
+ * between steps (or as the live status strip before any fold exists).
  */
 function syncPhase() {
   if (state.replaying || !state.turn || state.bundle?.settled) return;
@@ -1257,9 +1258,9 @@ function syncPhase() {
     return;
   }
   if (!plan) {
-    plan = document.createElement('details');
+    plan = document.createElement('div');
     plan.className = 'beat planning';
-    plan.innerHTML = '<summary><span class="line">Planning next moves</span></summary><div class="body"></div>';
+    plan.innerHTML = '<span class="line">Planning next moves</span>';
     list.append(plan);
   } else {
     list.append(plan);
@@ -1267,13 +1268,17 @@ function syncPhase() {
   syncLiveStep();
 }
 
+/**
+ * Live status before a work fold exists: a flat strip, not a <details> that
+ * would make Planning/Thinking look like a parent of later steps.
+ */
 function ensureLiveFold() {
   if (state.bundle?.card?.isConnected) return null;
   if (state.liveFold?.isConnected) return state.liveFold;
-  const el = document.createElement('details');
+  const el = document.createElement('div');
   el.className = 'turn-live live';
   el.innerHTML =
-    '<summary><span class="label"></span><span class="live-step" hidden><span class="live-step-rail"></span></span></summary><div class="beats"></div>';
+    '<div class="label"></div><div class="live-step" hidden><div class="live-step-rail"></div></div>';
   state.liveFold = el;
   state.statusEl = el;
   return el;
@@ -1311,6 +1316,7 @@ function retireLiveFold() {
   state.liveFold = null;
   if (state.statusEl === el) state.statusEl = null;
   if (!el?.isConnected) return;
+  // Legacy: older builds nested thinks under the status strip.
   const beats = el.querySelector('.beats');
   if (beats) {
     for (const child of [...beats.children]) {
@@ -1319,6 +1325,18 @@ function retireLiveFold() {
     }
   }
   el.remove();
+}
+
+/** Thought rows sitting above the live status / work card, waiting to join it. */
+function takePendingThinks(beforeEl) {
+  if (!beforeEl?.isConnected) return [];
+  const collected = [];
+  let n = beforeEl.previousElementSibling;
+  while (n && n.classList?.contains('think') && n.classList.contains('beat')) {
+    collected.push(n);
+    n = n.previousElementSibling;
+  }
+  return collected.reverse();
 }
 
 /**
@@ -1366,7 +1384,7 @@ function clearLiveStep(host) {
     rail.style.transform = '';
     rail.style.removeProperty('transition');
   }
-  state.liveFold?.querySelector(':scope > summary > .label')?.classList.remove('shimmer');
+  state.liveFold?.querySelector(':scope > .label')?.classList.remove('shimmer');
 }
 
 /** Paint / scroll the shimmering current-step line under the summary. */
@@ -1378,8 +1396,8 @@ function syncLiveStep() {
     clearLiveStep();
     return;
   }
-  // Before any tool fold, the summary itself gleams (Thinking / Planning).
-  const foldLabel = state.liveFold?.querySelector(':scope > summary > .label');
+  // Before any tool fold, the status strip itself gleams (Thinking / Planning).
+  const foldLabel = state.liveFold?.querySelector(':scope > .label');
   if (foldLabel) {
     foldLabel.classList.toggle('shimmer', !state.bundle?.card?.isConnected);
   }
@@ -1878,11 +1896,12 @@ function renderStreaming(rec) {
         });
         state.thinking = d;
         if (state.verbosity === 'quiet') state.quietThinking = d;
-        // Once this turn has a work fold, later thoughts sit inside it,
-        // the way Cursor tucks "Thought 5s" between the Ran and Edited rows.
+        // Thoughts are siblings of tools under the work fold — never children
+        // of the "Planning next moves" status strip.
         if (!state.bundle && state.turn && !state.replaying) paintLiveStatus();
         const list = phaseList();
         if (list) list.appendChild(d);
+        else if (state.liveFold?.isConnected) state.liveFold.before(d);
         else add(d, { keepStream: true });
         syncPhase();
         syncLiveStep();
@@ -2163,14 +2182,18 @@ function startBundle(lane) {
   const list = card.querySelector('.bundle-list');
   const fold = state.liveFold;
   if (fold?.isConnected) {
+    // Any thinks nested under an old status strip (legacy) plus flat thinks
+    // sitting above the strip — all become siblings of the tool rows.
     for (const child of [...fold.querySelectorAll('.beats > *')]) {
       if (!child.classList.contains('planning')) list.appendChild(child);
     }
+    for (const th of takePendingThinks(fold)) list.appendChild(th);
     fold.replaceWith(card);
     if (state.statusEl === fold) state.statusEl = null;
     state.liveFold = null;
   } else {
     add(card);
+    for (const th of takePendingThinks(card)) list.appendChild(th);
   }
   state.bundle = { lane, card, items: [] };
   if (state.turn && !state.replaying) parkBundle(state.bundle);

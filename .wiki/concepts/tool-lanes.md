@@ -11,7 +11,7 @@ sources:
   - id: core
     resource: /src/core/desktop-tool-ui.mjs
     title: Node re-export for Telegram
-generated: { by: agent, at: 2026-09-26T03:40:00Z }
+generated: { by: agent, at: 2026-09-26T03:45:00Z }
 ---
 
 # Tool lanes
@@ -47,10 +47,12 @@ next moves) — not the past-tense labels used inside a finished fold. The text
 stays muted grey; a white highlight sweeps across it. When the step changes,
 that line scrolls up to the new one. When the turn ends the gleam and the
 current-step line are cleared — a finished fold must not keep flashing.
-**Thinking** and **Planning next moves** are also rows under that line in the
-opened fold: one line until tapped, then the text scrolls. Planning is the gap
-between steps. Before any step, the bottom summary itself is Thinking or
-Planning next moves.
+
+Inside the opened fold, **Thought**, **Ran** / **Edited**, and **Planning
+next moves** are siblings — never nested under each other. Planning is only
+a gap row between steps (or the flat live status strip before any work fold
+exists). Thinking is not a parent of tool rows, and Planning is not a parent
+of the whole list.
 Browser tools (`browser_*`) count as browser actions and stay in the fold.
 
 Cursor names its tools (`edit_file_v2`, `ripgrep_raw_search`). An ACP agent
