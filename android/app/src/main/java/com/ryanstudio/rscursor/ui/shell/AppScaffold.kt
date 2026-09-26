@@ -9,11 +9,15 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
@@ -149,6 +153,7 @@ private fun MainShell(
 ) {
     Scaffold(
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets.navigationBars,
         topBar = {
             CompactTopBar(
                 title = state.meta?.title ?: "RS Cursor",
@@ -275,6 +280,7 @@ private fun CompactTopBar(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .statusBarsPadding()
                 .height(RsSpace.bar)
                 .padding(horizontal = 2.dp),
     ) {
@@ -313,7 +319,10 @@ private fun CompactTopBar(
 
 @Composable
 private fun NoHostScreen(onSettings: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier.fillMaxSize().statusBarsPadding().windowInsetsPadding(WindowInsets.navigationBars),
+        contentAlignment = Alignment.Center,
+    ) {
         GlassChip(
             modifier = Modifier.padding(28.dp),
             shape = RoundedCornerShape(24.dp),
