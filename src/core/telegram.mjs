@@ -325,6 +325,17 @@ export class TelegramBridge extends EventEmitter {
     });
   }
 
+  /** Remove a message we posted (cancelled permission cards, etc.). */
+  drop(messageId) {
+    return tgApi(this.auth.token, 'deleteMessage', {
+      chat_id: this.auth.chatId,
+      message_id: messageId,
+    }).catch((err) => {
+      this.emit('log', `delete failed: ${err.message}`);
+      return null;
+    });
+  }
+
   /**
    * Words we just posted into the active session from this chat.
    *
@@ -1408,9 +1419,13 @@ export class TelegramBridge extends EventEmitter {
     const messageId = this.permMessages.get(rec.requestId);
     if (!messageId) return;
     this.permMessages.delete(rec.requestId);
-    const how = rec.cancelled
-      ? 'cancelled'
-      : `${rec.optionId || 'answered'}${rec.automatic ? ' (policy)' : ''}`;
+    // Cancelled asks (answered in the IDE / false flash) should disappear,
+    // not leave a "cancelled" edit that looks like an error.
+    if (rec.cancelled) {
+      await this.drop(messageId);
+      return;
+    }
+    const how = `${rec.optionId || 'answered'}${rec.automatic ? ' (policy)' : ''}`;
     await this.edit(messageId, `🔐 <b>Permission</b> — ${esc(how)}`, { reply_markup: undefined });
   }
 }

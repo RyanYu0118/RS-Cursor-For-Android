@@ -20,7 +20,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Desktop approval watcher
-generated: { by: agent, at: 2026-09-24T16:50:00Z }
+generated: { by: agent, at: 2026-09-26T13:10:00Z }
 ---
 
 # Approvals, questions, and plans
@@ -46,7 +46,10 @@ A session whose policy you change keeps that choice.
 While a desktop turn runs, Auto watches the window for controls whose words
 mean it is waiting for a person, parks them in the same broker, and presses
 whichever option comes back — withdrawing the question if it is answered in
-the IDE first. The vocabulary lives in `cursor-dom.mjs` (never class names).
+the IDE first. The same labels must appear on **two consecutive looks**
+(~4s) before a card is sent, so a one-frame DOM flash does not flicker on
+the phone. Cancelled asks are removed from the screen rather than left as
+"cancelled". The vocabulary lives in `cursor-dom.mjs` (never class names).
 With Cursor set to run everything automatically it rarely asks — treat the
 first real sighting as a chance to learn the words Cursor actually uses.
 

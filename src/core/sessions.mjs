@@ -2712,8 +2712,27 @@ export class SessionManager extends EventEmitter {
       const names = this.#questionWaiting(id)
         ? []
         : (state.asking || []).map((c) => c.label || c.text).filter(Boolean);
-      if (names.length) this.#askOnBehalfOfCursor(id, meta, names);
-      else this.#withdrawAsk(id, 'answered in Cursor');
+      // One look is a flicker: Cursor's DOM often flashes an approval-shaped
+      // control that is gone on the next tick, and each flash used to push a
+      // permission card to the phone then cancel it. Wait for the same labels
+      // across two looks (~4s) before asking on anyone's behalf.
+      const live = this.live.get(id) || {};
+      const signature = names.join('|');
+      if (names.length) {
+        const cand = live.askCandidate;
+        if (cand?.signature === signature) cand.hits += 1;
+        else live.askCandidate = { signature, hits: 1 };
+        this.live.set(id, live);
+        if ((live.askCandidate?.hits || 0) >= 2) {
+          this.#askOnBehalfOfCursor(id, meta, names);
+        }
+      } else {
+        if (live.askCandidate) {
+          live.askCandidate = null;
+          this.live.set(id, live);
+        }
+        this.#withdrawAsk(id, 'answered in Cursor');
+      }
 
       this.#queueChanged(id, state.queue);
 
@@ -2793,7 +2812,7 @@ export class SessionManager extends EventEmitter {
     });
 
     const requestId = this.permissions.list(id).at(-1)?.requestId || null;
-    this.live.set(id, { ...runtime, ask: { signature, requestId } });
+    this.live.set(id, { ...runtime, ask: { signature, requestId }, askCandidate: null });
 
     answer
       .then(async (res) => {

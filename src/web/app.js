@@ -2674,10 +2674,16 @@ function renderPermission(rec) {
 function renderPermissionResolved(rec) {
   const card = state.permCards.get(rec.requestId);
   if (!card) return;
+  // A cancelled ask is noise (answered in the IDE, or a DOM flash). Leave it
+  // on the transcript for history, but take the card off the screen so the
+  // phone does not stack "cancelled" rows that flicker.
+  if (rec.cancelled) {
+    card.remove();
+    state.permCards.delete(rec.requestId);
+    return;
+  }
   card.classList.add('resolved');
-  const how = rec.cancelled
-    ? 'cancelled'
-    : `${rec.optionId || 'answered'}${rec.automatic ? ' (policy)' : ''}`;
+  const how = `${rec.optionId || 'answered'}${rec.automatic ? ' (policy)' : ''}`;
   card.querySelector('.opts').innerHTML = `<span class="outcome">${esc(how)}</span>`;
 }
 
