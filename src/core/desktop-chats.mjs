@@ -42,21 +42,6 @@ const textOf = (row, column = 'value') =>
     ? Buffer.from(row[column]).toString('utf8')
     : String(row[column]);
 
-/** How many desktop chats each workspace has, in one pass. */
-export function chatCountsByWorkspace() {
-  return (
-    withDb((db) => {
-      const out = new Map();
-      for (const r of db
-        .prepare('SELECT workspaceId, COUNT(*) c FROM composerHeaders WHERE isArchived = 0 AND isSubagent = 0 GROUP BY workspaceId')
-        .all()) {
-        out.set(r.workspaceId, r.c);
-      }
-      return out;
-    }) || new Map()
-  );
-}
-
 /** One `composerHeaders` row as a chat. */
 function chatOf(row) {
   let head = {};
@@ -74,8 +59,35 @@ function chatOf(row) {
     linesAdded: head.totalLinesAdded || 0,
     linesRemoved: head.totalLinesRemoved || 0,
     workspaceId: row.workspaceId,
+    isDraft: !!head.isDraft,
+    hasName: !!(head.name && String(head.name).trim()),
   };
 }
+
+/** Drop empty drafts / placeholder composers Cursor itself hides from Agents. */
+function keepChat(chat) {
+  if (!chat?.id) return false;
+  if (chat.id === 'empty-state-draft') return false;
+  if (String(chat.id).startsWith('draft-') && !chat.hasName) return false;
+  if (chat.isDraft && !chat.hasName) return false;
+  return true;
+}
+
+/** How many desktop chats each workspace has, in one pass. */
+export function chatCountsByWorkspace() {
+  return (
+    withDb((db) => {
+      const out = new Map();
+      for (const r of db
+        .prepare('SELECT workspaceId, COUNT(*) c FROM composerHeaders WHERE isArchived = 0 AND isSubagent = 0 GROUP BY workspaceId')
+        .all()) {
+        out.set(r.workspaceId, r.c);
+      }
+      return out;
+    }) || new Map()
+  );
+}
+
 
 /**
  * The desktop's most recent chats across every workspace, newest first.
@@ -90,8 +102,10 @@ export function recentDesktopChats({ limit = 60 } = {}) {
         .prepare(
           'SELECT composerId, workspaceId, createdAt, lastUpdatedAt, value FROM composerHeaders WHERE isArchived = 0 AND isSubagent = 0 ORDER BY lastUpdatedAt DESC LIMIT ?',
         )
-        .all(limit)
-        .map(chatOf),
+        .all(Math.max(limit * 2, limit))
+        .map(chatOf)
+        .filter(keepChat)
+        .slice(0, limit),
     ) || []
   );
 }
@@ -106,9 +120,36 @@ export function desktopChats(workspaceId, { limit = 40 } = {}) {
   return (
     withDb((db) => {
       return db
-        .prepare('SELECT composerId, workspaceId, createdAt, lastUpdatedAt, value FROM composerHeaders WHERE workspaceId = ? AND isArchived = 0 AND isSubagent = 0 ORDER BY lastUpdatedAt DESC LIMIT ?')
-        .all(workspaceId, limit)
-        .map(chatOf);
+        .prepare(
+          'SELECT composerId, workspaceId, createdAt, lastUpdatedAt, value FROM composerHeaders WHERE workspaceId = ? AND isArchived = 0 AND isSubagent = 0 ORDER BY lastUpdatedAt DESC LIMIT ?',
+        )
+        .all(workspaceId, Math.max(limit * 2, limit))
+        .map(chatOf)
+        .filter(keepChat)
+        .slice(0, limit);
     }) || []
+  );
+}
+
+/**
+ * Chats with no workspace id — Cursor parks some under "No Repo" / Home.
+ */
+export function desktopChatsWithoutWorkspace({ limit = 40 } = {}) {
+  return (
+    withDb((db) =>
+      db
+        .prepare(
+          `SELECT composerId, workspaceId, createdAt, lastUpdatedAt, value
+           FROM composerHeaders
+           WHERE isArchived = 0 AND isSubagent = 0
+             AND (workspaceId IS NULL OR workspaceId = '')
+           ORDER BY lastUpdatedAt DESC
+           LIMIT ?`,
+        )
+        .all(Math.max(limit * 2, limit))
+        .map(chatOf)
+        .filter(keepChat)
+        .slice(0, limit),
+    ) || []
   );
 }

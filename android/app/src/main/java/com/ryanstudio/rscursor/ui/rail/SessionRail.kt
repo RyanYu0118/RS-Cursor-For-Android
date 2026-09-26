@@ -59,7 +59,7 @@ import com.ryanstudio.rscursor.ui.theme.RsText
 
 private val RailCorner = RoundedCornerShape(RsSpace.cornerSm)
 private val PreviewLimit = 5
-private val RecentLimit = 10
+private val PinnedPreview = 8
 
 @Composable
 fun SessionRail(
@@ -79,19 +79,9 @@ fun SessionRail(
     var filter by remember { mutableStateOf("") }
     var filterOpen by remember { mutableStateOf(false) }
     var expandedMore by remember { mutableStateOf(setOf<String>()) }
+    var pinnedExpanded by remember { mutableStateOf(false) }
 
     val needle = filter.trim().lowercase()
-    val recent =
-        remember(repos, needle) {
-            repos
-                .asSequence()
-                .flatMap { it.chats.asSequence() }
-                .distinctBy { it.key }
-                .sortedByDescending { it.at }
-                .filter { needle.isEmpty() || it.title.lowercase().contains(needle) }
-                .take(RecentLimit)
-                .toList()
-        }
     val visibleRepos =
         remember(repos, needle) {
             if (needle.isEmpty()) {
@@ -112,6 +102,12 @@ fun SessionRail(
         remember(pinned, needle) {
             if (needle.isEmpty()) pinned
             else pinned.filter { it.name.lowercase().contains(needle) }
+        }
+    val pinnedShown =
+        if (pinnedExpanded || needle.isNotEmpty() || pinnedVisible.size <= PinnedPreview) {
+            pinnedVisible
+        } else {
+            pinnedVisible.take(PinnedPreview)
         }
 
     Column(
@@ -188,7 +184,7 @@ fun SessionRail(
                 item(key = "sec-pinned") {
                     SectionLabel("Pinned")
                 }
-                items(pinnedVisible, key = { "pin:${it.id}" }) { pin ->
+                items(pinnedShown, key = { "pin:${it.id}" }) { pin ->
                     PinnedRow(
                         pin = pin,
                         selected =
@@ -197,19 +193,20 @@ fun SessionRail(
                         onClick = { onOpenPinned(pin) },
                     )
                 }
-            }
-
-            if (recent.isNotEmpty()) {
-                item(key = "sec-recent") {
-                    SectionLabel(if (pinnedVisible.isEmpty()) "Recent" else "Recent")
-                }
-                items(recent, key = { "r:${it.key}" }) { chat ->
-                    ChatRow(
-                        chat = chat,
-                        selected = isSelected(chat, activeSessionId, activeDesktopThreadId),
-                        indented = false,
-                        onClick = { onOpenChat(chat) },
-                    )
+                if (pinnedVisible.size > pinnedShown.size) {
+                    item(key = "pin-more") {
+                        Text(
+                            "More (${pinnedVisible.size - pinnedShown.size})",
+                            color = RsAccent,
+                            fontSize = 12.sp,
+                            modifier =
+                                Modifier
+                                    .padding(start = 14.dp, top = 2.dp, bottom = 4.dp)
+                                    .clip(RailCorner)
+                                    .clickable { pinnedExpanded = true }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
                 }
             }
 
@@ -217,7 +214,7 @@ fun SessionRail(
                 SectionLabel("Repositories")
             }
 
-            if (visibleRepos.isEmpty() && pinnedVisible.isEmpty() && recent.isEmpty()) {
+            if (visibleRepos.isEmpty() && pinnedVisible.isEmpty()) {
                 item(key = "empty") {
                     Text(
                         "No projects yet — start a new chat.",
@@ -475,7 +472,7 @@ private fun ChatRow(
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-            chat.title,
+            chat.title.ifBlank { "Untitled chat" },
             color = if (selected) RsAccent else RsText,
             fontSize = 13.sp,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,

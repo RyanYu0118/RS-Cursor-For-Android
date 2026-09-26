@@ -950,6 +950,8 @@ wss.on('connection', async (ws, req) => {
     policies: Object.values(POLICY),
     agents: sessions.agents(),
     chats: recentChats(),
+    projects: projectList(),
+    sidebar: sidebarSnapshot(),
     host: hostIdentity.snapshot(),
     settings: settings.get(),
     webBuild: webBuildId(assetTag),

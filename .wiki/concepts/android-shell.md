@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T14:52:00Z }
+generated: { by: agent, at: 2026-09-26T15:05:00Z }
 ---
 
 # Android shell
@@ -46,8 +46,10 @@ not raw source.
 ## Side rail
 
 Mirrors Cursor Agents / the web rail: **New Chat**, **Search** (filter),
-**Pinned**, **Recent**, then **Repositories** as accordions. Rows come from
-the host `sidebar` snapshot (plus Auto sessions and recent desktop chats).
+**Pinned**, then **Repositories** as accordions (no separate Recent list —
+Cursor Agents does the same). Rows come from the host `sidebar` snapshot
+(per-workspace desktop chats), not a flat recent pool. Pinned agents need a
+`projectAppearance` (or cloud agent); empty drafts stay out of the lists.
 Tapping an Auto session attaches; tapping a desktop-only chat sends
 `desktop.continue`. Repo **+** starts `session.create` in that folder.
 
@@ -87,7 +89,7 @@ flash.
 ## What v1 covers
 
 - Host URL settings ([SettingsActivity](/android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt))
-- Side rail: Agents-style Pinned / Recent / Repositories, attach or
+- Side rail: Agents-style Pinned / Repositories, attach or
   `desktop.continue`, new session (global or per folder)
 - Transcript: user / assistant text, image thumbs, tool rows, permission
   and question cards, queue strip; scroll-up loads older history

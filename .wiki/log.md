@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Fix**: Android rail drops Recent; sidebar loads chats per workspace (not a flat recent pool), skips empty drafts, and hello includes the sidebar so Pinned is complete. See [Android shell](concepts/android-shell.md).
 * **Fix**: Android live-step gleam sweeps across text glyphs (not a background band); finished Thought blocks auto-collapse. See [Android shell](concepts/android-shell.md).
 * **Update**: Android UI tighter (48dp title bar, denser rows) with page/rail/row transitions. See [Android shell](concepts/android-shell.md).
 * **Update**: Android paints Cursor-style work folds with live subtask gleam (same lanes as web). See [Android shell](concepts/android-shell.md) and [Tool lanes](concepts/tool-lanes.md).

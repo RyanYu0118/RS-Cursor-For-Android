@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { foldersByWorkspaceId } from './projects.mjs';
-import { recentDesktopChats } from './desktop-chats.mjs';
+import { desktopChats, desktopChatsWithoutWorkspace, recentDesktopChats } from './desktop-chats.mjs';
 
 const APPDATA = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
 const IDE_DB = join(APPDATA, 'Cursor', 'User', 'globalStorage', 'state.vscdb');
@@ -41,12 +41,15 @@ function pinnedAgents() {
         .prepare(
           `SELECT composerId AS id,
                   json_extract(value, '$.name') AS name,
+                  json_extract(value, '$.subtitle') AS subtitle,
                   json_extract(value, '$.projectAppearance.icon') AS icon,
                   json_extract(value, '$.projectAppearance.colorId') AS color,
                   json_extract(value, '$.lastUpdatedAt') AS at,
-                  json_extract(value, '$.agentLocation.environment.uri.fsPath') AS folder
+                  json_extract(value, '$.agentLocation.environment.uri.fsPath') AS folder,
+                  json_extract(value, '$.workspaceIdentifier.uri.fsPath') AS wsFolder
            FROM composerHeaders
-           WHERE value LIKE '%"projectAppearance"%'`,
+           WHERE value LIKE '%"projectAppearance"%'
+              OR json_extract(value, '$.isProject') = 1`,
         )
         .all(),
     ) || [];
@@ -60,18 +63,18 @@ function pinnedAgents() {
   const rows = [
     ...appearance.map((row) => ({
       id: row.id,
-      name: row.name,
+      name: row.name || row.subtitle || 'project',
       at: Number(row.at) || 0,
-      folder: pathOf({ displayPath: row.folder }),
+      folder: pathOf({ displayPath: row.folder || row.wsFolder }),
       cloud: false,
       icon: row.icon || 'dot',
       color: row.color || 'orange',
     })),
     ...agents
-      .filter((agent) => agent && agent.name && !agent.isArchived)
+      .filter((agent) => agent && (agent.name || agent.bcId) && !agent.isArchived)
       .map((agent) => ({
         id: agent.bcId,
-        name: agent.name,
+        name: agent.name || 'cloud agent',
         at: Number(agent.lastMessageActivityAtMs || agent.updatedAt) || 0,
         folder: pathOf({ displayPath: agent.privateWorkspaceIdentifier?.uri?.fsPath || '' }),
         cloud: true,
@@ -81,7 +84,7 @@ function pinnedAgents() {
   ];
   const seen = new Set();
   return rows
-    .filter((row) => row.name && !seen.has(row.id) && seen.add(row.id))
+    .filter((row) => row.id && !seen.has(row.id) && seen.add(row.id))
     .sort((a, b) => b.at - a.at);
 }
 
@@ -128,7 +131,6 @@ export function sidebarSnapshot() {
   const collapsed = new Set(settings.collapsedSectionIdsByGroupBy?.repository || []);
   const extra = readKey('cursor/glass.additionalProjects') || [];
   const folders = foldersByWorkspaceId();
-  const chats = recentDesktopChats({ limit: 240 });
   const envPaths = environmentPaths();
   const pinned = pinnedAgents();
 
@@ -144,19 +146,45 @@ export function sidebarSnapshot() {
     return row;
   };
 
-  for (const chat of chats) {
-    const folder = folders.get(chat.workspaceId) || '';
-    const group = folder
-      ? ensure(folder, leaf(folder), 'folder')
-      : ensure('norepo', 'No Repo', 'home');
-    if (!group) continue;
+  const pushChat = (group, chat) => {
+    if (!group || !chat?.id) return;
+    if (group.chats.some((c) => c.id === chat.id)) return;
     group.chats.push({
       id: chat.id,
-      title: chat.title,
+      title: chat.title || chat.subtitle || 'Untitled chat',
       at: chat.updatedAt || 0,
       folder: group.folder,
       cloud: String(chat.id || '').startsWith('bc-'),
     });
+  };
+
+  // Load chats per workspace (Cursor Agents does this). A single global
+  // "recent 240" pool starved quieter repos and dumped leftovers into No Repo.
+  const covered = new Set();
+  for (const [workspaceId, folder] of folders) {
+    const group = folder
+      ? ensure(folder, leaf(folder), 'folder')
+      : ensure('norepo', 'No Repo', 'home');
+    if (!group) continue;
+    for (const chat of desktopChats(workspaceId, { limit: 50 })) {
+      pushChat(group, chat);
+      covered.add(chat.id);
+    }
+  }
+  for (const chat of desktopChatsWithoutWorkspace({ limit: 50 })) {
+    const group = ensure('norepo', 'No Repo', 'home');
+    pushChat(group, chat);
+    covered.add(chat.id);
+  }
+  // Workspace ids Cursor still has chats for but no folder map → No Repo.
+  for (const chat of recentDesktopChats({ limit: 120 })) {
+    if (covered.has(chat.id)) continue;
+    const folder = folders.get(chat.workspaceId) || '';
+    const group = folder
+      ? ensure(folder, leaf(folder), 'folder')
+      : ensure('norepo', 'No Repo', 'home');
+    pushChat(group, chat);
+    covered.add(chat.id);
   }
 
   const used = new Set();

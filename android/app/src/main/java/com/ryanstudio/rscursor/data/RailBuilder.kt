@@ -50,10 +50,14 @@ object RailBuilder {
             val o = arr.optJSONObject(i) ?: continue
             val id = o.optString("id")
             if (id.isBlank()) continue
+            val name =
+                o.optString("name").ifBlank {
+                    o.optString("subtitle").ifBlank { "project" }
+                }
             out +=
                 RailPinned(
                     id = id,
-                    name = o.optString("name").ifBlank { "project" },
+                    name = name,
                     folder = o.optString("folder"),
                     at = parseTime(o.opt("at")),
                     color = o.optString("color"),
@@ -91,19 +95,44 @@ object RailBuilder {
         return pinned to repos
     }
 
-    private fun sessionChat(s: SessionMeta): RailChat =
-        RailChat(
+    private fun isGenericTitle(title: String, folder: String = ""): Boolean {
+        val t = title.trim()
+        if (t.isEmpty()) return true
+        val lower = t.lowercase()
+        if (lower == "session" || lower == "chat" || lower == "desktop chat") return true
+        if (lower == "untitled chat" || lower == "untitled" || lower == "norepo") return true
+        val leaf = folderName(folder)
+        return leaf.isNotBlank() && t.equals(leaf, ignoreCase = true)
+    }
+
+    private fun pickTitle(cursorTitle: String, sessionTitle: String, folder: String): String {
+        val c = cursorTitle.trim()
+        val s = sessionTitle.trim()
+        return when {
+            c.isNotEmpty() && !isGenericTitle(c, folder) -> c
+            s.isNotEmpty() && !isGenericTitle(s, folder) -> s
+            c.isNotEmpty() -> c
+            s.isNotEmpty() -> s
+            else -> "Untitled chat"
+        }
+    }
+
+    private fun sessionChat(s: SessionMeta, cursorTitle: String = ""): RailChat {
+        val folder = s.folder
+        return RailChat(
             key = "s:${s.id}",
             sessionId = s.id,
             chatId = s.desktopThreadId.ifBlank { null },
-            title = s.title.ifBlank { folderName(s.folder).ifBlank { "session" } },
-            folder = s.folder,
+            title = pickTitle(cursorTitle, s.title, folder),
+            folder = folder,
             at = s.updatedAt,
         )
+    }
 
     private fun reposFromSidebar(sessions: List<SessionMeta>, reposArr: JSONArray): List<RailRepo> {
         val byThread = sessions.filter { it.desktopThreadId.isNotBlank() }.associateBy { it.desktopThreadId }
         val seenSession = mutableSetOf<String>()
+        val seenThread = mutableSetOf<String>()
         val repos = ArrayList<RailRepo>()
         for (i in 0 until reposArr.length()) {
             val r = reposArr.optJSONObject(i) ?: continue
@@ -114,16 +143,27 @@ object RailBuilder {
                 for (j in 0 until chatsArr.length()) {
                     val c = chatsArr.optJSONObject(j) ?: continue
                     val chatId = c.optString("id")
+                    if (chatId.isBlank() || chatId in seenThread) continue
+                    seenThread += chatId
+                    val cursorTitle = c.optString("title")
+                    // Skip nameless drafts the host may still emit.
+                    if (isGenericTitle(cursorTitle, folder) &&
+                        cursorTitle.isBlank() &&
+                        byThread[chatId] == null
+                    ) {
+                        continue
+                    }
                     val known = byThread[chatId]
                     if (known != null) {
                         seenSession += known.id
-                        chats += sessionChat(known)
-                    } else if (chatId.isNotBlank()) {
+                        chats += sessionChat(known, cursorTitle)
+                    } else {
+                        val title = pickTitle(cursorTitle, "", folder)
                         chats +=
                             RailChat(
                                 key = "c:$chatId",
                                 chatId = chatId,
-                                title = c.optString("title").ifBlank { "chat" },
+                                title = title,
                                 folder = c.optString("folder").ifBlank { folder },
                                 at = parseTime(c.opt("at")),
                             )
@@ -140,8 +180,15 @@ object RailBuilder {
                     chats = chats,
                 )
         }
+        // Cursor's sidebar is authoritative: only append desktop threads the
+        // snapshot missed (e.g. outside the per-repo window), never ACP shells
+        // that only inherit a folder name and read as blank/wrong rows.
         for (s in sessions) {
             if (s.id in seenSession) continue
+            if (s.desktopThreadId.isBlank()) continue
+            if (s.desktopThreadId in seenThread) continue
+            seenThread += s.desktopThreadId
+            seenSession += s.id
             val key = folderKey(s.folder)
             val idx = repos.indexOfFirst { folderKey(it.folder) == key }
             if (idx >= 0) {
@@ -178,6 +225,8 @@ object RailBuilder {
 
         val openThreads = sessions.map { it.desktopThreadId }.filter { it.isNotBlank() }.toSet()
         for (s in sessions) {
+            // Prefer desktop-backed rows; skip nameless Auto shells.
+            if (s.desktopThreadId.isBlank() && isGenericTitle(s.title, s.folder)) continue
             val repo = ensure(s.folder)
             byKey[folderKey(s.folder).ifBlank { "norepo" }] =
                 repo.copy(chats = repo.chats + sessionChat(s))
@@ -186,6 +235,8 @@ object RailBuilder {
             val chatId = c.optString("id")
             if (chatId.isBlank() || chatId in openThreads) continue
             val folder = c.optString("folder")
+            val cursorTitle = c.optString("title")
+            if (isGenericTitle(cursorTitle, folder) && cursorTitle.isBlank()) continue
             val repo = ensure(folder, c.optString("project").ifBlank { folderName(folder) })
             val key = folderKey(folder).ifBlank { "norepo" }
             byKey[key] =
@@ -195,7 +246,7 @@ object RailBuilder {
                             RailChat(
                                 key = "c:$chatId",
                                 chatId = chatId,
-                                title = c.optString("title").ifBlank { "chat" },
+                                title = pickTitle(cursorTitle, "", folder),
                                 folder = folder,
                                 at = parseTime(c.opt("updatedAt") ?: c.opt("at") ?: c.opt("createdAt")),
                             ),
