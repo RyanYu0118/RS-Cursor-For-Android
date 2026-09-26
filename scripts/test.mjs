@@ -2877,6 +2877,22 @@ if (existsSync(SRC)) {
     fail('composer popovers need Cursor-style nested menu styles');
     failed = true;
   }
+  // Queue above the box is Cursor's card — "N Queued" / Start Multitasking / ×
+  // — not a sent bubble and not a folded <details> summary.
+  if (!/<div[^>]*id="queue"/.test(html) || /<details[^>]*id="queue"/.test(html)) {
+    fail('the queue must be a card container, not a details accordion');
+    failed = true;
+  }
+  if (
+    !js.includes('Start Multitasking') ||
+    !js.includes('queued-head') ||
+    !js.includes('Queued') ||
+    !css.includes('.queued-head') ||
+    !css.includes('.queued-multitask')
+  ) {
+    fail('queued messages must render as Cursor-style cards with Start Multitasking');
+    failed = true;
+  }
   if (!html.includes('composer-row') || !html.includes('composer-trailing') || !html.includes('composer-send')) {
     fail('composer must be a pill row with trailing send');
     failed = true;

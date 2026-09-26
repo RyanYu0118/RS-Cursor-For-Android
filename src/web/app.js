@@ -114,7 +114,6 @@ const els = {
   attachments: $('attachments'),
   file: $('file'),
   queue: $('queue'),
-  queueCount: $('queue-count'),
   queueList: $('queue-list'),
   usage: $('usage'),
   usageSheet: $('usage-sheet'),
@@ -5062,12 +5061,9 @@ function renderAttachments() {
 }
 
 /**
- * The messages waiting for the turn to end, above the box you typed them in.
- *
- * The same three things the IDE offers, because a message queued from a phone is
- * the one most likely to need taking back: reword it, push it to the front, or
- * throw it away. Rewording happens in the row itself rather than in the message
- * box, so a half-typed follow-up is never overwritten by an edit.
+ * The messages waiting for the turn to end, above the box — Cursor's card:
+ * "N Queued" / Start Multitasking / × on top, the words underneath. Not a
+ * sent bubble; not a folded summary.
  */
 function renderQueue() {
   const { items, waiting, hidden, owner, reason } = state.queue;
@@ -5078,17 +5074,18 @@ function renderQueue() {
     return;
   }
 
-  // Open on the first sight of a queue, then leave it however it was left.
-  if (!els.queue.dataset.touched) els.queue.open = true;
   const extra = hidden ? ` (${hidden} out of view)` : '';
-  els.queueCount.textContent = `${waiting} queued${extra}`;
   els.queue.title = owner === 'cursor' ? 'Held by Cursor until this turn ends' : '';
-
   els.queueList.innerHTML = '';
   if (reason) els.queueList.append(said('queue-note', `Cursor's queue is out of reach: ${reason}`));
 
+  const countLabel = `${waiting} Queued${extra}`;
   for (const item of items) {
-    const row = div('queued');
+    const card = div('queued');
+    const head = div('queued-head');
+    const count = said('queued-count', countLabel);
+    const acts = div('queued-acts');
+
     if (state.editing === item.id) {
       const editor = document.createElement('textarea');
       editor.value = item.text;
@@ -5106,33 +5103,51 @@ function renderQueue() {
         state.editing = null;
         renderQueue();
       });
-      const acts = div('queued-acts');
       acts.append(save, cancel);
-      row.append(editor, acts);
-      els.queueList.append(row);
+      head.append(count, acts);
+      card.append(head, editor);
+      els.queueList.append(card);
       editor.focus();
       continue;
     }
 
+    const multitask = document.createElement('button');
+    multitask.type = 'button';
+    multitask.className = 'queued-multitask';
+    multitask.textContent = 'Start Multitasking';
+    multitask.title = owner === 'cursor' ? 'Send it now' : 'Send it next';
+    multitask.onclick = () =>
+      sendOp({ op: 'queue.now', sessionId: state.sessionId, itemId: item.id });
+
+    const drop = button('×', 'Remove from queue', () =>
+      sendOp({ op: 'queue.drop', sessionId: state.sessionId, itemId: item.id }),
+    );
+    drop.classList.add('queued-dismiss');
+
+    acts.append(multitask, drop);
+    head.append(count, acts);
+
     const text = said('queued-text', item.text);
+    text.title = 'Tap to edit';
+    text.setAttribute('role', 'button');
+    text.tabIndex = 0;
+    text.onclick = () => {
+      state.editing = item.id;
+      renderQueue();
+    };
+    text.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        state.editing = item.id;
+        renderQueue();
+      }
+    };
     if (item.images) {
       text.append(said('cap', `+${item.images} image${item.images === 1 ? '' : 's'}`));
     }
-    const acts = div('queued-acts');
-    acts.append(
-      button('✎', 'Edit this message', () => {
-        state.editing = item.id;
-        renderQueue();
-      }),
-      button('↑', owner === 'cursor' ? 'Send it now' : 'Send it next', () =>
-        sendOp({ op: 'queue.now', sessionId: state.sessionId, itemId: item.id }),
-      ),
-      button('🗑', 'Delete this message', () =>
-        sendOp({ op: 'queue.drop', sessionId: state.sessionId, itemId: item.id }),
-      ),
-    );
-    row.append(text, acts);
-    els.queueList.append(row);
+
+    card.append(head, text);
+    els.queueList.append(card);
   }
 }
 
@@ -5499,11 +5514,6 @@ function slashSync() {
 }
 
 $('slash-back').onclick = () => slashBack();
-
-// Folding the queue away is a choice worth keeping; the count stays visible.
-els.queue.addEventListener('toggle', () => {
-  els.queue.dataset.touched = '1';
-});
 
 els.send.onclick = () => submit();
 els.stop.onclick = () => sendOp({ op: 'cancel', sessionId: state.sessionId });

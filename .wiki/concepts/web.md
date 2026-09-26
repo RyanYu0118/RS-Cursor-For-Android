@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-26T03:10:00Z }
+generated: { by: agent, at: 2026-09-26T03:20:00Z }
 ---
 
 # Web app
@@ -188,7 +188,8 @@ is the way to start somewhere Cursor has never opened — see
   faintly visible on a touch screen where hover never comes. A left swipe's
   click-guard expires after the gesture so the next open can switch chats on
   the first tap.
-- The [queue](queue.md) above the chat box, with reword / send now / delete.
+- The [queue](queue.md) above the chat box as Cursor's card (**N Queued**,
+  Start Multitasking, ×, body to edit) — not a sent bubble.
 - Tool calls the way Cursor groups them — see [tool lanes](tool-lanes.md).
 - Diffs, thinking (folded into one block per turn under `quiet`, otherwise
   folded when each block ends, timed from the record so a replay says

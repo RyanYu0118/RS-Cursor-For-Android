@@ -11,7 +11,7 @@ sources:
   - id: dom
     resource: /src/core/cursor-dom.mjs
     title: Cursor queue selectors
-generated: { by: agent, at: 2026-09-25T12:50:00Z }
+generated: { by: agent, at: 2026-09-26T03:20:00Z }
 ---
 
 # Queue
@@ -28,6 +28,11 @@ stopping.
 | --- | --- | --- |
 | Desktop | Cursor, above the chat box | Read out of the window; press Cursor's own buttons |
 | ACP | Auto, in memory | Edited in place |
+
+On the web the waiting list is Cursor's card: **N Queued** and **Start
+Multitasking** / × on the top row, the words underneath — not a sent bubble
+and not a folded summary. Tap the body to reword; Start Multitasking is
+send-now (desktop) or send-next (ACP).
 
 Auto's queue does not survive a restart. A queued prompt is worth a minute
 of patience, not a reboot. Send-now makes a message *next*, rather than

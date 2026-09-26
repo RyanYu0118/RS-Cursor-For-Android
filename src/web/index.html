@@ -209,11 +209,10 @@
     </div>
 
     <footer id="composer">
-      <!-- Messages waiting for the turn to end, as the IDE shows them. -->
-      <details id="queue" hidden>
-        <summary><span id="queue-count"></span></summary>
+      <!-- Messages waiting for the turn to end — Cursor-style queue cards. -->
+      <div id="queue" hidden>
         <div id="queue-list"></div>
-      </details>
+      </div>
       <!-- Slash commands, opened with `/` in the chat box. A command with
            options opens a second page; Escape steps back a page at a time. -->
       <div id="slash" hidden>

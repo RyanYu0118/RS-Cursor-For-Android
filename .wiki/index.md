@@ -17,9 +17,9 @@ Remote control for Cursor's agent. Start at [overview](overview.md).
 * [Tool lanes](concepts/tool-lanes.md) - One Cursor work fold (Editing / explored / browser actions / ran), with Thinking and Planning under it
 * [ACP](concepts/acp.md) - `cursor-agent acp` or `opencode acp` sessions, one picker shape for both
 * [Approvals](concepts/approvals.md) - Permissions, automatic mode transitions, questions, plans, and deliberate Keep / Undo / Redo
-* [Queue](concepts/queue.md) - Messages waiting behind a turn; listing them does not switch the desktop
+* [Queue](concepts/queue.md) - Messages waiting behind a turn; web shows Cursor's Queued card, not a sent bubble
 * [Telegram](concepts/telegram.md) - Bot projection with model price bands
-* [Web](concepts/web.md) - PWA lifecycle, transcript cache, Agents sidebar, shared chat-box draft with Cursor, + / model nested menus, remembered model per agent, and Home Screen behaviour
+* [Web](concepts/web.md) - PWA lifecycle, transcript cache, Agents sidebar, shared chat-box draft with Cursor, + / model nested menus, Cursor-style queue cards, remembered model per agent, and Home Screen behaviour
 * [Usage](concepts/usage.md) - Context dial, relative model price bands, and Cursor Models / Other Models account quotas
 * [Browser](concepts/browser.md) - Headed Chrome, client-themed screencast, not recorded
 * [Terminals](concepts/terminals.md) - node-pty shells for the user and the agent
