@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-26
+* **Feature**: Android rail long-press Pin / Unpin / Archive (Cursor `composerHeaders` + Auto session). See [Android shell](concepts/android-shell.md).
 * **Update**: Android paints Cursor's **N Queued** card above the composer (Start Multitasking / × / edit); queue WS payload reads `items`. See [Queue](concepts/queue.md) and [Android shell](concepts/android-shell.md).
 * **Fix**: Android rail drops Recent; sidebar loads chats per workspace (not a flat recent pool), skips empty drafts, and hello includes the sidebar so Pinned is complete. See [Android shell](concepts/android-shell.md).
 * **Fix**: Android live-step gleam sweeps across text glyphs (not a background band); finished Thought blocks auto-collapse. See [Android shell](concepts/android-shell.md).

@@ -145,6 +145,52 @@ class HostRepository {
         if (pin.folder.isNotBlank()) createSession(pin.folder) else createSession()
     }
 
+    /** Pin / unpin / archive a rail chat (Cursor Agents + matching Auto session). */
+    fun railChatAction(chatId: String?, sessionId: String?, action: String) {
+        val act = action.lowercase()
+        if (!chatId.isNullOrBlank()) {
+            send(
+                JSONObject()
+                    .put("op", "desktop.chat")
+                    .put("chatId", chatId)
+                    .put("action", act),
+            )
+            return
+        }
+        if (!sessionId.isNullOrBlank() && act == "archive") {
+            send(JSONObject().put("op", "session.archive").put("sessionId", sessionId))
+        }
+    }
+
+    fun pinChat(chat: RailChat) {
+        val chatId = chat.chatId ?: return
+        railChatAction(chatId, chat.sessionId, "pin")
+    }
+
+    fun unpinChat(chat: RailChat) {
+        val chatId = chat.chatId ?: return
+        railChatAction(chatId, chat.sessionId, "unpin")
+    }
+
+    fun archiveChat(chat: RailChat) {
+        val chatId = chat.chatId
+        if (!chatId.isNullOrBlank()) {
+            railChatAction(chatId, chat.sessionId, "archive")
+            return
+        }
+        val sid = chat.sessionId ?: return
+        send(JSONObject().put("op", "session.archive").put("sessionId", sid))
+    }
+
+    fun pinPinned(pin: RailPinned) = railChatAction(pin.id, null, "pin")
+
+    fun unpinPinned(pin: RailPinned) = railChatAction(pin.id, null, "unpin")
+
+    fun archivePinned(pin: RailPinned) {
+        val known = _state.sessions.find { it.desktopThreadId == pin.id }
+        railChatAction(pin.id, known?.id, "archive")
+    }
+
     fun setDraft(text: String, claim: Boolean = true, force: Boolean = false) {
         publish(_state.copy(draft = text))
         val id = _state.sessionId ?: return
@@ -464,6 +510,34 @@ class HostRepository {
                     }
                 }
                 publish(_state.copy(queue = queue))
+            }
+            "desktop.chat" -> {
+                ingestSidebar(msg)
+                val sessions =
+                    if (msg.has("sessions")) parseSessions(msg.optJSONArray("sessions"))
+                    else _state.sessions
+                val (pinned, repos) = rebuildRail(sessions)
+                val prevId = _state.sessionId
+                val stillThere = prevId != null && sessions.any { it.id == prevId }
+                val nextId = if (stillThere) prevId else sessions.firstOrNull()?.id
+                publish(
+                    _state.copy(
+                        sessions = sessions,
+                        sessionsReady = true,
+                        railPinned = pinned,
+                        railRepos = repos,
+                        sessionId = if (stillThere) prevId else _state.sessionId,
+                        meta =
+                            if (stillThere) {
+                                sessions.find { it.id == prevId } ?: _state.meta
+                            } else {
+                                _state.meta
+                            },
+                    ),
+                )
+                if (msg.optBoolean("archived", false) && !stillThere && nextId != null) {
+                    attach(nextId)
+                }
             }
             "draft" -> {
                 if (msg.optString("sessionId") != _state.sessionId) return

@@ -23,7 +23,7 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T15:10:00Z }
+generated: { by: agent, at: 2026-09-26T15:20:00Z }
 ---
 
 # Android shell
@@ -52,6 +52,9 @@ Cursor Agents does the same). Rows come from the host `sidebar` snapshot
 `projectAppearance` (or cloud agent); empty drafts stay out of the lists.
 Tapping an Auto session attaches; tapping a desktop-only chat sends
 `desktop.continue`. Repo **+** starts `session.create` in that folder.
+Long-press a chat (or Pinned row) for **Pin** / **Unpin** / **Archive** —
+writes Cursor's `composerHeaders` (`projectAppearance` / `isArchived`) and
+refreshes the sidebar.
 
 ## Connection
 

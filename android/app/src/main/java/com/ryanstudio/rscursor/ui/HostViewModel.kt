@@ -44,6 +44,16 @@ class HostViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openPinned(pin: com.ryanstudio.rscursor.data.RailPinned) = repo.openPinned(pin)
 
+    fun pinChat(chat: com.ryanstudio.rscursor.data.RailChat) = repo.pinChat(chat)
+
+    fun unpinChat(chat: com.ryanstudio.rscursor.data.RailChat) = repo.unpinChat(chat)
+
+    fun archiveChat(chat: com.ryanstudio.rscursor.data.RailChat) = repo.archiveChat(chat)
+
+    fun unpinPinned(pin: com.ryanstudio.rscursor.data.RailPinned) = repo.unpinPinned(pin)
+
+    fun archivePinned(pin: com.ryanstudio.rscursor.data.RailPinned) = repo.archivePinned(pin)
+
     fun toggleRepo(folder: String) = repo.toggleRepo(folder)
 
     fun setDraft(text: String) = repo.setDraft(text)

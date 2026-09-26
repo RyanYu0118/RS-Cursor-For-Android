@@ -24,6 +24,11 @@ import { listProjects, workspaceIdFor, foldersByWorkspaceId } from '../core/proj
 import { sidebarSnapshot } from '../core/glass-sidebar.mjs';
 import { listDirectories } from '../core/fs-browse.mjs';
 import { desktopChats, recentDesktopChats } from '../core/desktop-chats.mjs';
+import {
+  archiveComposer,
+  pinComposer,
+  unpinComposer,
+} from '../core/desktop-chat-actions.mjs';
 import { listMcpServers } from '../core/mcp-config.mjs';
 import {
   assertSwitches,
@@ -411,8 +416,61 @@ const OPS = {
     return OPS.attach(ws, state, { sessionId: meta.id });
   },
 
-  async 'session.archive'(_ws, _state, msg) {
-    await sessions.archive(msg.sessionId);
+  /**
+   * Pin / unpin / archive a Cursor Agents chat (composerHeaders). Also archives
+   * the matching Auto session when there is one.
+   */
+  async 'desktop.chat'(ws, state, msg) {
+    const chatId = msg.chatId || msg.composerId;
+    const action = String(msg.action || '').toLowerCase();
+    if (!chatId) throw new Error('chatId required');
+    let result;
+    if (action === 'pin') result = pinComposer(chatId);
+    else if (action === 'unpin') result = unpinComposer(chatId);
+    else if (action === 'archive') {
+      result = archiveComposer(chatId);
+      const known = sessions.list().find((s) => s.desktopThreadId === chatId);
+      if (known) await sessions.archive(known.id);
+      if (state.sessionId && known && state.sessionId === known.id) {
+        const next = sessions.activeId || sessions.list()[0]?.id;
+        if (next) await OPS.attach(ws, state, { sessionId: next });
+      }
+    } else throw new Error(`Unknown desktop.chat action ${action}`);
+    send(ws, {
+      type: 'desktop.chat',
+      action,
+      ...result,
+      sidebar: sidebarSnapshot(),
+      sessions: sessions.list(),
+    });
+  },
+
+  async 'session.archive'(ws, state, msg) {
+    const id = msg.sessionId;
+    const meta = sessions.get(id);
+    // Prefer archiving the Cursor composer when this is a desktop thread, so
+    // Agents and the pad rail stay in sync.
+    if (meta?.desktopThreadId) {
+      try {
+        archiveComposer(meta.desktopThreadId);
+      } catch {
+        /* Auto-only archive still works if Cursor's row is gone */
+      }
+    }
+    await sessions.archive(id);
+    if (state.sessionId === id) {
+      const next = sessions.activeId || sessions.list()[0]?.id;
+      if (next) await OPS.attach(ws, state, { sessionId: next });
+    }
+    send(ws, {
+      type: 'desktop.chat',
+      action: 'archive',
+      ok: true,
+      archived: true,
+      id: meta?.desktopThreadId || id,
+      sidebar: sidebarSnapshot(),
+      sessions: sessions.list(),
+    });
   },
 
   'session.rename'(_ws, _state, msg) {

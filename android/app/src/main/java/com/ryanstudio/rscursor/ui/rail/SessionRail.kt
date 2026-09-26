@@ -1,8 +1,10 @@
 package com.ryanstudio.rscursor.ui.rail
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,8 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -61,6 +65,7 @@ private val RailCorner = RoundedCornerShape(RsSpace.cornerSm)
 private val PreviewLimit = 5
 private val PinnedPreview = 8
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SessionRail(
     pinned: List<RailPinned>,
@@ -69,6 +74,11 @@ fun SessionRail(
     activeDesktopThreadId: String?,
     onOpenChat: (RailChat) -> Unit,
     onOpenPinned: (RailPinned) -> Unit,
+    onPinChat: (RailChat) -> Unit,
+    onUnpinChat: (RailChat) -> Unit,
+    onArchiveChat: (RailChat) -> Unit,
+    onUnpinPinned: (RailPinned) -> Unit,
+    onArchivePinned: (RailPinned) -> Unit,
     onNew: () -> Unit,
     onNewInFolder: (String) -> Unit,
     onToggleRepo: (String) -> Unit,
@@ -76,6 +86,7 @@ fun SessionRail(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val pinnedIds = remember(pinned) { pinned.map { it.id }.toSet() }
     var filter by remember { mutableStateOf("") }
     var filterOpen by remember { mutableStateOf(false) }
     var expandedMore by remember { mutableStateOf(setOf<String>()) }
@@ -191,6 +202,8 @@ fun SessionRail(
                             pin.id == activeDesktopThreadId ||
                                 (activeDesktopThreadId.isNullOrBlank() && pin.id == activeSessionId),
                         onClick = { onOpenPinned(pin) },
+                        onUnpin = { onUnpinPinned(pin) },
+                        onArchive = { onArchivePinned(pin) },
                     )
                 }
                 if (pinnedVisible.size > pinnedShown.size) {
@@ -255,7 +268,11 @@ fun SessionRail(
                                 chat = chat,
                                 selected = isSelected(chat, activeSessionId, activeDesktopThreadId),
                                 indented = true,
+                                pinned = !chat.chatId.isNullOrBlank() && chat.chatId in pinnedIds,
                                 onClick = { onOpenChat(chat) },
+                                onPin = { onPinChat(chat) },
+                                onUnpin = { onUnpinChat(chat) },
+                                onArchive = { onArchiveChat(chat) },
                             )
                         }
                         if (!showAll && repo.chats.size > PreviewLimit) {
@@ -328,48 +345,73 @@ private fun RailAction(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PinnedRow(
     pin: RailPinned,
     selected: Boolean,
     onClick: () -> Unit,
+    onUnpin: () -> Unit,
+    onArchive: () -> Unit,
 ) {
+    var menu by remember { mutableStateOf(false) }
     val bg =
         if (selected) {
             Color.White.copy(alpha = 0.12f)
         } else {
             Color.Transparent
         }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp)
-                .clip(RailCorner)
-                .background(bg)
-                .clickable(onClick = onClick)
-                .padding(horizontal = RsSpace.railRowH, vertical = RsSpace.railRowV),
-    ) {
-        Box(
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier =
                 Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(pinColor(pin.color.ifBlank { pin.name })),
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            pin.name,
-            color = if (selected) RsAccent else RsText,
-            fontSize = 13.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        val age = RailBuilder.relTime(pin.at)
-        if (age.isNotEmpty()) {
-            Text(age, color = RsMuted, fontSize = 11.sp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .clip(RailCorner)
+                    .background(bg)
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = { menu = true },
+                    )
+                    .padding(horizontal = RsSpace.railRowH, vertical = RsSpace.railRowV),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(pinColor(pin.color.ifBlank { pin.name })),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                pin.name,
+                color = if (selected) RsAccent else RsText,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            val age = RailBuilder.relTime(pin.at)
+            if (age.isNotEmpty()) {
+                Text(age, color = RsMuted, fontSize = 11.sp)
+            }
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text("Unpin") },
+                onClick = {
+                    menu = false
+                    onUnpin()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Archive") },
+                onClick = {
+                    menu = false
+                    onArchive()
+                },
+            )
         }
     }
 }
@@ -435,54 +477,84 @@ private fun RepoHead(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatRow(
     chat: RailChat,
     selected: Boolean,
     indented: Boolean,
+    pinned: Boolean,
     onClick: () -> Unit,
+    onPin: () -> Unit,
+    onUnpin: () -> Unit,
+    onArchive: () -> Unit,
 ) {
+    var menu by remember { mutableStateOf(false) }
     val bg =
         when {
             selected -> Color.White.copy(alpha = 0.12f)
             else -> Color.Transparent
         }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp)
-                .clip(RailCorner)
-                .background(bg)
-                .clickable(onClick = onClick)
-                .padding(
-                    start = if (indented) 24.dp else RsSpace.railRowH,
-                    end = RsSpace.railRowH,
-                    top = RsSpace.railRowV,
-                    bottom = RsSpace.railRowV,
-                ),
-    ) {
-        Box(
+    val canPin = !chat.chatId.isNullOrBlank()
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier =
                 Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(if (selected) RsAccent else RsMuted.copy(alpha = 0.55f)),
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            chat.title.ifBlank { "Untitled chat" },
-            color = if (selected) RsAccent else RsText,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        val age = RailBuilder.relTime(chat.at)
-        if (age.isNotEmpty()) {
-            Text(age, color = RsMuted, fontSize = 11.sp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .clip(RailCorner)
+                    .background(bg)
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = { menu = true },
+                    )
+                    .padding(
+                        start = if (indented) 24.dp else RsSpace.railRowH,
+                        end = RsSpace.railRowH,
+                        top = RsSpace.railRowV,
+                        bottom = RsSpace.railRowV,
+                    ),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) RsAccent else RsMuted.copy(alpha = 0.55f)),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                chat.title.ifBlank { "Untitled chat" },
+                color = if (selected) RsAccent else RsText,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            val age = RailBuilder.relTime(chat.at)
+            if (age.isNotEmpty()) {
+                Text(age, color = RsMuted, fontSize = 11.sp)
+            }
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (canPin) {
+                DropdownMenuItem(
+                    text = { Text(if (pinned) "Unpin" else "Pin") },
+                    onClick = {
+                        menu = false
+                        if (pinned) onUnpin() else onPin()
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Archive") },
+                onClick = {
+                    menu = false
+                    onArchive()
+                },
+            )
         }
     }
 }
