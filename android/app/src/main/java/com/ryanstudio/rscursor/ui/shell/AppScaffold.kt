@@ -29,8 +29,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -63,6 +61,7 @@ import com.ryanstudio.rscursor.ui.chat.QueueStrip
 import com.ryanstudio.rscursor.ui.chat.TranscriptScreen
 import com.ryanstudio.rscursor.ui.composer.ComposerBar
 import com.ryanstudio.rscursor.ui.rail.SessionRail
+import com.ryanstudio.rscursor.ui.theme.GlassButton
 import com.ryanstudio.rscursor.ui.theme.GlassChip
 import com.ryanstudio.rscursor.ui.theme.ImmersiveLightBackground
 import com.ryanstudio.rscursor.ui.theme.RsAccent
@@ -449,17 +448,7 @@ private fun NoHostScreen(onSettings: () -> Unit) {
                     fontSize = 13.sp,
                     modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
                 )
-                Button(
-                    onClick = onSettings,
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = RsAccent.copy(alpha = 0.85f),
-                            contentColor = Color(0xFF071018),
-                        ),
-                    shape = RoundedCornerShape(999.dp),
-                ) {
-                    Text("主机设置")
-                }
+                GlassButton("主机设置", primary = true, onClick = onSettings)
             }
         }
     }

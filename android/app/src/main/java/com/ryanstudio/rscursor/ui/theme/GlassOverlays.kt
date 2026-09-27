@@ -45,6 +45,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -515,6 +517,8 @@ fun GlassTextField(
     modifier: Modifier = Modifier,
     placeholder: String = "",
     trailing: (@Composable () -> Unit)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     OutlinedTextField(
         value = value,
@@ -522,6 +526,8 @@ fun GlassTextField(
         singleLine = true,
         placeholder = if (placeholder.isBlank()) null else ({ Text(placeholder) }),
         trailingIcon = trailing,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
         shape = RoundedCornerShape(12.dp),
         colors = glassFieldColors(),
         modifier = modifier.fillMaxWidth(),

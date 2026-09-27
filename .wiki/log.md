@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-27
+* **Update**: The Android host-URL screen uses the immersive glass field instead of a Material toolbar and text field. See [Android shell](concepts/android-shell.md).
 * **Fix**: Closing the Android rail animates its width, so the chat pane fills leftward instead of jumping. See [Android shell](concepts/android-shell.md).
 * **Update**: Android secondary menus and dialogs (row menu + Move/Copy submenus, Rename, Edit Icon, composer + / mode / model) use one immersive lit-glass look with spring-in / fade-out transitions and folding submenus. See [Android shell](concepts/android-shell.md).
 * **Update**: Pinned and every row action (pin, rename, icon, unread, fork, move, copy, archive) now call the Agents window's own services over CDP — no menus, clicks or focus changes, so Cursor can stay in the background. Copy no longer borrows the computer's clipboard. See [Android shell](concepts/android-shell.md).
