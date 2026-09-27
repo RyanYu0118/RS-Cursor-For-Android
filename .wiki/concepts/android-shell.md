@@ -26,7 +26,7 @@ sources:
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
     title: Pinned + row actions through Cursor's services
-generated: { by: agent, at: 2026-09-27T05:30:00Z }
+generated: { by: agent, at: 2026-09-27T10:00:00Z }
 ---
 
 # Android shell
@@ -45,6 +45,18 @@ own glass cards. Page changes, rail open/close, and transcript rows use
 short fade/slide transitions; row gaps and the 48dp title bar are tightened
 for a denser pad layout. Assistant and user prose render as **Markdown**,
 not raw source.
+
+Every secondary menu and dialog shares one immersive glass look
+([`GlassOverlays.kt`](/android/app/src/main/java/com/ryanstudio/rscursor/ui/theme/GlassOverlays.kt)):
+a deep tinted sheet lit from inside by slowly drifting cyan / violet / rose
+glows, a top sheen and the glass edge — the same light field as the page.
+`GlassMenu` replaces `DropdownMenu` (rail row menu, composer + / mode /
+model): it opens below its anchor or above when there is no room, springs
+out of that side (scale + fade + slide) and fades back on close. Inline
+submenus (Move to ›, Copy ›) fold open with the chevron turning.
+`GlassDialog` (Rename, Edit Icon) rises over an animated light-tinted scrim
+and plays back out before it is removed; buttons, fields and icon chips are
+glass too.
 
 ## Side rail
 

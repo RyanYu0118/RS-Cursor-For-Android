@@ -31,15 +31,20 @@ const ms = (v) => {
 };
 
 async function rpc(token, path, body = {}) {
-  const res = await fetch(`${API}${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'Connect-Protocol-Version': '1',
-    },
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Connect-Protocol-Version': '1',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return { ok: false, status: 0, json: null, error: err?.cause?.code || err?.message || 'network' };
+  }
   const text = await res.text();
   let json = null;
   try {
@@ -61,8 +66,8 @@ async function refreshAccessToken() {
       client_id: CLIENT_ID,
       refresh_token: refresh,
     }),
-  });
-  if (!res.ok) return null;
+  }).catch(() => null);
+  if (!res?.ok) return null;
   const json = await res.json().catch(() => null);
   if (!json?.access_token || json.shouldLogout) return null;
   return json.access_token;
@@ -187,7 +192,9 @@ export async function accountUsage({ force = false } = {}) {
       reason:
         period.status === 401 || period.status === 403
           ? 'Cursor’s login has expired. Open Cursor and sign in again.'
-          : `Cursor usage API returned ${period.status}.`,
+          : period.status === 0
+            ? `Cursor usage API could not be reached (${period.error}).`
+            : `Cursor usage API returned ${period.status}.`,
       account,
     };
   }

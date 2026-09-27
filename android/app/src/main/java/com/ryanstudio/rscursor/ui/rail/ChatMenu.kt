@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,8 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CallSplit
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -29,16 +26,8 @@ import androidx.compose.material.icons.outlined.NotificationAdd
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.SentimentSatisfied
 import androidx.compose.material.icons.outlined.SwapHoriz
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,12 +37,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ryanstudio.rscursor.data.IconPickerState
 import com.ryanstudio.rscursor.data.MenuMoveState
 import com.ryanstudio.rscursor.data.RailMenuTarget
+import com.ryanstudio.rscursor.ui.theme.GlassButton
+import com.ryanstudio.rscursor.ui.theme.GlassChoiceChip
+import com.ryanstudio.rscursor.ui.theme.GlassDialog
+import com.ryanstudio.rscursor.ui.theme.GlassMenu
+import com.ryanstudio.rscursor.ui.theme.GlassMenuDivider
+import com.ryanstudio.rscursor.ui.theme.GlassMenuItem
+import com.ryanstudio.rscursor.ui.theme.GlassMenuNote
+import com.ryanstudio.rscursor.ui.theme.GlassSubmenu
+import com.ryanstudio.rscursor.ui.theme.GlassTextField
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import kotlinx.coroutines.delay
@@ -65,9 +62,11 @@ private val CopyItems =
         "transcript" to "Copy Transcript",
     )
 
+private val SubIndent = 28.dp
+
 /**
- * Cursor's row menu, mirrored: every action is pressed in Cursor's own
- * sidebar by the host. "Move to" is read live from Cursor when opened.
+ * Cursor's row menu, mirrored: every action is done by the host through
+ * Cursor's own services. "Move to" is read from Cursor when opened.
  */
 @Composable
 fun ChatRowMenu(
@@ -91,50 +90,60 @@ fun ChatRowMenu(
     }
     val chatId = target.chatId
 
-    DropdownMenu(expanded = expanded, onDismissRequest = close) {
+    GlassMenu(expanded = expanded, onDismissRequest = close) {
         if (chatId.isNullOrBlank()) {
             // An Auto-only session has no row in Cursor to act on.
-            MenuRow(Icons.Outlined.Archive, "Archive") { act("archive", null) }
-            return@DropdownMenu
+            GlassMenuItem("Archive", icon = Icons.Outlined.Archive, onClick = { act("archive", null) })
+            return@GlassMenu
         }
-        MenuRow(Icons.Outlined.PushPin, if (target.pinned) "Unpin" else "Pin") {
-            act(if (target.pinned) "unpin" else "pin", null)
-        }
-        MenuRow(Icons.Outlined.Edit, "Rename") {
+        GlassMenuItem(
+            if (target.pinned) "Unpin" else "Pin",
+            icon = Icons.Outlined.PushPin,
+            onClick = { act(if (target.pinned) "unpin" else "pin", null) },
+        )
+        GlassMenuItem("Rename", icon = Icons.Outlined.Edit, onClick = {
             close()
             renaming = true
-        }
-        MenuRow(Icons.Outlined.SentimentSatisfied, "Edit Icon") {
+        })
+        GlassMenuItem("Edit Icon", icon = Icons.Outlined.SentimentSatisfied, onClick = {
             close()
             onEditIcon(target)
-        }
-        MenuRow(Icons.Outlined.NotificationAdd, "Mark as Unread") { act("unread", null) }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        MenuRow(Icons.Outlined.CallSplit, "Fork") { act("fork", null) }
-        MenuRow(Icons.Outlined.SwapHoriz, "Move to", open = sub == "move") {
-            sub = if (sub == "move") null else "move"
-            if (sub == "move") onLoadMove(chatId)
-        }
-        if (sub == "move") {
+        })
+        GlassMenuItem("Mark as Unread", icon = Icons.Outlined.NotificationAdd, onClick = { act("unread", null) })
+        GlassMenuDivider()
+        GlassMenuItem("Fork", icon = Icons.Outlined.CallSplit, onClick = { act("fork", null) })
+        GlassSubmenu(
+            text = "Move to",
+            icon = Icons.Outlined.SwapHoriz,
+            open = sub == "move",
+            onToggle = {
+                sub = if (sub == "move") null else "move"
+                if (sub == "move") onLoadMove(chatId)
+            },
+        ) {
             val mine = menuMove?.takeIf { it.chatId == chatId }
             when {
                 mine == null || mine.loading -> SubLoading()
-                mine.items.isEmpty() -> SubNote("没有可移动的位置")
+                mine.items.isEmpty() -> GlassMenuNote("没有可移动的位置", indent = SubIndent)
                 else ->
                     mine.items.forEach { opt ->
-                        SubRow(opt.label, opt.detail) { act("move", opt.label) }
+                        GlassMenuItem(opt.label, detail = opt.detail, indent = SubIndent, onClick = { act("move", opt.label) })
                     }
             }
         }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        MenuRow(Icons.Outlined.ContentCopy, "Copy", open = sub == "copy") {
-            sub = if (sub == "copy") null else "copy"
+        GlassMenuDivider()
+        GlassSubmenu(
+            text = "Copy",
+            icon = Icons.Outlined.ContentCopy,
+            open = sub == "copy",
+            onToggle = { sub = if (sub == "copy") null else "copy" },
+        ) {
+            CopyItems.forEach { (key, label) ->
+                GlassMenuItem(label, indent = SubIndent, onClick = { act("copy", key) })
+            }
         }
-        if (sub == "copy") {
-            CopyItems.forEach { (key, label) -> SubRow(label) { act("copy", key) } }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        MenuRow(Icons.Outlined.Archive, "Archive") { act("archive", null) }
+        GlassMenuDivider()
+        GlassMenuItem("Archive", icon = Icons.Outlined.Archive, onClick = { act("archive", null) })
     }
 
     if (renaming) {
@@ -150,71 +159,15 @@ fun ChatRowMenu(
 }
 
 @Composable
-private fun MenuRow(
-    icon: ImageVector,
-    label: String,
-    open: Boolean? = null,
-    onClick: () -> Unit,
-) {
-    DropdownMenuItem(
-        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) },
-        text = { Text(label, fontSize = 14.sp) },
-        trailingIcon =
-            open?.let {
-                {
-                    Icon(
-                        if (it) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = RsMuted,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            },
-        onClick = onClick,
-    )
-}
-
-@Composable
-private fun SubRow(
-    label: String,
-    detail: String = "",
-    onClick: () -> Unit,
-) {
-    DropdownMenuItem(
-        text = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(label, fontSize = 13.sp)
-                if (detail.isNotBlank()) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(detail, fontSize = 12.sp, color = RsMuted)
-                }
-            }
-        },
-        modifier = Modifier.padding(start = 30.dp),
-        onClick = onClick,
-    )
-}
-
-@Composable
 private fun SubLoading() {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(start = 46.dp, top = 6.dp, bottom = 6.dp, end = 16.dp),
+        modifier = Modifier.padding(start = 10.dp + SubIndent, top = 8.dp, bottom = 8.dp, end = 10.dp),
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.6.dp)
+        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.6.dp, color = RsAccent)
         Spacer(modifier = Modifier.width(8.dp))
         Text("读取 Cursor…", fontSize = 12.sp, color = RsMuted)
     }
-}
-
-@Composable
-private fun SubNote(text: String) {
-    Text(
-        text,
-        fontSize = 12.sp,
-        color = RsMuted,
-        modifier = Modifier.padding(start = 46.dp, top = 6.dp, bottom = 6.dp, end = 16.dp),
-    )
 }
 
 @Composable
@@ -224,20 +177,16 @@ private fun RenameDialog(
     onRename: (String) -> Unit,
 ) {
     var text by remember { mutableStateOf(initial) }
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rename") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        title = "Rename",
+        actions = { dialog ->
+            GlassButton("Cancel", onClick = { dialog.dismiss(onDismiss) })
+            GlassButton("Rename", primary = true, onClick = { dialog.dismiss { onRename(text.trim()) } })
         },
-        confirmButton = { TextButton(onClick = { onRename(text.trim()) }) { Text("Rename") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+    ) {
+        GlassTextField(value = text, onValueChange = { text = it })
+    }
 }
 
 private fun swatch(label: String): Color =
@@ -270,65 +219,65 @@ fun IconPickerDialog(
         delay(350)
         onSearch(query.trim())
     }
-    AlertDialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Icon · ${state.title}", maxLines = 1, fontSize = 16.sp) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    state.colors.forEach { c ->
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(26.dp)
-                                    .border(
-                                        width = if (c.selected) 2.dp else 0.dp,
-                                        color = if (c.selected) Color.White else Color.Transparent,
-                                        shape = CircleShape,
-                                    )
-                                    .padding(3.dp)
-                                    .background(swatch(c.label), CircleShape)
-                                    .clickable { onColor(c.label) },
-                        )
-                    }
-                }
-                val hasIcon = state.current.isNotBlank() && state.current != "No icon"
-                if (!hasIcon) {
-                    Text("颜色要配合图标才会生效", fontSize = 12.sp, color = RsMuted)
-                }
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    placeholder = { Text("Search icons") },
-                    trailingIcon = {
-                        if (state.loading) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 1.6.dp)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+        title = "Edit Icon · ${state.title}",
+        width = 520.dp,
+        actions = { dialog -> GlassButton("Done", primary = true, onClick = { dialog.dismiss(onDismiss) }) },
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            state.colors.forEach { c ->
+                Box(
                     modifier =
                         Modifier
-                            .heightIn(max = 280.dp)
-                            .verticalScroll(rememberScrollState()),
-                ) {
-                    state.icons.forEach { ic ->
-                        FilterChip(
-                            selected = ic.selected || ic.label == state.current,
-                            onClick = { onIcon(ic.label) },
-                            label = { Text(ic.label, fontSize = 12.sp) },
-                        )
-                    }
+                            .size(28.dp)
+                            .border(
+                                width = 2.dp,
+                                color = if (c.selected) Color.White else Color.White.copy(alpha = 0.08f),
+                                shape = CircleShape,
+                            )
+                            .padding(4.dp)
+                            .background(swatch(c.label), CircleShape)
+                            .clickable { onColor(c.label) },
+                )
+            }
+        }
+        val hasIcon = state.current.isNotBlank() && state.current != "No icon"
+        if (!hasIcon) {
+            Text("颜色要配合图标才会生效", fontSize = 12.sp, color = RsMuted)
+        }
+        GlassTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = "Search icons",
+            trailing =
+                if (state.loading) {
+                    { CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 1.6.dp, color = RsAccent) }
+                } else {
+                    null
+                },
+        )
+        Column(
+            modifier =
+                Modifier
+                    .heightIn(max = 300.dp)
+                    .verticalScroll(rememberScrollState()),
+        ) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                state.icons.forEach { ic ->
+                    GlassChoiceChip(
+                        text = ic.label,
+                        selected = ic.selected || ic.label == state.current,
+                        onClick = { onIcon(ic.label) },
+                    )
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-    )
+        }
+    }
 }

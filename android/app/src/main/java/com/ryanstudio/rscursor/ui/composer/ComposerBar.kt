@@ -19,9 +19,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,6 +50,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.ryanstudio.rscursor.data.Catalog
 import com.ryanstudio.rscursor.data.LocalAttachment
+import com.ryanstudio.rscursor.ui.theme.GlassMenu
+import com.ryanstudio.rscursor.ui.theme.GlassMenuItem
+import com.ryanstudio.rscursor.ui.theme.GlassMenuNote
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import com.ryanstudio.rscursor.ui.theme.RsSpace
@@ -104,82 +108,48 @@ fun ComposerBar(
         }
 
         Row(verticalAlignment = Alignment.Bottom) {
-            IconButton(onClick = { plusOpen = true }) {
-                Icon(Icons.Default.Add, contentDescription = "加号菜单", tint = RsAccent)
-            }
-            DropdownMenu(expanded = plusOpen, onDismissRequest = { plusOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text("模式") },
-                    onClick = {
+            Box {
+                IconButton(onClick = { plusOpen = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "加号菜单", tint = RsAccent)
+                }
+                val modeName = catalog.modes.find { it.id == currentMode }?.name ?: currentMode.ifBlank { "—" }
+                val modelName = catalog.models.find { it.id == currentModel }?.name ?: currentModel.ifBlank { "—" }
+                GlassMenu(expanded = plusOpen, onDismissRequest = { plusOpen = false }) {
+                    GlassMenuItem("模式", icon = Icons.Outlined.Tune, detail = modeName, onClick = {
                         plusOpen = false
                         modeOpen = true
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("Files") },
-                    onClick = {
+                    })
+                    GlassMenuItem("Files", icon = Icons.Outlined.AttachFile, onClick = {
                         plusOpen = false
                         onPickFiles()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("模型") },
-                    onClick = {
+                    })
+                    GlassMenuItem("模型", icon = Icons.Outlined.AutoAwesome, detail = modelName, onClick = {
                         plusOpen = false
                         modelOpen = true
-                    },
-                )
-                HorizontalDivider()
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            "模式: ${catalog.modes.find { it.id == currentMode }?.name ?: currentMode.ifBlank { "—" }}",
-                            fontSize = 12.sp,
-                            color = RsMuted,
-                        )
-                    },
-                    onClick = {},
-                    enabled = false,
-                )
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            "模型: ${catalog.models.find { it.id == currentModel }?.name ?: currentModel.ifBlank { "—" }}",
-                            fontSize = 12.sp,
-                            color = RsMuted,
-                        )
-                    },
-                    onClick = {},
-                    enabled = false,
-                )
-            }
-            DropdownMenu(expanded = modeOpen, onDismissRequest = { modeOpen = false }) {
-                if (catalog.modes.isEmpty()) {
-                    DropdownMenuItem(text = { Text("暂无模式") }, onClick = { modeOpen = false })
-                } else {
-                    catalog.modes.forEach { mode ->
-                        DropdownMenuItem(
-                            text = { Text(mode.name) },
-                            onClick = {
+                    })
+                }
+                GlassMenu(expanded = modeOpen, onDismissRequest = { modeOpen = false }) {
+                    if (catalog.modes.isEmpty()) {
+                        GlassMenuNote("暂无模式")
+                    } else {
+                        catalog.modes.forEach { mode ->
+                            GlassMenuItem(mode.name, selected = mode.id == currentMode, onClick = {
                                 modeOpen = false
                                 onMode(mode.id)
-                            },
-                        )
+                            })
+                        }
                     }
                 }
-            }
-            DropdownMenu(expanded = modelOpen, onDismissRequest = { modelOpen = false }) {
-                if (catalog.models.isEmpty()) {
-                    DropdownMenuItem(text = { Text("暂无模型") }, onClick = { modelOpen = false })
-                } else {
-                    catalog.models.take(40).forEach { model ->
-                        DropdownMenuItem(
-                            text = { Text(model.name) },
-                            onClick = {
+                GlassMenu(expanded = modelOpen, onDismissRequest = { modelOpen = false }) {
+                    if (catalog.models.isEmpty()) {
+                        GlassMenuNote("暂无模型")
+                    } else {
+                        catalog.models.take(40).forEach { model ->
+                            GlassMenuItem(model.name, selected = model.id == currentModel, onClick = {
                                 modelOpen = false
                                 onModel(model.id)
-                            },
-                        )
+                            })
+                        }
                     }
                 }
             }
