@@ -23,7 +23,10 @@ sources:
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
-generated: { by: agent, at: 2026-09-26T15:45:00Z }
+  - id: cursor-sidebar
+    resource: /src/core/cursor-sidebar.mjs
+    title: Live Pinned read + sidebar menu presses
+generated: { by: agent, at: 2026-09-27T02:55:00Z }
 ---
 
 # Android shell
@@ -48,13 +51,27 @@ not raw source.
 Mirrors Cursor Agents / the web rail: **New Chat**, **Search** (filter),
 **Pinned**, then **Repositories** as accordions (no separate Recent list —
 Cursor Agents does the same). Rows come from the host `sidebar` snapshot
-(per-workspace desktop chats), not a flat recent pool. Pinned agents need a
-`projectAppearance` (or cloud agent); empty drafts stay out of the lists.
+(per-workspace desktop chats), not a flat recent pool; empty drafts stay out
+of the lists.
+
+**Pinned is read from Cursor's window**, not the database. Only some pins
+carry `projectAppearance` on disk, and writing that field never reaches a
+running window, so the disk guess showed two chats where the computer showed
+six. The host ([`cursor-sidebar.mjs`](/src/core/cursor-sidebar.mjs)) reads the
+`__pinned_agents__` group over the debug port every 8 s — rows by
+`data-sidebar-item-key="row:<id>"`, in Cursor's order — and broadcasts
+`projects` when it changes. Past six pins Cursor shows five and **More**;
+the reader presses More once (it has no "Less"). With no window answering for
+a minute, the snapshot falls back to the `projectAppearance` guess.
+
 Tapping an Auto session attaches; tapping a desktop-only chat sends
 `desktop.continue`. Repo **+** starts `session.create` in that folder.
 Long-press a chat (or Pinned row) for **Pin** / **Unpin** / **Archive** —
-writes Cursor's `composerHeaders` (`projectAppearance` / `isArchived`) and
-refreshes the sidebar. While a session is `busy` / `starting`, that row (and
+pressed through that row's own menu in Cursor's sidebar (a Base UI popup:
+it selects on pointer up, so a bare `click()` does nothing). A chat Cursor's
+sidebar is not showing (its repo folded past the first rows) answers with an
+error rather than a silent database write; the `composerHeaders` write is
+only used when no window answers at all. While a session is `busy` / `starting`, that row (and
 its Pinned twin) shows a spinner left of the title and the same left→right
 white **gleam** on the title glyphs as the live-step line.
 
@@ -136,10 +153,15 @@ From the repo (JDK 17, Android SDK with platform 35):
 
 ```powershell
 $env:JAVA_HOME = "$env:USERPROFILE\cursor-pad\.jdk\jdk-17.0.20.1+1"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
 $env:ANDROID_HOME = "$env:USERPROFILE\cursor-pad\.sdk"
 cd android
 .\gradlew.bat assembleDebug
 ```
+
+`gradlew.bat` prefers `java` on `PATH` over `JAVA_HOME`, and this machine's
+system Java is 25, which Gradle 8.9 rejects with a bare "25.0.2" — so JDK 17
+has to go first on `PATH`.
 
 Output: `android/app/build/outputs/apk/debug/app-debug.apk`.
 Copy `local.properties.example` to `local.properties` and set `sdk.dir`

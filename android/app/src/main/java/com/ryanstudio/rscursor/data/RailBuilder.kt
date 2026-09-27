@@ -40,7 +40,11 @@ object RailBuilder {
         if (min < 60) return "${min}m"
         val hr = (min / 60.0).toInt().coerceAtLeast(1)
         if (hr < 24) return "${hr}h"
-        return "${(hr / 24.0).toInt().coerceAtLeast(1)}d"
+        val days = (hr / 24.0).toInt().coerceAtLeast(1)
+        if (days < 30) return "${days}d"
+        val months = days / 30
+        if (months < 12) return "${months}mo"
+        return "${days / 365}y"
     }
 
     fun parsePinned(arr: JSONArray?): List<RailPinned> {

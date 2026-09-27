@@ -21,7 +21,8 @@ import { BrowserHost } from '../core/browser.mjs';
 import { HostIdentity } from '../core/host-identity.mjs';
 import { TelegramBridge } from '../core/telegram.mjs';
 import { listProjects, workspaceIdFor, foldersByWorkspaceId } from '../core/projects.mjs';
-import { sidebarSnapshot } from '../core/glass-sidebar.mjs';
+import { refreshLivePinned, sidebarSnapshot, watchLivePinned } from '../core/glass-sidebar.mjs';
+import { pressSidebarAction } from '../core/cursor-sidebar.mjs';
 import { listDirectories } from '../core/fs-browse.mjs';
 import { desktopChats, recentDesktopChats } from '../core/desktop-chats.mjs';
 import {
@@ -417,30 +418,51 @@ const OPS = {
   },
 
   /**
-   * Pin / unpin / archive a Cursor Agents chat (composerHeaders). Also archives
-   * the matching Auto session when there is one.
+   * Pin / unpin / archive a Cursor Agents chat. Pressed through the row's menu
+   * in Cursor's sidebar, since a running window ignores database writes; the
+   * `composerHeaders` write is only for when no window answers. Archive also
+   * archives the matching Auto session when there is one.
    */
   async 'desktop.chat'(ws, state, msg) {
     const chatId = msg.chatId || msg.composerId;
     const action = String(msg.action || '').toLowerCase();
     if (!chatId) throw new Error('chatId required');
-    let result;
-    if (action === 'pin') result = pinComposer(chatId);
-    else if (action === 'unpin') result = unpinComposer(chatId);
-    else if (action === 'archive') {
-      result = archiveComposer(chatId);
+    if (!['pin', 'unpin', 'archive'].includes(action)) {
+      throw new Error(`Unknown desktop.chat action ${action}`);
+    }
+    const pressed = await pressSidebarAction(chatId, action);
+    if (!pressed.ok && pressed.reason === 'not-shown') {
+      throw new Error('Cursor 侧栏没有显示这条对话，先在电脑上展开它所在的仓库再试');
+    }
+    if (!pressed.ok && pressed.reason === 'no-item') {
+      throw new Error(`Cursor 的菜单里没有 ${action}（${(pressed.words || []).join(' / ')}）`);
+    }
+    let result = { ok: true, id: chatId, via: 'cursor' };
+    if (!pressed.ok) {
+      if (action === 'pin') result = pinComposer(chatId);
+      else if (action === 'unpin') result = unpinComposer(chatId);
+      else result = archiveComposer(chatId);
+    } else if (action === 'pin' || action === 'unpin') {
+      result.pinned = action === 'pin';
+    } else {
+      result.archived = true;
+    }
+    await refreshLivePinned().catch(() => false);
+    if (action === 'archive') {
       const known = sessions.list().find((s) => s.desktopThreadId === chatId);
       if (known) await sessions.archive(known.id);
       if (state.sessionId && known && state.sessionId === known.id) {
         const next = sessions.activeId || sessions.list()[0]?.id;
         if (next) await OPS.attach(ws, state, { sessionId: next });
       }
-    } else throw new Error(`Unknown desktop.chat action ${action}`);
+    }
+    const sidebar = sidebarSnapshot();
+    broadcast({ type: 'projects', projects: projectList(), sidebar });
     send(ws, {
       type: 'desktop.chat',
       action,
       ...result,
-      sidebar: sidebarSnapshot(),
+      sidebar,
       sessions: sessions.list(),
     });
   },
@@ -1160,6 +1182,9 @@ server.listen(PORT, HOST, () => {
   console.log(`[auto] http://127.0.0.1:${PORT}  (${sessions.list().length} sessions)`);
   announceRestart();
   keepBridgeEnabled();
+  watchLivePinned(() =>
+    broadcast({ type: 'projects', projects: projectList(), sidebar: sidebarSnapshot() }),
+  );
   // Threads in the IDE keep moving whether or not Auto is watching, so pick
   // them back up: a reply typed into Cursor should still reach the phone.
   const watching = sessions.watchDesktopThreads().then((n) => {

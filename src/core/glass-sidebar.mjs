@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { foldersByWorkspaceId } from './projects.mjs';
 import { desktopChats, desktopChatsWithoutWorkspace, recentDesktopChats } from './desktop-chats.mjs';
+import { readLivePinned } from './cursor-sidebar.mjs';
 
 const APPDATA = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
 const IDE_DB = join(APPDATA, 'Cursor', 'User', 'globalStorage', 'state.vscdb');
@@ -33,8 +34,68 @@ function readKey(key) {
   });
 }
 
-/** Agents the Projects list treats as pinned: a saved appearance, or a live cloud agent. */
-function pinnedAgents() {
+/**
+ * Pinned as Cursor's window last showed it. The disk only knows some pins
+ * (`projectAppearance`), so while a window answers, its list wins; the disk
+ * guess is for when Cursor is down.
+ */
+const LIVE_PINNED_TTL_MS = 60_000;
+let livePinned = { ids: null, names: new Map(), at: 0 };
+
+/**
+ * Re-read Pinned from the window.
+ * @returns {Promise<boolean>} whether the list changed
+ */
+export async function refreshLivePinned(opts) {
+  const rows = await readLivePinned(opts);
+  if (!rows) return false;
+  const ids = rows.map((r) => r.id);
+  const changed = !livePinned.ids || ids.join('|') !== livePinned.ids.join('|');
+  livePinned = { ids, names: new Map(rows.map((r) => [r.id, r.name])), at: Date.now() };
+  return changed;
+}
+
+/** Poll the window so a pin made at the computer reaches the phone. */
+export function watchLivePinned(onChange, { everyMs = 8_000 } = {}) {
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      if (await refreshLivePinned()) onChange?.();
+    } catch {
+      /* Cursor may be restarting */
+    } finally {
+      running = false;
+    }
+  };
+  tick();
+  return setInterval(tick, everyMs).unref();
+}
+
+function livePinnedRows() {
+  if (!livePinned.ids || Date.now() - livePinned.at > LIVE_PINNED_TTL_MS) return null;
+  const all = pinnedAgents({ ids: livePinned.ids });
+  const byId = new Map(all.map((row) => [row.id, row]));
+  return livePinned.ids.map(
+    (id) =>
+      byId.get(id) || {
+        id,
+        name: livePinned.names.get(id) || 'Untitled chat',
+        at: 0,
+        folder: '',
+        cloud: id.startsWith('bc-'),
+        icon: 'dot',
+        color: 'orange',
+      },
+  );
+}
+
+/**
+ * Agents the Projects list treats as pinned: a saved appearance, or a live
+ * cloud agent. With `ids`, describe exactly those chats instead.
+ */
+function pinnedAgents({ ids } = {}) {
   const appearance =
     withDb((db) =>
       db
@@ -44,14 +105,17 @@ function pinnedAgents() {
                   json_extract(value, '$.subtitle') AS subtitle,
                   json_extract(value, '$.projectAppearance.icon') AS icon,
                   json_extract(value, '$.projectAppearance.colorId') AS color,
-                  json_extract(value, '$.lastUpdatedAt') AS at,
+                  COALESCE(json_extract(value, '$.lastUpdatedAt'), lastUpdatedAt) AS at,
                   json_extract(value, '$.agentLocation.environment.uri.fsPath') AS folder,
                   json_extract(value, '$.workspaceIdentifier.uri.fsPath') AS wsFolder
            FROM composerHeaders
-           WHERE value LIKE '%"projectAppearance"%'
-              OR json_extract(value, '$.isProject') = 1`,
+           WHERE ${
+             ids
+               ? `composerId IN (${ids.map(() => '?').join(',') || "''"})`
+               : `value LIKE '%"projectAppearance"%' OR json_extract(value, '$.isProject') = 1`
+           }`,
         )
-        .all(),
+        .all(...(ids || [])),
     ) || [];
   const cloud = readKey(
     withDb((db) => {
@@ -132,7 +196,7 @@ export function sidebarSnapshot() {
   const extra = readKey('cursor/glass.additionalProjects') || [];
   const folders = foldersByWorkspaceId();
   const envPaths = environmentPaths();
-  const pinned = pinnedAgents();
+  const pinned = livePinnedRows() || pinnedAgents();
 
   const byFolder = new Map();
   const ensure = (folder, name, kind = 'folder') => {

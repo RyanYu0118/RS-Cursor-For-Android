@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-09-27
+* **Fix**: Pinned now matches the computer — read live from Cursor's sidebar over the debug port (disk only knew 2 of 6); Pin / Unpin / Archive press the row's own Cursor menu. Rail times show `mo` / `y` like Cursor. See [Android shell](concepts/android-shell.md).
+
 ## 2026-09-26
 * **Feature**: Android rail shows a spinner + left→right title gleam on busy / starting chats. See [Android shell](concepts/android-shell.md).
 * **Fix**: Android composer keeps Send while busy so mid-turn messages queue (Stop stays beside it). See [Android shell](concepts/android-shell.md) and [Queue](concepts/queue.md).

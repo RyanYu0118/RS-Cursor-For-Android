@@ -18,6 +18,7 @@ copy local.properties.example local.properties
 # edit sdk.dir
 
 $env:JAVA_HOME = "$env:USERPROFILE\cursor-pad\.jdk\jdk-17.0.20.1+1"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"   # gradlew.bat prefers java on PATH
 $env:ANDROID_HOME = "$env:USERPROFILE\cursor-pad\.sdk"
 .\gradlew.bat assembleDebug
 ```
