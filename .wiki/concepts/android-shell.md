@@ -26,7 +26,7 @@ sources:
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
     title: Pinned + row actions through Cursor's services
-generated: { by: agent, at: 2026-09-27T10:45:00Z }
+generated: { by: agent, at: 2026-09-27T11:30:00Z }
 ---
 
 # Android shell
@@ -59,7 +59,10 @@ submenus (Move to ›, Copy ›) fold open with the chevron turning.
 `GlassDialog` (Rename, Edit Icon) rises over an animated light-tinted scrim
 and plays back out before it is removed; buttons, fields and icon chips are
 glass too. The host-URL screen is the same field: a lit glass card, not a
-Material toolbar and text field.
+Material toolbar and text field. It opens with a cross-fade, the card
+springing up and in while the header slides from the left; back (button or
+gesture) and save play that in reverse before the activity finishes, and the
+error line folds open rather than popping.
 
 ## Side rail
 

@@ -2,8 +2,20 @@ package com.ryanstudio.rscursor
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,12 +38,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -52,40 +66,79 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // The window only cross-fades; the card's own rise and fall is the motion.
+        @Suppress("DEPRECATION")
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         val initial = HostPrefs.get(this).trimEnd('/')
         setContent {
             RsCursorTheme {
                 SettingsScreen(
                     initial = initial,
-                    onBack = { finish() },
-                    onSave = { raw ->
-                        val normalized = HostPrefs.normalize(raw)
-                        if (normalized.isEmpty()) {
-                            false
-                        } else {
-                            HostPrefs.set(this, normalized)
+                    validate = { raw -> HostPrefs.normalize(raw).ifEmpty { null } },
+                    onDone = { saved ->
+                        if (saved != null) {
+                            HostPrefs.set(this, saved)
                             setResult(RESULT_OK)
-                            finish()
-                            true
                         }
+                        finish()
                     },
                 )
             }
         }
     }
+
+    override fun finish() {
+        super.finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
 }
 
+/**
+ * The card rises and fades in on open. Back and save play it back down
+ * before the activity closes, so leaving is a motion too.
+ */
 @Composable
 private fun SettingsScreen(
     initial: String,
-    onBack: () -> Unit,
-    onSave: (String) -> Boolean,
+    validate: (String) -> String?,
+    onDone: (String?) -> Unit,
 ) {
     var url by remember { mutableStateOf(initial) }
     var error by remember { mutableStateOf(false) }
-    val save = {
-        error = !onSave(url)
+    val shown = remember { MutableTransitionState(false).apply { targetState = true } }
+    var result by remember { mutableStateOf<String?>(null) }
+    var leaving by remember { mutableStateOf(false) }
+
+    val leave = { saved: String? ->
+        if (!leaving) {
+            leaving = true
+            result = saved
+            shown.targetState = false
+        }
     }
+    val save = {
+        val saved = validate(url)
+        error = saved == null
+        if (saved != null) leave(saved)
+    }
+    BackHandler(enabled = !leaving) { leave(null) }
+    LaunchedEffect(shown.currentState, shown.isIdle) {
+        if (leaving && shown.isIdle && !shown.currentState) onDone(result)
+    }
+
+    val transition = rememberTransition(shown, label = "settings")
+    val p by transition.animateFloat(
+        transitionSpec = {
+            if (targetState) spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow) else tween(200)
+        },
+        label = "settings-progress",
+    ) { if (it) 1f else 0f }
+    val bar by transition.animateFloat(
+        transitionSpec = { tween(if (targetState) 320 else 160) },
+        label = "settings-bar",
+    ) { if (it) 1f else 0f }
+
     ImmersiveLightBackground {
         Column(
             modifier =
@@ -101,9 +154,13 @@ private fun SettingsScreen(
                     Modifier
                         .fillMaxWidth()
                         .height(RsSpace.bar)
-                        .padding(horizontal = 2.dp),
+                        .padding(horizontal = 2.dp)
+                        .graphicsLayer {
+                            alpha = bar
+                            translationX = (1f - bar) * -16.dp.toPx()
+                        },
             ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                IconButton(onClick = { leave(null) }, modifier = Modifier.size(40.dp)) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",
@@ -125,6 +182,13 @@ private fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier =
                         Modifier
+                            .graphicsLayer {
+                                alpha = p.coerceIn(0f, 1f)
+                                val s = 0.92f + 0.08f * p
+                                scaleX = s
+                                scaleY = s
+                                translationY = (1f - p) * 36.dp.toPx()
+                            }
                             .widthIn(max = 480.dp)
                             .fillMaxWidth()
                             .glassPanel(shape = RoundedCornerShape(22.dp), strong = true)
@@ -148,7 +212,11 @@ private fun SettingsScreen(
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
                     )
-                    if (error) {
+                    AnimatedVisibility(
+                        visible = error,
+                        enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                        exit = shrinkVertically(tween(160)) + fadeOut(tween(120)),
+                    ) {
                         Text("还没有主机地址。先填电脑上 Auto 的 URL。", color = RsDeny, fontSize = 13.sp)
                     }
                     Box(modifier = Modifier.align(Alignment.End)) {
