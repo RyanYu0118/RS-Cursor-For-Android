@@ -26,7 +26,7 @@ sources:
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
     title: Pinned + row actions through Cursor's services
-generated: { by: agent, at: 2026-09-27T10:00:00Z }
+generated: { by: agent, at: 2026-09-27T10:40:00Z }
 ---
 
 # Android shell
@@ -41,8 +41,10 @@ the + menu are Compose — not a WebView.
 The shell keeps an **immersive light field** behind a **single rounded
 glass chat window** (transcript + composer). The top bar and session rail
 stay compact and flat — closer to the [Web](web.md) layout — without their
-own glass cards. Page changes, rail open/close, and transcript rows use
-short fade/slide transitions; row gaps and the 48dp title bar are tightened
+own glass cards. Page changes and transcript rows use short fade/slide transitions. Closing
+the rail animates its width (260ms), so the chat pane grows leftward into
+the space instead of jumping when the slot disappears; opening does the
+reverse. Row gaps and the 48dp title bar are tightened
 for a denser pad layout. Assistant and user prose render as **Markdown**,
 not raw source.
 
