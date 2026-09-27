@@ -2309,6 +2309,19 @@ if (existsSync(SRC)) {
   }
 }
 
+// Cursor's icon names ship front-coded in its bundle; Edit Icon from a phone
+// offers exactly what the picker accepts, featured icons first.
+{
+  const { decodeIconCatalog } = await import('../src/core/cursor-sidebar.mjs');
+  const bundle =
+    'function sS_(t){const e=[];let n="";for(const i of t.split(" "))n=n.slice(0,Number.parseInt(i[0],36))+i.slice(1),e.push(n);return e}' +
+    ';pCd="0code 0rocket 6-filled 0star 4-legacy",MJe=sS_(pCd),' +
+    'RCh=[{id:"default",label:"Default"},{id:"brand",label:"Brand"}],E9t=["star","code"],d2r=1';
+  const icons = decodeIconCatalog(bundle);
+  if (JSON.stringify(icons) === JSON.stringify(['star', 'code', 'rocket'])) ok('sidebar: icon catalog decoded');
+  else fail(`icon catalog decoded wrong: ${JSON.stringify(icons)}`);
+}
+
 // Mermaid and KaTeX ship as vendor assets; enrich.js paints them after markdown.
 {
   const server = readFileSync(join(ROOT, 'src/server/index.mjs'), 'utf8');

@@ -35,9 +35,9 @@ function readKey(key) {
 }
 
 /**
- * Pinned as Cursor's window last showed it. The disk only knows some pins
- * (`projectAppearance`), so while a window answers, its list wins; the disk
- * guess is for when Cursor is down.
+ * Pinned as Cursor's pin store last reported it. The disk only knows some
+ * pins (`projectAppearance`), so while a window answers, its list wins; the
+ * disk guess is for when Cursor is down.
  */
 const LIVE_PINNED_TTL_MS = 60_000;
 let livePinned = { ids: null, names: new Map(), at: 0 };
@@ -55,7 +55,7 @@ export async function refreshLivePinned(opts) {
   return changed;
 }
 
-/** Poll the window so a pin made at the computer reaches the phone. */
+/** Poll the pin store so a pin made at the computer reaches the phone. */
 export function watchLivePinned(onChange, { everyMs = 8_000 } = {}) {
   let running = false;
   const tick = async () => {

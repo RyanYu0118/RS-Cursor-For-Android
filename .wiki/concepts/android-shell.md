@@ -25,8 +25,8 @@ sources:
     title: Host URL settings
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
-    title: Live Pinned read + sidebar menu presses
-generated: { by: agent, at: 2026-09-27T03:05:00Z }
+    title: Pinned + row actions through Cursor's services
+generated: { by: agent, at: 2026-09-27T05:30:00Z }
 ---
 
 # Android shell
@@ -54,38 +54,49 @@ Cursor Agents does the same). Rows come from the host `sidebar` snapshot
 (per-workspace desktop chats), not a flat recent pool; empty drafts stay out
 of the lists.
 
-**Pinned is read from Cursor's window**, not the database. Only some pins
-carry `projectAppearance` on disk, and writing that field never reaches a
-running window, so the disk guess showed two chats where the computer showed
-six. The host ([`cursor-sidebar.mjs`](/src/core/cursor-sidebar.mjs)) reads the
-`__pinned_agents__` group over the debug port every 8 s — rows by
-`data-sidebar-item-key="row:<id>"`, in Cursor's order — and broadcasts
-`projects` when it changes. Past six pins Cursor shows five and **More**;
-the reader presses More once (it has no "Less"). With no window answering for
-a minute, the snapshot falls back to the `projectAppearance` guess.
+**Pinned and every row action go through the Agents window's own
+services, never its UI.** Pressing the row menu worked but opened menus on
+the computer's screen and needed Cursor in front; now nothing is clicked and
+Cursor can stay minimised. The host
+([`cursor-sidebar.mjs`](/src/core/cursor-sidebar.mjs)) runs a script beside
+the workbench's service registry (`CursorCdp.inAgentsWindow`, the same
+captured `__autoData` the model switch uses) and looks services up by their
+registered id, not Cursor's minified class names:
+
+| Action | Service call (mirrors the sidebar's own handler) |
+| --- | --- |
+| Pinned list | `cloudAgentRepositoryService.pinnedAgentIds` → headers from `agentRepositoryService`, archived dropped, newest `lastUpdatedAt` first (Cursor's order) |
+| Pin / Unpin | `cloudAgentRepositoryService.pinAgent` / `unpinAgent` |
+| Archive | `agentRepositoryService.archiveAgent(id, {cleanupWorktrees})` + `removeArchivedPinnedAgentIds` — no undo toast |
+| Mark as (Un)read | `markAgentUnread` / `markAgentRead` by `hasUnreadMessages` |
+| Fork | `duplicateAgent` — the fork is not opened on the computer |
+| Rename | header name + `composerDataHandle.setData('name')` + `setAllComposersData` + `composerService.renameComposer` + persist/save (rolled back on failure); cloud chats `renameCloudAgent` |
+| Edit Icon | header `projectAppearance` + `updateComposerDataAsync` + `setAllComposersData` + `saveComposers`; cloud chats `updateCloudAgentAppearance` |
+| Move to | `glassAgentMigrationService.getMigrationTargetsForAgent` / `migrateAgent` |
+| Copy | Agent ID = id; Branch = tracked repos' active branches; Transcript = the chat's bubbles as `## User` / `## Assistant` markdown — returned to the phone, the computer's clipboard untouched |
+
+The Pinned list is re-read every 8 s (about 30 ms) and `projects` is
+broadcast when it changes; cloud pins with no header are skipped, as in
+Cursor. With no window answering for a minute, the snapshot falls back to the
+`projectAppearance` guess on disk.
 
 Tapping an Auto session attaches; tapping a desktop-only chat sends
 `desktop.continue`. Repo **+** starts `session.create` in that folder.
 Long-press a chat (or Pinned row) for Cursor's own row menu, in its order:
 **Pin/Unpin**, **Rename**, **Edit Icon**, **Mark as Unread**, **Fork**,
-**Move to ›**, **Copy ›**, **Archive**. Every item is pressed through that
-row's menu in Cursor's sidebar (a Base UI popup: it selects on pointer up, so
-a bare `click()` does nothing; submenus open on hover).
+**Move to ›**, **Copy ›**, **Archive**.
 
-- **Rename** opens a dialog; the host presses Rename, fills Cursor's inline
-  field and presses Enter.
-- **Edit Icon** mirrors Cursor's picker (`desktop.chat.icons`): ten colour
-  swatches (`aria-pressed`), icon search, icon names (`aria-selected`).
-  Choosing an icon closes Cursor's picker, so the host re-reads it. A colour
-  only sticks once the chat has an icon.
-- **Move to ›** is read live when opened (`desktop.chat.menu`, e.g. Cloud ·
-  repo); **Copy ›** is Agent ID / Branch / Transcript — Cursor copies to the
-  computer's clipboard, the host takes the words, puts the old clipboard
-  back, and the phone gets them on its own clipboard.
+- **Edit Icon** (`desktop.chat.icons`) offers Cursor's ten colours and its
+  icon catalog, decoded once from the installed `workbench.glass.main.js`
+  (front-coded names, "legacy" / "filled" dropped, featured icons first);
+  search filters by words. An appearance is always icon + colour, so a colour
+  picked before any icon waits on the host until one is chosen. `clear`
+  removes it.
+- **Move to ›** is read when opened (`desktop.chat.menu` with `sub: "Move
+  to"`); the target is matched by id, "label detail", or label.
 - An Auto-only session (no Cursor chat) offers only Archive.
 
-A chat Cursor's sidebar is not showing (its repo folded past the first rows)
-answers with an error rather than a silent database write; the
+A chat the Agents window does not know answers with an error; the
 `composerHeaders` write is only used for Pin / Unpin / Archive when no window
 answers at all. While a session is `busy` / `starting`, that row (and
 its Pinned twin) shows a spinner left of the title and the same left→right

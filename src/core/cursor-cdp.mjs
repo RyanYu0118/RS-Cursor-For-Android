@@ -1293,11 +1293,32 @@ export class CursorCdp {
     );
   }
 
+  /**
+   * Run an expression beside the Agents window's own services — the pin
+   * store, the agent repository, composer data. Nothing is clicked and
+   * nothing comes forward. An expression answers `{ status: 'no-services' }`
+   * to pass the turn to the next window.
+   */
+  async inAgentsWindow(expression) {
+    return this.#withComposer(
+      async (window) => {
+        const value = await window.evaluate(expression);
+        return value?.status === 'no-services'
+          ? { status: 'unknown-thread', reason: 'no window has the Agents services' }
+          : value;
+      },
+      { prefer: /Agents/i },
+    );
+  }
+
   /** Run something in a window that has handed over its chat service. */
-  async #withComposer(work) {
+  async #withComposer(work, { prefer = null } = {}) {
     let targets;
     try {
       targets = (await this.listTargets()).filter(isWindow);
+      if (prefer) {
+        targets.sort((a, b) => Number(prefer.test(b.title || '')) - Number(prefer.test(a.title || '')));
+      }
     } catch (err) {
       return { status: 'no-cdp', reason: err.message };
     }

@@ -24,17 +24,20 @@ import { listProjects, workspaceIdFor, foldersByWorkspaceId } from '../core/proj
 import { refreshLivePinned, sidebarSnapshot, watchLivePinned } from '../core/glass-sidebar.mjs';
 import { pressSidebarAction, readRowMenu, renameRow, rowIcon } from '../core/cursor-sidebar.mjs';
 
-/** Turn a sidebar press Cursor could not take into words for the phone. */
+/** Turn a sidebar action Cursor could not take into words for the phone. */
 function sidebarRefusal(res, what) {
   if (res.ok) return;
-  if (res.reason === 'not-shown') {
-    throw new Error('Cursor 侧栏没有显示这条对话，先在电脑上展开它所在的仓库再试');
+  if (res.reason === 'not-found') {
+    throw new Error('Cursor 的 Agents 窗口里没有这条对话');
   }
   if (res.reason === 'no-item') {
-    throw new Error(`Cursor 的菜单里没有 ${what}（${(res.words || []).join(' / ')}）`);
+    throw new Error(`Cursor 没有 ${what} 这一项（${(res.words || []).join(' / ')}）`);
   }
-  if (res.reason === 'no-input' || res.reason === 'no-picker' || res.reason === 'no-menu') {
-    throw new Error(`Cursor 没有打开 ${what} 的输入框，稍后再试`);
+  if (res.reason === 'unsupported') {
+    throw new Error(`这条对话不支持 ${what}`);
+  }
+  if (res.reason === 'failed') {
+    throw new Error(`Cursor 没能完成 ${what}${res.error ? `：${res.error}` : ''}`);
   }
 }
 import { listDirectories } from '../core/fs-browse.mjs';
@@ -432,10 +435,11 @@ const OPS = {
   },
 
   /**
-   * Pin / unpin / archive a Cursor Agents chat. Pressed through the row's menu
-   * in Cursor's sidebar, since a running window ignores database writes; the
-   * `composerHeaders` write is only for when no window answers. Archive also
-   * archives the matching Auto session when there is one.
+   * A Cursor Agents row action (pin, rename, fork, move, copy, archive…),
+   * done through the Agents window's own services — no menu opens on the
+   * computer, so Cursor can stay in the background. A running window ignores
+   * database writes; the `composerHeaders` write is only for when no window
+   * answers. Archive also archives the matching Auto session when there is one.
    */
   async 'desktop.chat'(ws, state, msg) {
     const chatId = msg.chatId || msg.composerId;
@@ -461,6 +465,8 @@ const OPS = {
       result.archived = true;
     } else if (action === 'copy') {
       result.text = pressed.text || '';
+    } else if (action === 'fork') {
+      result.forkId = pressed.id || '';
     } else if (action === 'rename') {
       result.title = String(msg.title || '').trim();
     }
@@ -502,6 +508,7 @@ const OPS = {
       query: msg.query || '',
       color: msg.color || '',
       icon: msg.icon || '',
+      clear: Boolean(msg.clear),
     });
     sidebarRefusal(res, 'icon');
     if (!res.ok) throw new Error('Cursor 窗口不可达，读不到图标');
@@ -513,7 +520,7 @@ const OPS = {
       icons: res.icons || [],
       current: res.current || '',
     });
-    if (msg.color || msg.icon) {
+    if (msg.color || msg.icon || msg.clear) {
       await refreshLivePinned().catch(() => false);
       broadcast({ type: 'projects', projects: projectList(), sidebar: sidebarSnapshot() });
     }

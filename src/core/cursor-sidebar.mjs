@@ -1,276 +1,208 @@
 /**
- * Cursor's Agents sidebar as the window shows it, read and pressed over the
- * debug port.
+ * Cursor's Agents sidebar, read and changed through the Agents window's own
+ * services over the debug port — never by pressing its UI.
  *
- * Which chats are Pinned is not on disk where Auto can read it: only some
- * carry `projectAppearance`, and writing that field does not reach a running
- * window. The live sidebar is the truth, so Pinned is read from it and every
- * row action (Pin, Rename, Edit Icon, Fork, Move to, Copy, Archive…) is
- * pressed through the row's own menu.
+ * Pressing the row menu worked, but it opened menus on the computer's screen
+ * and needed the window in front; Cursor had to stay visible for a phone to
+ * pin a chat. The menu's handlers are thin wrappers over services the
+ * workbench already holds (`cloudAgentRepositoryService` for pins,
+ * `agentRepositoryService` for archive / unread / fork, `composerDataService`
+ * and `composerService` for names and icons, `glassAgentMigrationService` for
+ * Move to), so Auto calls those directly: nothing is clicked, nothing comes
+ * forward, and Cursor can sit minimised.
  *
- * Rows are found by `data-sidebar-item-key="row:<composerId>"` and the Pinned
- * group by `data-agent-drop-section-id="__pinned_agents__"` — data attributes,
- * not Cursor's generated classes. Menu items are found by the first line of
- * their words (the second is a shortcut or detail). The menu is a Base UI
- * popup that selects on pointer up, so a bare `click()` does nothing; the full
- * pointer sequence is dispatched. A submenu opens on hover.
+ * Services are looked up by their registered id, not by Cursor's minified
+ * class names. What each action does mirrors the sidebar's own handler for
+ * it, including the persistence steps a rename or icon change needs.
  */
-import { CursorWindow, DEFAULT_PORT } from './cursor-cdp.mjs';
-import { putText, takeText } from './clipboard.mjs';
+import { readFileSync } from 'node:fs';
+import { CursorCdp, DEFAULT_PORT } from './cursor-cdp.mjs';
 
-const DISCOVER_TIMEOUT_MS = 1500;
-
-// Past six pins Cursor shows five and a "More" row. Pressing it expands the
-// group for good (there is no "Less"), which is what reading every pin takes.
-const READ_PINNED = `(async () => {
-  const rows = document.querySelectorAll('[data-sidebar-item-key^="row:"]');
-  if (!rows.length) return null;
-  const sec = document.querySelector('[data-agent-drop-section-id="__pinned_agents__"]');
-  if (!sec) return [];
-  const label = sec.querySelector('[data-sidebar-group-label]');
-  if (label && label.getAttribute('aria-expanded') === 'false') return null;
-  const more = [...sec.querySelectorAll('*')].find((e) => e.children.length === 0 && (e.textContent || '').trim() === 'More');
-  if (more) {
-    (more.closest('[role=button],button') || more).click();
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  return [...sec.querySelectorAll('[data-sidebar-item-key^="row:"]')].map((li) => ({
-    id: li.getAttribute('data-sidebar-item-key').slice(4),
-    name: (li.innerText || '').split('\\n')[0].trim(),
-  }));
-})()`;
-
-/** Shared in-page helpers; `CHAT` and `PREFER_PINNED` are spliced in. */
-function rowScript(chatId, { preferPinned = false } = {}, body) {
-  return `(async () => {
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    const fire = (el, kinds, buttons) => {
-      const r = el.getBoundingClientRect();
-      const o = { bubbles: true, cancelable: true, composed: true, clientX: r.x + 10, clientY: r.y + r.height / 2,
-        pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons };
-      for (const k of kinds) el.dispatchEvent(new (k.startsWith('pointer') ? PointerEvent : MouseEvent)(k, o));
-    };
-    const press = (el) => {
-      fire(el, ['pointerover', 'pointerenter', 'pointermove', 'mousemove', 'pointerdown', 'mousedown'], 1);
-      fire(el, ['pointerup', 'mouseup', 'click'], 0);
-    };
-    const hover = (el) => fire(el, ['pointerover', 'pointerenter', 'pointermove', 'mouseover', 'mousemove'], 0);
-    const escape = async () => {
-      for (let i = 0; i < 3 && document.querySelector('[role=menu]'); i++) {
-        (document.activeElement || document).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
-        await sleep(120);
-      }
-    };
-    const firstLine = (el) => (el.innerText || '').split('\\n')[0].trim();
-    const menus = () => [...document.querySelectorAll('[role=menu]')];
-    const itemsOf = (menu) => [...menu.querySelectorAll('[role=menuitem],[role=menuitemradio],[role=menuitemcheckbox]')];
-    const findItem = (menu, words) => {
-      const list = itemsOf(menu);
-      for (const w of words) {
-        const hit = list.find((e) => firstLine(e) === w);
-        if (hit) return hit;
-      }
-      return null;
-    };
-    const chatKey = 'row:' + ${JSON.stringify(chatId)};
-    const pinSec = () => document.querySelector('[data-agent-drop-section-id="__pinned_agents__"]');
-    const row = () => {
-      const rows = [...document.querySelectorAll('[data-sidebar-item-key="' + chatKey + '"]')];
-      const inPin = rows.find((e) => pinSec()?.contains(e));
-      const outPin = rows.find((e) => !pinSec()?.contains(e));
-      return ${preferPinned} ? inPin || outPin : outPin || inPin;
-    };
-    const openMenu = async () => {
-      const li = row();
-      const target = li.querySelector('a,button,[role=button],[tabindex]') || li;
-      const r = target.getBoundingClientRect();
-      target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true,
-        clientX: r.x + 20, clientY: r.y + r.height / 2, button: 2 }));
-      for (let i = 0; i < 10 && !menus().length; i++) await sleep(60);
-      await sleep(120);
-      return menus()[0] || null;
-    };
-    const openSub = async (menu, word) => {
-      const item = findItem(menu, [word]);
-      if (!item) return null;
-      const before = menus().length;
-      hover(item);
-      for (let i = 0; i < 10 && menus().length <= before; i++) await sleep(60);
-      await sleep(120);
-      return menus().length > before ? menus().pop() : null;
-    };
-    if (!document.querySelector('[data-sidebar-item-key^="row:"]')) return { ok: false, reason: 'no-sidebar' };
-    if (!row()) return { ok: false, reason: 'not-shown' };
-    try {
-      ${body}
-    } finally {
-      await escape();
-    }
-  })()`;
-}
-
-/** Press a path of menu words: `[['Pin']]`, `[['Copy'], ['Copy Agent ID']]`. */
-function pressPathScript(chatId, path, opts) {
-  return rowScript(
-    chatId,
-    opts,
-    `let menu = await openMenu();
-    if (!menu) return { ok: false, reason: 'no-menu' };
-    const path = ${JSON.stringify(path)};
-    for (let i = 0; i < path.length - 1; i++) {
-      menu = await openSub(menu, path[i][0]);
-      if (!menu) return { ok: false, reason: 'no-item', words: [path[i][0]] };
-    }
-    const item = findItem(menu, path[path.length - 1]);
-    if (!item) return { ok: false, reason: 'no-item', words: itemsOf(menu).map(firstLine) };
-    press(item);
-    await sleep(500);
-    return { ok: true };`,
-  );
-}
-
-function readMenuScript(chatId, sub) {
-  return rowScript(
-    chatId,
-    {},
-    `let menu = await openMenu();
-    if (!menu) return { ok: false, reason: 'no-menu' };
-    const sub = ${JSON.stringify(sub || '')};
-    const list = (m) => itemsOf(m).map((e) => {
-      const lines = (e.innerText || '').split('\\n').map((s) => s.trim()).filter(Boolean);
-      return { label: lines[0] || '', detail: lines.slice(1).join(' '), sub: e.getAttribute('aria-haspopup') === 'menu',
-        disabled: e.getAttribute('aria-disabled') === 'true' };
-    });
-    if (!sub) return { ok: true, items: list(menu) };
-    const inner = await openSub(menu, sub);
-    if (!inner) return { ok: false, reason: 'no-item', words: [sub] };
-    return { ok: true, items: list(inner) };`,
-  );
-}
-
-function renameScript(chatId, title) {
-  return rowScript(
-    chatId,
-    { preferPinned: true },
-    `const menu = await openMenu();
-    const item = menu && findItem(menu, ['Rename']);
-    if (!item) return { ok: false, reason: 'no-item', words: menu ? itemsOf(menu).map(firstLine) : [] };
-    const key = row().getAttribute('data-sidebar-item-key');
-    const inPin = Boolean(pinSec()?.contains(row()));
-    press(item);
-    let input = null;
-    for (let i = 0; i < 12 && !input; i++) {
-      await sleep(60);
-      const li = [...document.querySelectorAll('[data-sidebar-item-key="' + key + '"]')].find((e) => Boolean(pinSec()?.contains(e)) === inPin);
-      input = li?.querySelector('input');
-    }
-    if (!input) return { ok: false, reason: 'no-input' };
-    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-    set.call(input, ${JSON.stringify(title)});
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-    await sleep(500);
-    return { ok: true };`,
-  );
+const cdps = new Map();
+function cdpFor(port) {
+  if (!cdps.has(port)) cdps.set(port, new CursorCdp({ port }));
+  return cdps.get(port);
 }
 
 /**
- * Open Edit Icon, optionally search, read or choose, close. Colours are the
- * `aria-pressed` swatches in its fieldset; icons are the `Icons` listbox options.
+ * The in-page half: find the services, then run one action. `op` and `args`
+ * are spliced in as JSON. Answers `{ status: 'no-services' }` in a window
+ * without the Agents services so the next window gets the turn.
  */
-function iconScript(chatId, { query = '', color = '', icon = '' } = {}) {
-  return rowScript(
-    chatId,
-    { preferPinned: true },
-    `const menu = await openMenu();
-    const item = menu && findItem(menu, ['Edit Icon']);
-    if (!item) return { ok: false, reason: 'no-item', words: menu ? itemsOf(menu).map(firstLine) : [] };
-    press(item);
-    let picker = null;
-    for (let i = 0; i < 12 && !picker; i++) {
-      await sleep(60);
-      picker = document.querySelector('[role=listbox][aria-label="Icons"]');
+function agentScript(op, args = {}) {
+  return `(async () => {
+    const op = ${JSON.stringify(op)};
+    const a = ${JSON.stringify(args)};
+    const entries = globalThis.__autoData?._instantiationService?._services?._entries;
+    if (!entries || typeof entries[Symbol.iterator] !== 'function') return { status: 'no-services' };
+    const svc = {};
+    for (const [id, v] of entries) {
+      const o = v && (v._instance || v.instance || v);
+      if (!o || typeof o !== 'object') continue;
+      try { svc[String(id)] = o; } catch {}
     }
-    if (!picker) return { ok: false, reason: 'no-picker' };
-    const panel = picker.closest('[role=menu]') || document;
-    const colors = () => [...panel.querySelectorAll('fieldset button[aria-pressed]')];
-    const query = ${JSON.stringify(query)};
-    if (query) {
-      const search = panel.querySelector('input');
-      if (search) {
-        const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-        set.call(search, query);
-        search.dispatchEvent(new Event('input', { bubbles: true }));
-        await sleep(250);
+    const repo = svc.agentRepositoryService;
+    const pins = svc.cloudAgentRepositoryService;
+    const data = svc.composerDataService;
+    if (typeof repo?.getAgentHeader !== 'function' || typeof pins?.pinAgent !== 'function') {
+      return { status: 'no-services' };
+    }
+    const val = (x) => (x && typeof x === 'object' && 'value' in x ? x.value : x);
+    const pinnedIds = () => [...(pins.pinnedAgentIds?.get?.() ?? pins._pinnedAgentIds?.value ?? [])];
+    const release = (ref) => { try { ref?.dispose?.(); } catch {} };
+    const withLoaded = (id, fn) => { const ref = repo.getAgent?.(id); try { return fn(ref); } finally { release(ref); } };
+
+    if (op === 'pinned') {
+      // What the Pinned group draws: pins that still have a header, newest first.
+      return {
+        ok: true,
+        pinned: pinnedIds()
+          .map((id) => repo.getAgentHeader(id))
+          .filter((h) => h && !val(h.isArchived))
+          .sort((x, y) => (val(y.lastUpdatedAt) || 0) - (val(x.lastUpdatedAt) || 0))
+          .map((h) => ({ id: h.id, name: String(val(h.name) || '').trim() })),
+      };
+    }
+
+    const h = repo.getAgentHeader(a.id);
+    if (!h) return { ok: false, reason: 'not-found' };
+
+    if (op === 'pin') { pins.pinAgent(a.id); return { ok: pinnedIds().includes(a.id) }; }
+    if (op === 'unpin') { pins.unpinAgent(a.id); return { ok: !pinnedIds().includes(a.id) }; }
+
+    if (op === 'archive') {
+      await repo.archiveAgent(a.id, { closePullRequest: false, cleanupWorktrees: true });
+      pins.removeArchivedPinnedAgentIds?.([a.id]);
+      return { ok: true };
+    }
+
+    if (op === 'unread') {
+      const unread = Boolean(val(h.hasUnreadMessages));
+      if (unread) await repo.markAgentRead(a.id);
+      else await repo.markAgentUnread(a.id);
+      return { ok: true, unread: !unread };
+    }
+
+    if (op === 'fork') {
+      const ref = await repo.duplicateAgent(a.id);
+      const id = ref?.header?.id;
+      release(ref);
+      return id ? { ok: true, id } : { ok: false, reason: 'failed' };
+    }
+
+    if (op === 'rename') {
+      const name = String(a.title || '');
+      if (h.source === 'cloud') {
+        const done = await pins.renameCloudAgent({ agentId: a.id, newName: name });
+        return done ? { ok: true } : { ok: false, reason: 'failed' };
       }
+      if (h.source !== 'local') return { ok: false, reason: 'unsupported' };
+      const before = String(val(h.name) || '');
+      const apply = (value) => {
+        h.name?.set?.(value);
+        withLoaded(a.id, (ref) => {
+          if (ref && ref.header !== h) ref.header?.name?.set?.(value);
+          ref?.composerDataHandle?.setData('name', value);
+        });
+        data.setAllComposersData('allComposers', (c) => c.composerId === a.id, { name: value });
+      };
+      apply(name);
+      try {
+        const host = svc.cursorAgentHostEnablementService?.isCursorAgentHostEnabled?.() === true;
+        if (host && typeof svc.agentHostProviderService?.setSessionTitle === 'function') {
+          await svc.agentHostProviderService.setSessionTitle({ sessionId: a.id, title: name });
+        } else {
+          await svc.composerService.renameComposer(a.id, name, { throwOnFailure: true });
+          await data.manuallyPersistComposerOrThrow(a.id);
+          await data.saveComposers();
+        }
+      } catch (err) {
+        apply(before);
+        return { ok: false, reason: 'failed', error: String(err?.message || err) };
+      }
+      return { ok: true };
     }
-    const color = ${JSON.stringify(color)};
-    const icon = ${JSON.stringify(icon)};
-    if (color) {
-      const b = colors().find((e) => (e.getAttribute('aria-label') || e.innerText || '').trim() === color);
-      if (!b) return { ok: false, reason: 'no-item', words: colors().map((e) => e.getAttribute('aria-label')) };
-      press(b);
-      await sleep(250);
+
+    if (op === 'appearance') {
+      const current = val(h.projectAppearance) || null;
+      if (!('appearance' in a)) return { ok: true, current };
+      const next = a.appearance || undefined;
+      if (h.source === 'cloud') {
+        if (next) pins.updateCloudAgentAppearance(a.id, next);
+        else pins.clearCloudAgentAppearance(a.id);
+        return { ok: true, current: next || null };
+      }
+      if (h.source !== 'local') return { ok: false, reason: 'unsupported' };
+      h.projectAppearance?.set?.(next);
+      withLoaded(a.id, (ref) => ref?.composerDataHandle?.setData('projectAppearance', next));
+      await data.updateComposerDataAsync(a.id, (set) => set('projectAppearance', next));
+      data.setAllComposersData('allComposers', (c) => c.composerId === a.id, { projectAppearance: next });
+      await data.saveComposers();
+      return { ok: true, current: next || null };
     }
-    if (icon) {
-      const o = [...picker.querySelectorAll('[role=option]')].find((e) => (e.getAttribute('aria-label') || e.innerText || '').trim() === icon);
-      if (!o) return { ok: false, reason: 'no-item', words: [icon] };
-      press(o);
-      await sleep(250);
+
+    if (op === 'move-targets' || op === 'move') {
+      const mig = svc.glassAgentMigrationService;
+      if (typeof mig?.getMigrationTargetsForAgent !== 'function') return { ok: false, reason: 'unsupported' };
+      const list = mig.getMigrationTargetsForAgent(h) || [];
+      if (op === 'move-targets') {
+        return {
+          ok: true,
+          items: list.map((t) => ({ id: t.id, label: t.label || t.id, detail: t.description || '', sub: false,
+            disabled: Boolean(t.disabled || t.disabledReason) })),
+        };
+      }
+      const want = String(a.target || '');
+      const target =
+        list.find((t) => t.id === want) ||
+        list.find((t) => ((t.label || '') + ' ' + (t.description || '')).trim() === want) ||
+        list.find((t) => t.label === want);
+      if (!target) return { ok: false, reason: 'no-item', words: list.map((t) => t.label) };
+      await mig.migrateAgent({ sourceAgentId: a.id, targetEnvironment: target.environment,
+        targetLabel: target.label, entrypoint: 'sidebar_move_to_menu' });
+      return { ok: true, label: target.label };
     }
-    return {
-      ok: true,
-      colors: colors().map((e) => ({ label: (e.getAttribute('aria-label') || e.innerText || '').trim(), checked: e.getAttribute('aria-pressed') === 'true' })),
-      current: (picker.querySelector('[role=option][aria-selected=true]')?.getAttribute('aria-label') || '').trim(),
-      icons: [...picker.querySelectorAll('[role=option]')].slice(0, 160).map((e) => ({
-        label: (e.getAttribute('aria-label') || e.innerText || '').trim(), selected: e.getAttribute('aria-selected') === 'true' })),
-    };`,
-  );
+
+    if (op === 'copy') {
+      if (a.target === 'agent-id') return { ok: true, text: a.id };
+      if (a.target === 'branch') {
+        const names = [...new Set((val(h.trackedGitRepos) || [])
+          .map((r) => String(val(r.activeBranchName) || '').trim()).filter(Boolean))];
+        return names.length ? { ok: true, text: names.join(', ') } : { ok: false, reason: 'no-item', words: ['Copy Branch'] };
+      }
+      if (a.target === 'transcript') {
+        const ref = repo.getAgent?.(a.id) ?? (await repo.loadAgent(a.id));
+        try {
+          const heads = ref.composerDataHandle.data.fullConversationHeadersOnly ?? [];
+          await ref.ensureConversationBodies?.(heads.map((x) => x.bubbleId));
+          const d = ref.composerDataHandle.data;
+          const out = [];
+          const title = String(d.name || '').trim();
+          if (title) out.push('# ' + title + '\\n\\n');
+          for (const x of d.fullConversationHeadersOnly ?? []) {
+            const b = d.conversationMap?.[x.bubbleId];
+            const text = String(b?.text || '').trim();
+            const type = b?.type ?? x.type;
+            if (!text || (type !== 1 && type !== 2)) continue;
+            out.push('## ' + (type === 1 ? 'User' : 'Assistant') + '\\n\\n' + text + '\\n\\n');
+          }
+          return { ok: true, text: out.join('').trimEnd() };
+        } finally {
+          release(ref);
+        }
+      }
+      return { ok: false, reason: 'no-item', words: ['Copy Agent ID', 'Copy Branch', 'Copy Transcript'] };
+    }
+
+    return { ok: false, reason: 'unsupported' };
+  })()`;
 }
 
-async function pageTargets(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json`, {
-    signal: AbortSignal.timeout(DISCOVER_TIMEOUT_MS),
-  });
-  if (!res.ok) throw new Error(`the debug port answered HTTP ${res.status}`);
-  const list = await res.json();
-  // The Agents window first: it is the one that carries the sidebar.
-  return list
-    .filter((t) => t.type === 'page' && t.webSocketDebuggerUrl)
-    .sort((a, b) => Number(/Agents/i.test(b.title)) - Number(/Agents/i.test(a.title)));
-}
-
-async function firstAnswer(port, script, accept) {
-  let targets;
-  try {
-    targets = await pageTargets(port);
-  } catch {
-    return null;
-  }
-  for (const target of targets) {
-    let win;
-    try {
-      win = await CursorWindow.open(target);
-      const value = await win.evaluate(script);
-      if (accept(value)) return value;
-    } catch {
-      /* next window */
-    } finally {
-      win?.close();
-    }
-  }
-  return null;
-}
-
-/** Run a row script in whichever window shows the sidebar. */
-async function onRow(script, port) {
-  let lastMiss = null;
-  const hit = await firstAnswer(port, script, (v) => {
-    if (v?.ok) return true;
-    if (v && v.reason !== 'no-sidebar') lastMiss = v;
-    return false;
-  });
-  return hit || lastMiss || { ok: false, reason: 'no-cdp' };
+/** Run one action in the Agents window. `no-cdp` when no window could. */
+async function run(op, args, port = DEFAULT_PORT) {
+  const res = await cdpFor(port).inAgentsWindow(agentScript(op, args));
+  if (res && typeof res.ok === 'boolean') return res;
+  return { ok: false, reason: 'no-cdp', error: res?.reason };
 }
 
 function checkId(chatId) {
@@ -278,78 +210,162 @@ function checkId(chatId) {
 }
 
 /**
- * The Pinned group as the window shows it, in its order.
- * @returns {Promise<{id: string, name: string}[] | null>} null when no window
- *   is showing the sidebar (Cursor down, no debug port, group collapsed).
+ * The Pinned group as the window draws it, in its order.
+ * @returns {Promise<{id: string, name: string}[] | null>} null when no window answers
  */
 export async function readLivePinned({ port = DEFAULT_PORT } = {}) {
-  return firstAnswer(port, READ_PINNED, (v) => Array.isArray(v));
+  const res = await run('pinned', {}, port);
+  return res.ok ? res.pinned : null;
 }
 
-/** Menu words for each action; the first that exists is pressed. */
-export const ROW_ACTIONS = {
-  pin: [['Pin']],
-  unpin: [['Unpin']],
-  archive: [['Archive']],
-  unread: [['Mark as Unread', 'Mark as Read']],
-  fork: [['Fork']],
-};
-
-export const COPY_ITEMS = {
-  'agent-id': 'Copy Agent ID',
-  branch: 'Copy Branch',
-  transcript: 'Copy Transcript',
-};
+export const ROW_ACTIONS = ['pin', 'unpin', 'archive', 'unread', 'fork', 'move', 'copy'];
+export const COPY_ITEMS = { 'agent-id': 'Copy Agent ID', branch: 'Copy Branch', transcript: 'Copy Transcript' };
 
 /**
- * Press a row action in Cursor's sidebar.
- * @param {string} action  a key of ROW_ACTIONS, or `move` / `copy` with `target`
- * @returns {Promise<{ ok: boolean, reason?: string, words?: string[], text?: string }>}
+ * Do a row action through Cursor's services.
+ * @param {string} action  one of ROW_ACTIONS; `move` / `copy` take `target`
+ * @returns {Promise<{ ok: boolean, reason?: string, words?: string[], text?: string, id?: string }>}
  *   reason `no-cdp` when no window answered at all.
  */
 export async function pressSidebarAction(chatId, action, { port = DEFAULT_PORT, target = '' } = {}) {
   checkId(chatId);
-  let path = ROW_ACTIONS[action];
-  if (action === 'move') path = [['Move to'], [String(target)]];
-  if (action === 'copy') {
-    const word = COPY_ITEMS[target] || String(target);
-    path = [['Copy'], [word]];
-  }
-  if (!path) throw new Error(`Unknown sidebar action ${action}`);
-  const script = pressPathScript(chatId, path, { preferPinned: action === 'unpin' });
-  if (action !== 'copy') return onRow(script, port);
-  // Copy lands on the computer's clipboard; bring the words back and put the
-  // clipboard back the way it was.
-  const held = await takeText().catch(() => '');
-  const res = await onRow(script, port);
-  if (!res.ok) return res;
-  await new Promise((r) => setTimeout(r, 250));
-  const text = await takeText().catch(() => '');
-  await putText(held).catch(() => {});
-  return { ...res, text };
+  if (!ROW_ACTIONS.includes(action)) throw new Error(`Unknown sidebar action ${action}`);
+  return run(action, { id: chatId, target: String(target || '') }, port);
 }
 
-/** What a row's menu (or one of its submenus) offers right now. */
+/**
+ * What a row's menu offers. Only "Move to" varies by chat; the rest is
+ * Cursor's fixed list, answered here without asking the window.
+ */
 export async function readRowMenu(chatId, { sub = '', port = DEFAULT_PORT } = {}) {
   checkId(chatId);
-  return onRow(readMenuScript(chatId, sub), port);
+  if (/^move/i.test(sub)) return run('move-targets', { id: chatId }, port);
+  if (/^copy/i.test(sub)) {
+    return { ok: true, items: Object.values(COPY_ITEMS).map((label) => ({ label, detail: '', sub: false, disabled: false })) };
+  }
+  const items = ['Pin', 'Rename', 'Edit Icon', 'Mark as Unread', 'Fork', 'Move to', 'Copy', 'Archive'];
+  return { ok: true, items: items.map((label) => ({ label, detail: '', sub: label === 'Move to' || label === 'Copy', disabled: false })) };
 }
 
 export async function renameRow(chatId, title, { port = DEFAULT_PORT } = {}) {
   checkId(chatId);
   const name = String(title || '').trim();
   if (!name) throw new Error('title required');
-  return onRow(renameScript(chatId, name), port);
+  return run('rename', { id: chatId, title: name }, port);
 }
 
+/** Cursor's icon colours, as its picker lists them. */
+export const ICON_COLORS = [
+  ['default', 'Default'],
+  ['green', 'Green'],
+  ['cyan', 'Cyan'],
+  ['blue', 'Blue'],
+  ['purple', 'Purple'],
+  ['magenta', 'Magenta'],
+  ['orange', 'Orange'],
+  ['yellow', 'Yellow'],
+  ['red', 'Red'],
+  ['brand', 'Brand'],
+];
+
+// The picker's first screen, used when the installed bundle cannot be read.
+const FEATURED_ICONS = [
+  'code', 'terminal', 'bug', 'git-branch', 'brackets-curly', 'chip', 'folder', 'book-open', 'file-text',
+  'files', 'library', 'globe', 'browser', 'link', 'chat-bubbles', 'envelope', 'megaphone', 'paperplane',
+  'briefcase', 'calendar', 'board-kanban', 'list-todo', 'target', 'flag', 'database', 'chart-bars',
+  'graph-line', 'table', 'atom', 'beaker', 'microscope', 'brain', 'palette', 'brush', 'camera', 'image',
+  'music', 'magic-wand', 'cloud', 'server', 'shield', 'lightning', 'rocket', 'sparkle', 'star', 'moon',
+  'heart', 'smiley-happy',
+];
+
+let iconCatalog = null;
+
 /**
- * Read the Edit Icon picker (optionally filtered), or choose a colour / icon.
- * @returns {Promise<{ ok: boolean, colors?: {label, checked}[], icons?: {label, selected}[] }>}
+ * Every icon name the picker accepts, read once from the installed Agents
+ * bundle: the names ship front-coded (each entry keeps a base-36 count of
+ * the previous name's characters), and the picker drops "legacy" and
+ * "filled" variants. Featured icons come first, as in Cursor.
  */
-export async function rowIcon(chatId, { query = '', color = '', icon = '', port = DEFAULT_PORT } = {}) {
+export function decodeIconCatalog(source) {
+  const decoder = /function (\w+)\(t\)\{const e=\[\];let n="";for\(const i of t\.split\(" "\)\)n=n\.slice\(0,Number\.parseInt\(i\[0\],36\)\)\+i\.slice\(1\),e\.push\(n\)/.exec(source);
+  if (!decoder) return null;
+  const call = new RegExp(`[,;\\s]\\w+=${decoder[1]}\\((\\w+)\\)`).exec(source);
+  if (!call) return null;
+  const literal = new RegExp(`[,;\\s]${call[1]}="([^"]*)"`).exec(source);
+  if (!literal) return null;
+  const names = [];
+  let prev = '';
+  for (const part of literal[1].split(' ')) {
+    prev = prev.slice(0, Number.parseInt(part[0], 36)) + part.slice(1);
+    names.push(prev);
+  }
+  const usable = names.filter((n) => !n.toLowerCase().includes('legacy') && !n.includes('filled'));
+  const featured = /label:"Brand"\}\],\w+=\[([^\]]*)\]/.exec(source);
+  const first = featured ? [...featured[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]) : FEATURED_ICONS;
+  const set = new Set(usable);
+  return [...first.filter((n) => set.has(n)), ...usable.filter((n) => !first.includes(n))];
+}
+
+async function loadIconCatalog(port) {
+  if (iconCatalog) return iconCatalog;
+  try {
+    const targets = await cdpFor(port).listTargets();
+    const glass = targets.find((t) => /workbench/i.test(t.url || '') && /Agents/i.test(t.title || '')) ||
+      targets.find((t) => /workbench/i.test(t.url || ''));
+    let file = decodeURIComponent(String(glass?.url || '').replace('vscode-file://vscode-app/', ''));
+    if (/^\/[A-Za-z]:/.test(file)) file = file.slice(1);
+    const out = file.indexOf('/out/');
+    if (out >= 0) {
+      const bundle = `${file.slice(0, out)}/out/vs/workbench/workbench.glass.main.js`;
+      iconCatalog = decodeIconCatalog(readFileSync(bundle, 'utf8'));
+    }
+  } catch {
+    iconCatalog = null;
+  }
+  return iconCatalog || FEATURED_ICONS;
+}
+
+// A colour picked before any icon waits here, as Cursor's picker keeps it
+// until an icon is chosen — an appearance is always both.
+const pendingColor = new Map();
+
+/**
+ * Read a chat's icon and the choices (optionally searched), set a colour /
+ * icon, or `clear` it back to none. Colours and icons are named by their
+ * labels; icon labels are Cursor's icon names.
+ * @returns {Promise<{ ok: boolean, colors?: {label, checked}[], icons?: {label, selected}[], current?: string }>}
+ */
+export async function rowIcon(chatId, { query = '', color = '', icon = '', clear = false, port = DEFAULT_PORT } = {}) {
   checkId(chatId);
-  const res = await onRow(iconScript(chatId, { query, color, icon }), port);
-  if (!res.ok || (!color && !icon)) return res;
-  // Choosing an icon closes the picker, so what it said last is stale.
-  return onRow(iconScript(chatId, { query }), port);
+  let res = await run('appearance', clear ? { id: chatId, appearance: null } : { id: chatId }, port);
+  if (!res.ok) return res;
+  if (clear) pendingColor.delete(chatId);
+  const catalog = await loadIconCatalog(port);
+  let current = res.current || null;
+  if (!clear && (color || icon)) {
+    const colorId = color
+      ? ICON_COLORS.find(([id, label]) => label === color || id === color)?.[0]
+      : current?.colorId || pendingColor.get(chatId) || 'default';
+    if (!colorId) return { ok: false, reason: 'no-item', words: ICON_COLORS.map(([, label]) => label) };
+    if (icon && !catalog.includes(icon)) return { ok: false, reason: 'no-item', words: [icon] };
+    const nextIcon = icon || current?.icon;
+    if (nextIcon) {
+      res = await run('appearance', { id: chatId, appearance: { icon: nextIcon, colorId } }, port);
+      if (!res.ok) return res;
+      current = res.current;
+      pendingColor.delete(chatId);
+    } else {
+      pendingColor.set(chatId, colorId);
+    }
+  }
+  const shownColor = current?.colorId || pendingColor.get(chatId) || 'default';
+  const words = String(query).trim().toLowerCase().split(/[\s/_]+/).filter(Boolean);
+  let icons = words.length ? catalog.filter((n) => words.every((w) => n.toLowerCase().includes(w))) : catalog;
+  if (current?.icon && !words.length) icons = [current.icon, ...icons.filter((n) => n !== current.icon)];
+  return {
+    ok: true,
+    colors: ICON_COLORS.map(([id, label]) => ({ label, checked: id === shownColor })),
+    icons: icons.slice(0, 160).map((label) => ({ label, selected: label === current?.icon })),
+    current: current?.icon || '',
+  };
 }
