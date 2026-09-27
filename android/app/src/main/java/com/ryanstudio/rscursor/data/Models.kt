@@ -141,6 +141,49 @@ data class RailPinned(
     val color: String = "",
 )
 
+/** A rail row the long-press menu is acting on. */
+data class RailMenuTarget(
+    val chatId: String?,
+    val sessionId: String?,
+    val title: String,
+    val pinned: Boolean,
+)
+
+data class MenuOption(
+    val label: String,
+    val detail: String = "",
+)
+
+/** Live "Move to" submenu read from Cursor for one chat. */
+data class MenuMoveState(
+    val chatId: String,
+    val loading: Boolean = true,
+    val items: List<MenuOption> = emptyList(),
+)
+
+data class IconChoice(
+    val label: String,
+    val selected: Boolean,
+)
+
+/** Cursor's Edit Icon picker, mirrored for one chat. */
+data class IconPickerState(
+    val chatId: String,
+    val title: String,
+    val query: String = "",
+    val loading: Boolean = true,
+    val colors: List<IconChoice> = emptyList(),
+    val icons: List<IconChoice> = emptyList(),
+    val current: String = "",
+)
+
+/** One-shot message for the UI: a toast, and text to put on the phone clipboard. */
+data class UiNotice(
+    val text: String,
+    val clip: String? = null,
+    val id: Long = System.nanoTime(),
+)
+
 enum class ConnPhase {
     NoHost,
     Connecting,
@@ -170,4 +213,7 @@ data class HostUiState(
     /** How many transcript records sit above what is painted (host attach window). */
     val earlierCount: Int = 0,
     val loadingEarlier: Boolean = false,
+    val menuMove: MenuMoveState? = null,
+    val iconPicker: IconPickerState? = null,
+    val notice: UiNotice? = null,
 )

@@ -29,8 +29,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +47,8 @@ import com.ryanstudio.rscursor.data.ConnPhase
 import com.ryanstudio.rscursor.data.HostUiState
 import com.ryanstudio.rscursor.data.ImagePart
 import com.ryanstudio.rscursor.data.RailChat
+import com.ryanstudio.rscursor.data.RailMenuTarget
+import com.ryanstudio.rscursor.ui.rail.IconPickerDialog
 import com.ryanstudio.rscursor.data.RailPinned
 import com.ryanstudio.rscursor.ui.chat.QueueStrip
 import com.ryanstudio.rscursor.ui.chat.TranscriptScreen
@@ -63,11 +70,11 @@ fun AppScaffold(
     state: HostUiState,
     onOpenChat: (RailChat) -> Unit,
     onOpenPinned: (RailPinned) -> Unit,
-    onPinChat: (RailChat) -> Unit,
-    onUnpinChat: (RailChat) -> Unit,
-    onArchiveChat: (RailChat) -> Unit,
-    onUnpinPinned: (RailPinned) -> Unit,
-    onArchivePinned: (RailPinned) -> Unit,
+    onChatMenu: (RailMenuTarget, String, String?) -> Unit,
+    onLoadMoveTargets: (String) -> Unit,
+    onChatIcons: (RailMenuTarget, String, String?, String?) -> Unit,
+    onCloseIcons: () -> Unit,
+    onNoticeShown: (Long) -> Unit,
     onNewSession: () -> Unit,
     onNewInFolder: (String) -> Unit,
     onToggleRepo: (String) -> Unit,
@@ -113,11 +120,11 @@ fun AppScaffold(
                         state = state,
                         onOpenChat = onOpenChat,
                         onOpenPinned = onOpenPinned,
-                        onPinChat = onPinChat,
-                        onUnpinChat = onUnpinChat,
-                        onArchiveChat = onArchiveChat,
-                        onUnpinPinned = onUnpinPinned,
-                        onArchivePinned = onArchivePinned,
+                        onChatMenu = onChatMenu,
+                        onLoadMoveTargets = onLoadMoveTargets,
+                        onChatIcons = onChatIcons,
+                        onCloseIcons = onCloseIcons,
+                        onNoticeShown = onNoticeShown,
                         onNewSession = onNewSession,
                         onNewInFolder = onNewInFolder,
                         onToggleRepo = onToggleRepo,
@@ -150,11 +157,11 @@ private fun MainShell(
     state: HostUiState,
     onOpenChat: (RailChat) -> Unit,
     onOpenPinned: (RailPinned) -> Unit,
-    onPinChat: (RailChat) -> Unit,
-    onUnpinChat: (RailChat) -> Unit,
-    onArchiveChat: (RailChat) -> Unit,
-    onUnpinPinned: (RailPinned) -> Unit,
-    onArchivePinned: (RailPinned) -> Unit,
+    onChatMenu: (RailMenuTarget, String, String?) -> Unit,
+    onLoadMoveTargets: (String) -> Unit,
+    onChatIcons: (RailMenuTarget, String, String?, String?) -> Unit,
+    onCloseIcons: () -> Unit,
+    onNoticeShown: (Long) -> Unit,
     onNewSession: () -> Unit,
     onNewInFolder: (String) -> Unit,
     onToggleRepo: (String) -> Unit,
@@ -177,6 +184,25 @@ private fun MainShell(
     onRailOpen: (Boolean) -> Unit,
     imageUrl: (ImagePart) -> String?,
 ) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val notice = state.notice
+    LaunchedEffect(notice?.id) {
+        if (notice == null) return@LaunchedEffect
+        notice.clip?.let { clipboard.setText(AnnotatedString(it)) }
+        Toast.makeText(context, notice.text, Toast.LENGTH_SHORT).show()
+        onNoticeShown(notice.id)
+    }
+    state.iconPicker?.let { picker ->
+        val target = RailMenuTarget(chatId = picker.chatId, sessionId = null, title = picker.title, pinned = false)
+        IconPickerDialog(
+            state = picker,
+            onSearch = { q -> onChatIcons(target, q, null, null) },
+            onColor = { c -> onChatIcons(target, picker.query, c, null) },
+            onIcon = { i -> onChatIcons(target, picker.query, null, i) },
+            onDismiss = onCloseIcons,
+        )
+    }
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets.navigationBars,
@@ -234,11 +260,10 @@ private fun MainShell(
                     busyKeys = busyKeys,
                     onOpenChat = onOpenChat,
                     onOpenPinned = onOpenPinned,
-                    onPinChat = onPinChat,
-                    onUnpinChat = onUnpinChat,
-                    onArchiveChat = onArchiveChat,
-                    onUnpinPinned = onUnpinPinned,
-                    onArchivePinned = onArchivePinned,
+                    menuMove = state.menuMove,
+                    onChatMenu = onChatMenu,
+                    onLoadMoveTargets = onLoadMoveTargets,
+                    onEditIcon = { target -> onChatIcons(target, "", null, null) },
                     onNew = onNewSession,
                     onNewInFolder = onNewInFolder,
                     onToggleRepo = onToggleRepo,

@@ -11,6 +11,7 @@ import com.ryanstudio.rscursor.HostPrefs
 import com.ryanstudio.rscursor.data.HostRepository
 import com.ryanstudio.rscursor.data.HostUiState
 import com.ryanstudio.rscursor.data.LocalAttachment
+import com.ryanstudio.rscursor.data.RailMenuTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,15 +45,16 @@ class HostViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openPinned(pin: com.ryanstudio.rscursor.data.RailPinned) = repo.openPinned(pin)
 
-    fun pinChat(chat: com.ryanstudio.rscursor.data.RailChat) = repo.pinChat(chat)
+    fun chatMenu(target: RailMenuTarget, action: String, arg: String?) = repo.chatMenu(target, action, arg)
 
-    fun unpinChat(chat: com.ryanstudio.rscursor.data.RailChat) = repo.unpinChat(chat)
+    fun loadMoveTargets(chatId: String) = repo.loadMoveTargets(chatId)
 
-    fun archiveChat(chat: com.ryanstudio.rscursor.data.RailChat) = repo.archiveChat(chat)
+    fun chatIcons(target: RailMenuTarget, query: String, color: String?, icon: String?) =
+        repo.chatIcons(target, query, color, icon)
 
-    fun unpinPinned(pin: com.ryanstudio.rscursor.data.RailPinned) = repo.unpinPinned(pin)
+    fun closeIcons() = repo.closeIcons()
 
-    fun archivePinned(pin: com.ryanstudio.rscursor.data.RailPinned) = repo.archivePinned(pin)
+    fun consumeNotice(id: Long) = repo.consumeNotice(id)
 
     fun toggleRepo(folder: String) = repo.toggleRepo(folder)
 

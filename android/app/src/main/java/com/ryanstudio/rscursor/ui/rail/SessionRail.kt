@@ -54,7 +54,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ryanstudio.rscursor.data.RailBuilder
+import com.ryanstudio.rscursor.data.MenuMoveState
 import com.ryanstudio.rscursor.data.RailChat
+import com.ryanstudio.rscursor.data.RailMenuTarget
 import com.ryanstudio.rscursor.data.RailPinned
 import com.ryanstudio.rscursor.data.RailRepo
 import com.ryanstudio.rscursor.ui.theme.GleamText
@@ -77,11 +79,10 @@ fun SessionRail(
     busyKeys: Set<String> = emptySet(),
     onOpenChat: (RailChat) -> Unit,
     onOpenPinned: (RailPinned) -> Unit,
-    onPinChat: (RailChat) -> Unit,
-    onUnpinChat: (RailChat) -> Unit,
-    onArchiveChat: (RailChat) -> Unit,
-    onUnpinPinned: (RailPinned) -> Unit,
-    onArchivePinned: (RailPinned) -> Unit,
+    menuMove: MenuMoveState?,
+    onChatMenu: (RailMenuTarget, String, String?) -> Unit,
+    onLoadMoveTargets: (String) -> Unit,
+    onEditIcon: (RailMenuTarget) -> Unit,
     onNew: () -> Unit,
     onNewInFolder: (String) -> Unit,
     onToggleRepo: (String) -> Unit,
@@ -206,8 +207,17 @@ fun SessionRail(
                                 (activeDesktopThreadId.isNullOrBlank() && pin.id == activeSessionId),
                         busy = pin.id in busyKeys,
                         onClick = { onOpenPinned(pin) },
-                        onUnpin = { onUnpinPinned(pin) },
-                        onArchive = { onArchivePinned(pin) },
+                        menuContent = { open, dismiss ->
+                            ChatRowMenu(
+                                expanded = open,
+                                onDismiss = dismiss,
+                                target = RailMenuTarget(pin.id, null, pin.name, pinned = true),
+                                menuMove = menuMove,
+                                onAction = onChatMenu,
+                                onLoadMove = onLoadMoveTargets,
+                                onEditIcon = onEditIcon,
+                            )
+                        },
                     )
                 }
                 if (pinnedVisible.size > pinnedShown.size) {
@@ -278,9 +288,23 @@ fun SessionRail(
                                         chat.sessionId in busyKeys ||
                                         (!chat.chatId.isNullOrBlank() && chat.chatId in busyKeys),
                                 onClick = { onOpenChat(chat) },
-                                onPin = { onPinChat(chat) },
-                                onUnpin = { onUnpinChat(chat) },
-                                onArchive = { onArchiveChat(chat) },
+                                menuContent = { open, dismiss ->
+                                    ChatRowMenu(
+                                        expanded = open,
+                                        onDismiss = dismiss,
+                                        target =
+                                            RailMenuTarget(
+                                                chatId = chat.chatId,
+                                                sessionId = chat.sessionId,
+                                                title = chat.title,
+                                                pinned = !chat.chatId.isNullOrBlank() && chat.chatId in pinnedIds,
+                                            ),
+                                        menuMove = menuMove,
+                                        onAction = onChatMenu,
+                                        onLoadMove = onLoadMoveTargets,
+                                        onEditIcon = onEditIcon,
+                                    )
+                                },
                             )
                         }
                         if (!showAll && repo.chats.size > PreviewLimit) {
@@ -360,8 +384,7 @@ private fun PinnedRow(
     selected: Boolean,
     busy: Boolean,
     onClick: () -> Unit,
-    onUnpin: () -> Unit,
-    onArchive: () -> Unit,
+    menuContent: @Composable (Boolean, () -> Unit) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     val bg =
@@ -399,22 +422,7 @@ private fun PinnedRow(
                 Text(age, color = RsMuted, fontSize = 11.sp)
             }
         }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(
-                text = { Text("Unpin") },
-                onClick = {
-                    menu = false
-                    onUnpin()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Archive") },
-                onClick = {
-                    menu = false
-                    onArchive()
-                },
-            )
-        }
+        menuContent(menu) { menu = false }
     }
 }
 
@@ -488,9 +496,7 @@ private fun ChatRow(
     pinned: Boolean,
     busy: Boolean,
     onClick: () -> Unit,
-    onPin: () -> Unit,
-    onUnpin: () -> Unit,
-    onArchive: () -> Unit,
+    menuContent: @Composable (Boolean, () -> Unit) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     val bg =
@@ -498,7 +504,6 @@ private fun ChatRow(
             selected -> Color.White.copy(alpha = 0.12f)
             else -> Color.Transparent
         }
-    val canPin = !chat.chatId.isNullOrBlank()
     val title = chat.title.ifBlank { "Untitled chat" }
     Box {
         Row(
@@ -533,24 +538,7 @@ private fun ChatRow(
                 Text(age, color = RsMuted, fontSize = 11.sp)
             }
         }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            if (canPin) {
-                DropdownMenuItem(
-                    text = { Text(if (pinned) "Unpin" else "Pin") },
-                    onClick = {
-                        menu = false
-                        if (pinned) onUnpin() else onPin()
-                    },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text("Archive") },
-                onClick = {
-                    menu = false
-                    onArchive()
-                },
-            )
-        }
+        menuContent(menu) { menu = false }
     }
 }
 

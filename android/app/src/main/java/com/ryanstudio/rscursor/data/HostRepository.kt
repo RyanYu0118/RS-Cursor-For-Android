@@ -145,50 +145,69 @@ class HostRepository {
         if (pin.folder.isNotBlank()) createSession(pin.folder) else createSession()
     }
 
-    /** Pin / unpin / archive a rail chat (Cursor Agents + matching Auto session). */
-    fun railChatAction(chatId: String?, sessionId: String?, action: String) {
+    /**
+     * A row-menu action pressed in Cursor's own sidebar menu: pin, unpin,
+     * rename (arg = title), unread, fork, move (arg = target), copy
+     * (arg = agent-id / branch / transcript), archive. An Auto-only session
+     * (no Cursor chat) can only be archived.
+     */
+    fun chatMenu(target: RailMenuTarget, action: String, arg: String? = null) {
         val act = action.lowercase()
-        if (!chatId.isNullOrBlank()) {
-            send(
-                JSONObject()
-                    .put("op", "desktop.chat")
-                    .put("chatId", chatId)
-                    .put("action", act),
-            )
+        val chatId = target.chatId
+        if (chatId.isNullOrBlank()) {
+            val sid = target.sessionId
+            if (act == "archive" && !sid.isNullOrBlank()) {
+                send(JSONObject().put("op", "session.archive").put("sessionId", sid))
+            }
             return
         }
-        if (!sessionId.isNullOrBlank() && act == "archive") {
-            send(JSONObject().put("op", "session.archive").put("sessionId", sessionId))
+        val op =
+            JSONObject()
+                .put("op", "desktop.chat")
+                .put("chatId", chatId)
+                .put("action", act)
+        when (act) {
+            "rename" -> op.put("title", arg.orEmpty())
+            "move", "copy" -> op.put("target", arg.orEmpty())
         }
+        send(op)
     }
 
-    fun pinChat(chat: RailChat) {
-        val chatId = chat.chatId ?: return
-        railChatAction(chatId, chat.sessionId, "pin")
+    fun loadMoveTargets(chatId: String) {
+        publish(_state.copy(menuMove = MenuMoveState(chatId = chatId)))
+        send(
+            JSONObject()
+                .put("op", "desktop.chat.menu")
+                .put("chatId", chatId)
+                .put("sub", "Move to"),
+        )
     }
 
-    fun unpinChat(chat: RailChat) {
-        val chatId = chat.chatId ?: return
-        railChatAction(chatId, chat.sessionId, "unpin")
+    /** Open / search Cursor's Edit Icon picker, or choose a colour or icon in it. */
+    fun chatIcons(target: RailMenuTarget, query: String = "", color: String? = null, icon: String? = null) {
+        val chatId = target.chatId ?: return
+        val prev = _state.iconPicker?.takeIf { it.chatId == chatId }
+        publish(
+            _state.copy(
+                iconPicker =
+                    (prev ?: IconPickerState(chatId = chatId, title = target.title))
+                        .copy(query = query, loading = true),
+            ),
+        )
+        val op =
+            JSONObject()
+                .put("op", "desktop.chat.icons")
+                .put("chatId", chatId)
+                .put("query", query)
+        if (!color.isNullOrBlank()) op.put("color", color)
+        if (!icon.isNullOrBlank()) op.put("icon", icon)
+        send(op)
     }
 
-    fun archiveChat(chat: RailChat) {
-        val chatId = chat.chatId
-        if (!chatId.isNullOrBlank()) {
-            railChatAction(chatId, chat.sessionId, "archive")
-            return
-        }
-        val sid = chat.sessionId ?: return
-        send(JSONObject().put("op", "session.archive").put("sessionId", sid))
-    }
+    fun closeIcons() = publish(_state.copy(iconPicker = null))
 
-    fun pinPinned(pin: RailPinned) = railChatAction(pin.id, null, "pin")
-
-    fun unpinPinned(pin: RailPinned) = railChatAction(pin.id, null, "unpin")
-
-    fun archivePinned(pin: RailPinned) {
-        val known = _state.sessions.find { it.desktopThreadId == pin.id }
-        railChatAction(pin.id, known?.id, "archive")
+    fun consumeNotice(id: Long) {
+        if (_state.notice?.id == id) publish(_state.copy(notice = null))
     }
 
     fun setDraft(text: String, claim: Boolean = true, force: Boolean = false) {
@@ -543,6 +562,60 @@ class HostRepository {
                 if (msg.optBoolean("archived", false) && !stillThere && nextId != null) {
                     attach(nextId)
                 }
+                val notice =
+                    when (msg.optString("action")) {
+                        "copy" -> {
+                            val text = msg.optString("text")
+                            if (text.isBlank()) UiNotice("Cursor 没有复制出内容")
+                            else UiNotice("已复制到平板剪贴板", clip = text)
+                        }
+                        "fork" -> UiNotice("已在 Cursor 里 Fork")
+                        "unread" -> UiNotice("已标记")
+                        "move" -> UiNotice("已移动")
+                        "rename" -> UiNotice("已重命名")
+                        else -> null
+                    }
+                if (notice != null) publish(_state.copy(notice = notice))
+            }
+            "desktop.chat.menu" -> {
+                val chatId = msg.optString("chatId")
+                val arr = msg.optJSONArray("items")
+                val items = ArrayList<MenuOption>()
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i) ?: continue
+                        val label = o.optString("label")
+                        if (label.isBlank() || o.optBoolean("disabled")) continue
+                        items += MenuOption(label = label, detail = o.optString("detail"))
+                    }
+                }
+                publish(_state.copy(menuMove = MenuMoveState(chatId = chatId, loading = false, items = items)))
+            }
+            "desktop.chat.icons" -> {
+                val chatId = msg.optString("chatId")
+                val prev = _state.iconPicker?.takeIf { it.chatId == chatId } ?: return
+                if (msg.optString("query") != prev.query) return
+                fun choices(key: String, flag: String): List<IconChoice> {
+                    val arr = msg.optJSONArray(key) ?: return emptyList()
+                    val out = ArrayList<IconChoice>(arr.length())
+                    for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i) ?: continue
+                        val label = o.optString("label")
+                        if (label.isNotBlank()) out += IconChoice(label, o.optBoolean(flag))
+                    }
+                    return out
+                }
+                publish(
+                    _state.copy(
+                        iconPicker =
+                            prev.copy(
+                                loading = false,
+                                colors = choices("colors", "checked"),
+                                icons = choices("icons", "selected"),
+                                current = msg.optString("current"),
+                            ),
+                    ),
+                )
             }
             "draft" -> {
                 if (msg.optString("sessionId") != _state.sessionId) return
@@ -557,7 +630,15 @@ class HostRepository {
                 publish(_state.copy(catalog = TranscriptReducer.catalogFrom(msg.optJSONObject("catalog"))))
             }
             "error" -> {
-                publish(_state.copy(banner = msg.optString("message").ifBlank { "error" }))
+                val text = msg.optString("message").ifBlank { "error" }
+                publish(
+                    _state.copy(
+                        banner = text,
+                        notice = UiNotice(text),
+                        menuMove = _state.menuMove?.copy(loading = false),
+                        iconPicker = _state.iconPicker?.copy(loading = false),
+                    ),
+                )
             }
             "host.restarting" -> {
                 publish(_state.copy(banner = "主机重启中…", reconnecting = true))

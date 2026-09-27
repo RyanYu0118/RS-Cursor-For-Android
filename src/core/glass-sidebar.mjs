@@ -77,18 +77,20 @@ function livePinnedRows() {
   if (!livePinned.ids || Date.now() - livePinned.at > LIVE_PINNED_TTL_MS) return null;
   const all = pinnedAgents({ ids: livePinned.ids });
   const byId = new Map(all.map((row) => [row.id, row]));
-  return livePinned.ids.map(
-    (id) =>
-      byId.get(id) || {
-        id,
-        name: livePinned.names.get(id) || 'Untitled chat',
-        at: 0,
-        folder: '',
-        cloud: id.startsWith('bc-'),
-        icon: 'dot',
-        color: 'orange',
-      },
-  );
+  return livePinned.ids.map((id) => {
+    const row = byId.get(id);
+    const shown = livePinned.names.get(id);
+    if (row) return shown ? { ...row, name: shown } : row;
+    return {
+      id,
+      name: shown || 'Untitled chat',
+      at: 0,
+      folder: '',
+      cloud: id.startsWith('bc-'),
+      icon: 'dot',
+      color: 'orange',
+    };
+  });
 }
 
 /**

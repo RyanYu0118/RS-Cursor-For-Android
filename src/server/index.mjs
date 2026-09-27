@@ -22,7 +22,21 @@ import { HostIdentity } from '../core/host-identity.mjs';
 import { TelegramBridge } from '../core/telegram.mjs';
 import { listProjects, workspaceIdFor, foldersByWorkspaceId } from '../core/projects.mjs';
 import { refreshLivePinned, sidebarSnapshot, watchLivePinned } from '../core/glass-sidebar.mjs';
-import { pressSidebarAction } from '../core/cursor-sidebar.mjs';
+import { pressSidebarAction, readRowMenu, renameRow, rowIcon } from '../core/cursor-sidebar.mjs';
+
+/** Turn a sidebar press Cursor could not take into words for the phone. */
+function sidebarRefusal(res, what) {
+  if (res.ok) return;
+  if (res.reason === 'not-shown') {
+    throw new Error('Cursor 侧栏没有显示这条对话，先在电脑上展开它所在的仓库再试');
+  }
+  if (res.reason === 'no-item') {
+    throw new Error(`Cursor 的菜单里没有 ${what}（${(res.words || []).join(' / ')}）`);
+  }
+  if (res.reason === 'no-input' || res.reason === 'no-picker' || res.reason === 'no-menu') {
+    throw new Error(`Cursor 没有打开 ${what} 的输入框，稍后再试`);
+  }
+}
 import { listDirectories } from '../core/fs-browse.mjs';
 import { desktopChats, recentDesktopChats } from '../core/desktop-chats.mjs';
 import {
@@ -427,25 +441,28 @@ const OPS = {
     const chatId = msg.chatId || msg.composerId;
     const action = String(msg.action || '').toLowerCase();
     if (!chatId) throw new Error('chatId required');
-    if (!['pin', 'unpin', 'archive'].includes(action)) {
-      throw new Error(`Unknown desktop.chat action ${action}`);
-    }
-    const pressed = await pressSidebarAction(chatId, action);
-    if (!pressed.ok && pressed.reason === 'not-shown') {
-      throw new Error('Cursor 侧栏没有显示这条对话，先在电脑上展开它所在的仓库再试');
-    }
-    if (!pressed.ok && pressed.reason === 'no-item') {
-      throw new Error(`Cursor 的菜单里没有 ${action}（${(pressed.words || []).join(' / ')}）`);
-    }
+    const known = ['pin', 'unpin', 'archive', 'unread', 'fork', 'move', 'copy', 'rename'];
+    if (!known.includes(action)) throw new Error(`Unknown desktop.chat action ${action}`);
+    const pressed =
+      action === 'rename'
+        ? await renameRow(chatId, msg.title)
+        : await pressSidebarAction(chatId, action, { target: msg.target });
+    sidebarRefusal(pressed, action);
     let result = { ok: true, id: chatId, via: 'cursor' };
     if (!pressed.ok) {
+      // No window answered: only the actions the database can carry fall back.
       if (action === 'pin') result = pinComposer(chatId);
       else if (action === 'unpin') result = unpinComposer(chatId);
-      else result = archiveComposer(chatId);
+      else if (action === 'archive') result = archiveComposer(chatId);
+      else throw new Error('Cursor 没有开调试端口或窗口不可达，这个操作只能在 Cursor 里完成');
     } else if (action === 'pin' || action === 'unpin') {
       result.pinned = action === 'pin';
-    } else {
+    } else if (action === 'archive') {
       result.archived = true;
+    } else if (action === 'copy') {
+      result.text = pressed.text || '';
+    } else if (action === 'rename') {
+      result.title = String(msg.title || '').trim();
     }
     await refreshLivePinned().catch(() => false);
     if (action === 'archive') {
@@ -465,6 +482,41 @@ const OPS = {
       sidebar,
       sessions: sessions.list(),
     });
+  },
+
+  /** What a row's menu (or a submenu such as "Move to") offers in Cursor now. */
+  async 'desktop.chat.menu'(ws, _state, msg) {
+    const chatId = msg.chatId;
+    if (!chatId) throw new Error('chatId required');
+    const res = await readRowMenu(chatId, { sub: msg.sub || '' });
+    sidebarRefusal(res, msg.sub || 'menu');
+    if (!res.ok) throw new Error('Cursor 窗口不可达，读不到菜单');
+    send(ws, { type: 'desktop.chat.menu', chatId, sub: msg.sub || '', items: res.items || [] });
+  },
+
+  /** Cursor's Edit Icon picker: read (optionally searched), or choose a colour / icon. */
+  async 'desktop.chat.icons'(ws, _state, msg) {
+    const chatId = msg.chatId;
+    if (!chatId) throw new Error('chatId required');
+    const res = await rowIcon(chatId, {
+      query: msg.query || '',
+      color: msg.color || '',
+      icon: msg.icon || '',
+    });
+    sidebarRefusal(res, 'icon');
+    if (!res.ok) throw new Error('Cursor 窗口不可达，读不到图标');
+    send(ws, {
+      type: 'desktop.chat.icons',
+      chatId,
+      query: msg.query || '',
+      colors: res.colors || [],
+      icons: res.icons || [],
+      current: res.current || '',
+    });
+    if (msg.color || msg.icon) {
+      await refreshLivePinned().catch(() => false);
+      broadcast({ type: 'projects', projects: projectList(), sidebar: sidebarSnapshot() });
+    }
   },
 
   async 'session.archive'(ws, state, msg) {

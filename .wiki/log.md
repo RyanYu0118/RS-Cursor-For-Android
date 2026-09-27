@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-09-27
+* **Feature**: Android long-press mirrors Cursor's full row menu — Pin/Unpin, Rename, Edit Icon (colours + icon search), Mark as Unread, Fork, Move to › (read live), Copy › (to the tablet clipboard), Archive — all pressed in Cursor's sidebar. See [Android shell](concepts/android-shell.md).
 * **Fix**: Pinned now matches the computer — read live from Cursor's sidebar over the debug port (disk only knew 2 of 6); Pin / Unpin / Archive press the row's own Cursor menu. Rail times show `mo` / `y` like Cursor. See [Android shell](concepts/android-shell.md).
 
 ## 2026-09-26

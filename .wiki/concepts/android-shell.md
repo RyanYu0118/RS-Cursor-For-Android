@@ -26,7 +26,7 @@ sources:
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
     title: Live Pinned read + sidebar menu presses
-generated: { by: agent, at: 2026-09-27T02:55:00Z }
+generated: { by: agent, at: 2026-09-27T03:05:00Z }
 ---
 
 # Android shell
@@ -66,12 +66,28 @@ a minute, the snapshot falls back to the `projectAppearance` guess.
 
 Tapping an Auto session attaches; tapping a desktop-only chat sends
 `desktop.continue`. Repo **+** starts `session.create` in that folder.
-Long-press a chat (or Pinned row) for **Pin** / **Unpin** / **Archive** —
-pressed through that row's own menu in Cursor's sidebar (a Base UI popup:
-it selects on pointer up, so a bare `click()` does nothing). A chat Cursor's
-sidebar is not showing (its repo folded past the first rows) answers with an
-error rather than a silent database write; the `composerHeaders` write is
-only used when no window answers at all. While a session is `busy` / `starting`, that row (and
+Long-press a chat (or Pinned row) for Cursor's own row menu, in its order:
+**Pin/Unpin**, **Rename**, **Edit Icon**, **Mark as Unread**, **Fork**,
+**Move to ›**, **Copy ›**, **Archive**. Every item is pressed through that
+row's menu in Cursor's sidebar (a Base UI popup: it selects on pointer up, so
+a bare `click()` does nothing; submenus open on hover).
+
+- **Rename** opens a dialog; the host presses Rename, fills Cursor's inline
+  field and presses Enter.
+- **Edit Icon** mirrors Cursor's picker (`desktop.chat.icons`): ten colour
+  swatches (`aria-pressed`), icon search, icon names (`aria-selected`).
+  Choosing an icon closes Cursor's picker, so the host re-reads it. A colour
+  only sticks once the chat has an icon.
+- **Move to ›** is read live when opened (`desktop.chat.menu`, e.g. Cloud ·
+  repo); **Copy ›** is Agent ID / Branch / Transcript — Cursor copies to the
+  computer's clipboard, the host takes the words, puts the old clipboard
+  back, and the phone gets them on its own clipboard.
+- An Auto-only session (no Cursor chat) offers only Archive.
+
+A chat Cursor's sidebar is not showing (its repo folded past the first rows)
+answers with an error rather than a silent database write; the
+`composerHeaders` write is only used for Pin / Unpin / Archive when no window
+answers at all. While a session is `busy` / `starting`, that row (and
 its Pinned twin) shows a spinner left of the title and the same left→right
 white **gleam** on the title glyphs as the live-step line.
 
@@ -130,6 +146,8 @@ Browser and Terminals tabs are not ported yet.
 opens `ws(s)://host/?session=&fromSeq=`, handles `hello` / `attached` /
 `record` / `sessions` / `projects` / `draft` / `queue`, and sends `attach`,
 `prompt`, `cancel`, `session.create`, `desktop.continue`, `projects.list`,
+`desktop.chat` (pin / unpin / rename / unread / fork / move / copy /
+archive), `desktop.chat.menu`, `desktop.chat.icons`,
 `session.draft`, `session.mode`, `session.model`, `permission`. Images load
 from `GET /api/image?session=&path=`.
 
