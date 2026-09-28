@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-09-28
+* **Fix**: Android rail no longer crashes when scrolling to Pinned — `pinColor` kept hue in range (negative Int overflow used to blow `Color.hsl`), and pinned ids are deduped. See [Android shell](concepts/android-shell.md).
+
 ## 2026-09-27
 * **Update**: The Android host-URL screen animates in and out — cross-fade, card spring-up, header slide, reverse on back/save. See [Android shell](concepts/android-shell.md).
 * **Update**: The Android host-URL screen uses the immersive glass field instead of a Material toolbar and text field. See [Android shell](concepts/android-shell.md).

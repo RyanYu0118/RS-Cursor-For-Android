@@ -614,18 +614,24 @@ private fun isSelected(
 }
 
 private fun pinColor(name: String): Color {
+    // Cursor's ICON_COLORS ids + a few display labels. Anything else hashes.
     val known =
         mapOf(
+            "default" to Color(0xFF9AA4B2),
             "green" to Color(0xFF3DD68C),
+            "cyan" to Color(0xFF4CC9C0),
             "blue" to Color(0xFF6EA8FE),
-            "orange" to Color(0xFFE6A15C),
             "purple" to Color(0xFFC084FC),
-            "red" to Color(0xFFF07178),
+            "magenta" to Color(0xFFE879F9),
+            "orange" to Color(0xFFE6A15C),
             "yellow" to Color(0xFFE6C15C),
+            "red" to Color(0xFFF07178),
+            "brand" to Color(0xFFF54E00),
         )
-    known[name.lowercase()]?.let { return it }
+    known[name.trim().lowercase()]?.let { return it }
     var n = 0
-    for (ch in name) n = (n * 33 + ch.code) ushr 0
-    val hue = (n % 360).toFloat()
-    return Color.hsl(hue, 0.62f, 0.58f)
+    for (ch in name) n = n * 33 + ch.code
+    // Int overflow is fine; hue must stay in [0, 360] or Color.hsl throws.
+    val hue = ((n % 360) + 360) % 360
+    return Color.hsl(hue.toFloat(), 0.62f, 0.58f)
 }

@@ -50,10 +50,11 @@ object RailBuilder {
     fun parsePinned(arr: JSONArray?): List<RailPinned> {
         if (arr == null) return emptyList()
         val out = ArrayList<RailPinned>(arr.length())
+        val seen = HashSet<String>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val id = o.optString("id")
-            if (id.isBlank()) continue
+            if (id.isBlank() || !seen.add(id)) continue
             val name =
                 o.optString("name").ifBlank {
                     o.optString("subtitle").ifBlank { "project" }
