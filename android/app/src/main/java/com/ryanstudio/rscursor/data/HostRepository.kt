@@ -45,7 +45,33 @@ class HostRepository {
     }
 
     fun setHostUrl(url: String) {
-        hostUrl = url.trim()
+        val next = url.trim()
+        val changed = next.trimEnd('/') != hostUrl.trimEnd('/')
+        hostUrl = next
+        if (changed) {
+            // Sessions, seq and sidebar belong to the old host; keeping them
+            // would replay a stale fromSeq / session id against the new one.
+            ws.close(reconnect = false)
+            rememberedSession = null
+            reducer.clear()
+            sidebarJson = null
+            recentChats = emptyList()
+            _state =
+                _state.copy(
+                    sessionsReady = false,
+                    transcriptReady = false,
+                    reconnecting = false,
+                    sessions = emptyList(),
+                    sessionId = null,
+                    meta = null,
+                    items = emptyList(),
+                    railPinned = emptyList(),
+                    railRepos = emptyList(),
+                    banner = null,
+                    connError = null,
+                    connAttempts = 0,
+                )
+        }
         if (hostUrl.isEmpty()) {
             ws.close(reconnect = false)
             publish(
@@ -433,6 +459,8 @@ class HostRepository {
                 phase = ConnPhase.Connected,
                 reconnecting = false,
                 banner = null,
+                connError = null,
+                connAttempts = 0,
             ),
         )
         // hello has chats but not the Agents sidebar; ask once so rail can match web.
@@ -448,6 +476,8 @@ class HostRepository {
                 phase = if (_state.sessionsReady) ConnPhase.Reconnecting else ConnPhase.Connecting,
                 reconnecting = true,
                 banner = "重连中… ($reason)",
+                connError = reason,
+                connAttempts = _state.connAttempts + 1,
             ),
         )
         if (!reconnectPosted.compareAndSet(false, true)) return

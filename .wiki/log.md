@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-10-04
+* **Fix**: Android loading skeleton no longer traps you when the host moves IP — a glass card shows the URL, failures, Retry and Change host; changing the URL resets old-host state. See [Android shell](concepts/android-shell.md).
+
 ## 2026-09-28
 * **Fix**: Android rail no longer crashes when scrolling to Pinned — `pinColor` kept hue in range (negative Int overflow used to blow `Color.hsl`), and pinned ids are deduped. See [Android shell](concepts/android-shell.md).
 

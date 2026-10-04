@@ -9,7 +9,14 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.ryanstudio.rscursor.ui.theme.RsDeny
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -87,6 +94,7 @@ fun AppScaffold(
     onNewInFolder: (String) -> Unit,
     onToggleRepo: (String) -> Unit,
     onSettings: () -> Unit,
+    onRetry: () -> Unit,
     onOpenWeb: () -> Unit,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
@@ -122,7 +130,17 @@ fun AppScaffold(
         ) { target ->
             when (target) {
                 ShellPage.NoHost -> NoHostScreen(onSettings = onSettings)
-                ShellPage.Skeleton -> SkeletonShell(showRail = true)
+                ShellPage.Skeleton ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SkeletonShell(showRail = true)
+                        ConnectingCard(
+                            hostUrl = state.hostUrl,
+                            error = state.connError,
+                            attempts = state.connAttempts,
+                            onSettings = onSettings,
+                            onRetry = onRetry,
+                        )
+                    }
                 ShellPage.Main ->
                     MainShell(
                         state = state,
@@ -449,6 +467,81 @@ private fun NoHostScreen(onSettings: () -> Unit) {
                     modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
                 )
                 GlassButton("主机设置", primary = true, onClick = onSettings)
+            }
+        }
+    }
+}
+
+/**
+ * Floats over the loading skeleton so a host that moved IP is not a dead
+ * end: shows where it is dialling, why it fails, and a way to change it.
+ */
+@Composable
+private fun ConnectingCard(
+    hostUrl: String,
+    error: String?,
+    attempts: Int,
+    onSettings: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(1200)
+        shown = true
+    }
+    val failing = attempts > 0
+    Box(
+        modifier = Modifier.fillMaxSize().statusBarsPadding().windowInsetsPadding(WindowInsets.navigationBars),
+        contentAlignment = Alignment.Center,
+    ) {
+        AnimatedVisibility(
+            visible = shown || failing,
+            enter = fadeIn(tween(RsMotion.Normal)) + slideInVertically(tween(RsMotion.Normal)) { it / 6 },
+            exit = fadeOut(tween(RsMotion.Fast)),
+        ) {
+            GlassChip(
+                modifier = Modifier.padding(28.dp).widthIn(max = 420.dp),
+                shape = RoundedCornerShape(22.dp),
+                strong = true,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 22.dp),
+                ) {
+                    Text(
+                        if (failing) "连不上主机" else "正在连接主机…",
+                        color = RsText,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 17.sp,
+                    )
+                    Text(
+                        hostUrl.trimEnd('/').ifBlank { "（未设置）" },
+                        color = RsMuted,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    AnimatedVisibility(visible = failing) {
+                        Text(
+                            "已重试 $attempts 次" + (error?.takeIf { it.isNotBlank() }?.let { "：$it" } ?: "") +
+                                "\n电脑换了 IP 的话，改一下主机地址。",
+                            color = RsDeny,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) {
+                        GlassButton("重试", onClick = onRetry)
+                        GlassButton("更改主机地址", primary = true, onClick = onSettings)
+                    }
+                }
             }
         }
     }

@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
                     onSettings = {
                         openSettings.launch(Intent(this, SettingsActivity::class.java))
                     },
+                    onRetry = vm::reloadHost,
                     onOpenWeb = {
                         startActivity(Intent(this, WebShellActivity::class.java))
                     },

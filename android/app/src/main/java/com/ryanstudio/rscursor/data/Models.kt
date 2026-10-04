@@ -197,6 +197,9 @@ data class HostUiState(
     val sessionsReady: Boolean = false,
     val transcriptReady: Boolean = false,
     val reconnecting: Boolean = false,
+    /** Why the last connect attempt failed, and how many failed in a row. */
+    val connError: String? = null,
+    val connAttempts: Int = 0,
     val sessions: List<SessionMeta> = emptyList(),
     val sessionId: String? = null,
     val meta: SessionMeta? = null,

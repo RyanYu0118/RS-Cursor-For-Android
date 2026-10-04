@@ -1,4 +1,4 @@
----
+﻿---
 type: Concept
 title: Android shell
 description: Native Jetpack Compose pad client for Auto — immersive light field, liquid-glass panels, skeleton until WS ready.
@@ -26,7 +26,7 @@ sources:
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
     title: Pinned + row actions through Cursor's services
-generated: { by: agent, at: 2026-09-27T11:30:00Z }
+generated: { by: agent, at: 2026-10-04T08:50:00Z }
 ---
 
 # Android shell
@@ -152,6 +152,14 @@ bubble stubs, bottom bar) with a light shimmer until `hello` /
 `attached` arrive. If the transcript is still catching up, only the main
 pane stays skeleton. Reconnect shows a top banner rather than a white
 flash.
+
+The skeleton is never a dead end: after about a second a glass card floats
+over it with the host URL it is dialling, and once an attempt fails, the
+retry count and error plus **重试** and **更改主机地址** (opens the host
+settings). The socket's connect timeout is 6 s. Saving a different host URL
+drops everything tied to the old one — session id, transcript seq, sidebar,
+rail — so the new host is a clean cold start rather than a replay of a stale
+`fromSeq`.
 
 ## What v1 covers
 

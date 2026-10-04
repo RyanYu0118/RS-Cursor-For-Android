@@ -29,6 +29,7 @@ class WsClient(
 ) {
     private val client =
         OkHttpClient.Builder()
+            .connectTimeout(6, TimeUnit.SECONDS)
             .pingInterval(20, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .build()
