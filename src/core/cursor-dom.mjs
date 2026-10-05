@@ -331,6 +331,17 @@ ${HELPERS}
       if (id) ids.add(id);
     }
   }
+  // The Agents window no longer writes the id into its markup; its
+  // active-agent service names the one chat it is showing.
+  if (!ids.size) {
+    try {
+      for (const [id, v] of globalThis.__autoData?._instantiationService?._services?._entries ?? []) {
+        if (String(id) !== 'glassActiveAgentService') continue;
+        const active = (v?._instance || v?.instance || v)?.getActiveAgentId?.();
+        if (typeof active === 'string' && active) ids.add(active);
+      }
+    } catch {}
+  }
 
   const rows = [];
   for (const s of ${list(SELECTORS.message)}) {

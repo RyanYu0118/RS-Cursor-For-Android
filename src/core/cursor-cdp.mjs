@@ -723,8 +723,20 @@ function richTextFromPlain(text) {
   });
 }
 
-/** Which chat the window is showing — same idea as FACTS.threadId. */
+/**
+ * Which chat the window is showing — same idea as FACTS.threadId. The Agents
+ * window's own active-agent service answers first: its markup no longer
+ * carries `data-composer-id`, and without this every chat read as "not on
+ * screen" and the two chat boxes stopped syncing.
+ */
 const SHOWN_COMPOSER_ID = `(() => {
+  try {
+    for (const [id, v] of globalThis.__autoData?._instantiationService?._services?._entries ?? []) {
+      if (String(id) !== 'glassActiveAgentService') continue;
+      const active = (v?._instance || v?.instance || v)?.getActiveAgentId?.();
+      if (typeof active === 'string' && active) return active;
+    }
+  } catch {}
   const pane =
     document.querySelector('#workbench\\\\.parts\\\\.auxiliarybar') ||
     document.querySelector('#workbench\\\\.parts\\\\.editor') ||

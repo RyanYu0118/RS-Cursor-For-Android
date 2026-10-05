@@ -17,7 +17,7 @@ sources:
   - id: clipboard
     resource: /src/core/clipboard.mjs
     title: Image paste via clipboard
-generated: { by: agent, at: 2026-09-26T08:40:00Z }
+generated: { by: agent, at: 2026-10-05T04:05:00Z }
 ---
 
 # The Cursor window
@@ -155,6 +155,13 @@ focused**. Editing either box takes ownership immediately and the other
 side loses push rights at once. When the two boxes disagree, the side that
 presses send is the message that goes: a phone send replaces the computer
 box, and a computer send leaves that text and clears the phone.
+
+"Which chat is on screen" comes from the Agents window's
+`glassActiveAgentService.getActiveAgentId()` first. Its markup stopped
+carrying `data-composer-id` (and no sidebar row is marked selected), and
+with only the DOM to go on every chat read as not focused — the two boxes
+silently stopped syncing. The window `FACTS.threadId` uses the same service
+when the markup has no id.
 
 Modes are the @-mention popover. A model row is named from
 `model-item-*` minus Edit and the badges, because "Composer" and "2.5"

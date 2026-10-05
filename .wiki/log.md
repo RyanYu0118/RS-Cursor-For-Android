@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-10-05
+* **Fix**: Chat-box drafts sync again — which chat is on screen is read from `glassActiveAgentService.getActiveAgentId()` because the Agents window markup lost `data-composer-id`. See [The Cursor window](concepts/cursor-window.md).
 * **Change**: New Chat no longer opens, launches or presses anything in Cursor. The first message creates the agent through `agentRepositoryService.createAgent` in the background (selection and focus untouched); refusals fall back to ACP with one notice. See [Desktop chats](concepts/desktop-chats.md), [Sessions](concepts/sessions.md).
 
 ## 2026-10-04
