@@ -5,7 +5,7 @@
  * agent projects). Auto does not invent a second list.
  */
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { foldersByWorkspaceId } from './projects.mjs';
@@ -182,6 +182,29 @@ function pathOf(entry) {
   return String(raw).replace(/\//g, '\\').replace(/^\\([A-Za-z]):/, '$1:');
 }
 
+/** `https://github.com/A/B.git`, `git@github.com:A/B` → `github.com/a/b`, Cursor's repo-section spelling. */
+export function normalizeRemote(url) {
+  return String(url || '')
+    .trim()
+    .replace(/^[a-z+]+:\/\//i, '')
+    .replace(/^[^@/]+@/, '')
+    .replace(/^([^/:]+):(?!\d)/, '$1/')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+}
+
+/** Cursor files a folder's chats under its git remotes, so a `repo:` section is found through them. */
+function remotesOf(folder) {
+  if (!folder || folder === 'norepo') return [];
+  try {
+    const config = readFileSync(join(folder, '.git', 'config'), 'utf8');
+    return [...config.matchAll(/^\s*url\s*=\s*(.+)$/gm)].map((m) => normalizeRemote(m[1]));
+  } catch {
+    return [];
+  }
+}
+
 function leaf(name) {
   const text = decodeURIComponent(String(name || '')).replace(/\\/g, '/');
   const bit = text.split('/').filter(Boolean).pop() || text;
@@ -269,12 +292,25 @@ export function sidebarSnapshot() {
     return row ? folders.get(row.workspaceId) || '' : '';
   };
 
+  const remoteCache = new Map();
   const matchSection = (id) => {
     if (id === 'workspace:home' || id.endsWith(':home')) return byFolder.get('norepo');
     const named = extra.find((p) => p.id === id);
     let folder = named ? pathOf(named) : '';
     if (!folder && id.startsWith('workspace:')) folder = envPaths.get(id.slice('workspace:'.length)) || '';
-    const repoUrl = id.startsWith('repo:') ? id.replace(/^repo:/, '').split('|')[0] : '';
+    const repoUrls = id.startsWith('repo:') ? id.replace(/^repo:/, '').split('|').map(normalizeRemote) : [];
+    const repoUrl = repoUrls[0] || '';
+    if (!folder && repoUrls.length) {
+      const remotes = (row) => {
+        if (!remoteCache.has(row.folder)) remoteCache.set(row.folder, remotesOf(row.folder));
+        return remoteCache.get(row.folder);
+      };
+      const owner = [...byFolder.values()].find((row) => remotes(row).some((url) => repoUrls.includes(url)));
+      if (owner) {
+        if (!used.has(owner.key)) owner.name = leaf(repoUrl);
+        return owner;
+      }
+    }
     if (!folder && repoUrl) folder = folderForMention(repoUrl);
     const want = (named?.name && named.name !== 'Home' ? named.name : leaf(id)).toLowerCase();
     const hit =

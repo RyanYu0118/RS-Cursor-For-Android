@@ -5516,6 +5516,20 @@ if (existsSync(SRC)) {
 
     if (!failed) ok(`v2 core: projects (${projects.length} found)`);
 
+    {
+      const { normalizeRemote } = await import('../src/core/glass-sidebar.mjs');
+      const want = 'github.com/ryanyu0118/rs-cursor-for-android';
+      const spellings = [
+        'https://github.com/RyanYu0118/RS-Cursor-For-Android.git',
+        'git@github.com:RyanYu0118/RS-Cursor-For-Android.git',
+        'ssh://git@github.com/RyanYu0118/RS-Cursor-For-Android',
+        'github.com/ryanyu0118/rs-cursor-for-android',
+      ];
+      const bad = spellings.filter((url) => normalizeRemote(url) !== want);
+      if (bad.length) fail(`sidebar: git remote not normalized to Cursor's repo section: ${bad.join(', ')}`);
+      else ok('v2 core: sidebar repo sections match a folder by its git remote');
+    }
+
     // Desktop chats: the folder must resolve to a workspace the IDE knows,
     // and its chats must come back with the fields the UI renders.
     const { desktopChats, desktopChatsAvailable, chatCountsByWorkspace } = await import(
