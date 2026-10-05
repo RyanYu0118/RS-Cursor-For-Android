@@ -1,7 +1,21 @@
 package com.ryanstudio.rscursor.ui.composer
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -10,7 +24,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,6 +46,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -45,17 +62,16 @@ import androidx.compose.ui.window.PopupProperties
 import com.ryanstudio.rscursor.data.Catalog
 import com.ryanstudio.rscursor.data.ModelControls
 import com.ryanstudio.rscursor.data.ModelParameter
+import com.ryanstudio.rscursor.ui.theme.ImmersiveGlassSurface
+import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
 import com.ryanstudio.rscursor.ui.theme.RsText
 
-private val MenuShape = RoundedCornerShape(12.dp)
-private val RowShape = RoundedCornerShape(8.dp)
-private val MenuBg = Color(0xF21A1A1A)
-private val RowHover = Color(0xFF2C2C2E)
+private val RowShape = RoundedCornerShape(10.dp)
 private val SwitchOn = Color(0xFF3DDC84)
 
-/** Popup sits above the chip, its right edge on the chip's right edge. */
-private object ModelMenuPosition : PopupPositionProvider {
+/** Above the chip, right edges aligned; below it only when there is no room. */
+private class ModelMenuPosition(private val onSide: (Boolean) -> Unit) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
         windowSize: IntSize,
@@ -63,16 +79,21 @@ private object ModelMenuPosition : PopupPositionProvider {
         popupContentSize: IntSize,
     ): IntOffset {
         val margin = 8
-        val x = (anchorBounds.right - popupContentSize.width).coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin))
-        val above = anchorBounds.top - popupContentSize.height - 6
-        val y = if (above >= margin) above else (anchorBounds.bottom + 6).coerceAtMost(windowSize.height - popupContentSize.height - margin)
+        val x =
+            (anchorBounds.right - popupContentSize.width)
+                .coerceAtMost(windowSize.width - popupContentSize.width - margin)
+                .coerceAtLeast(margin)
+        val above = anchorBounds.top - popupContentSize.height - 8
+        val up = above >= margin
+        onSide(up)
+        val y = if (up) above else (anchorBounds.bottom + 8).coerceAtMost(windowSize.height - popupContentSize.height - margin)
         return IntOffset(x, y)
     }
 }
 
 /**
  * Cursor's model sheet: Fast, then Context / Effort, then Model.
- * A row with a chevron opens its choices in place.
+ * A row with a chevron slides its choices in from the right.
  */
 @Composable
 fun ModelMenu(
@@ -87,71 +108,103 @@ fun ModelMenu(
 ) {
     var page by remember { mutableStateOf("root") }
     var query by remember { mutableStateOf("") }
-    LaunchedEffect(expanded) {
-        if (!expanded) page = "root"
+    val visible = remember { MutableTransitionState(false) }
+    visible.targetState = expanded
+    LaunchedEffect(visible.currentState, visible.isIdle) {
+        if (!visible.currentState && visible.isIdle) page = "root"
     }
-    if (!expanded) return
+    if (!visible.currentState && !visible.targetState && visible.isIdle) return
+
+    var openedUp by remember { mutableStateOf(true) }
+    val position = remember { ModelMenuPosition { openedUp = it } }
+    val transition = rememberTransition(visible, label = "model-menu")
+    val progress by transition.animateFloat(
+        transitionSpec = {
+            if (targetState) spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMediumLow) else tween(140)
+        },
+        label = "model-menu-progress",
+    ) { if (it) 1f else 0f }
+
     Popup(
-        popupPositionProvider = ModelMenuPosition,
+        popupPositionProvider = position,
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
-        Column(
+        ImmersiveGlassSurface(
             modifier =
                 Modifier
-                    .width(268.dp)
-                    .clip(MenuShape)
-                    .background(MenuBg)
-                    .border(1.dp, Color.White.copy(alpha = 0.08f), MenuShape)
-                    .padding(4.dp),
+                    .graphicsLayer {
+                        val p = progress
+                        alpha = p.coerceIn(0f, 1f)
+                        val s = 0.88f + 0.12f * p
+                        scaleX = s
+                        scaleY = s
+                        translationY = (1f - p) * 10.dp.toPx() * if (openedUp) 1f else -1f
+                        transformOrigin = TransformOrigin(0.9f, if (openedUp) 1f else 0f)
+                    }
+                    .width(272.dp),
         ) {
-            when {
-                page == "models" ->
-                    ModelList(
-                        query = query,
-                        onQuery = { query = it },
-                        catalog = catalog,
-                        controls = controls,
-                        currentModelId = currentModelId,
-                        onBack = { page = "root" },
-                        onAuto = {
-                            onAuto(true)
-                            page = "root"
-                        },
-                        onModel = {
-                            onModel(it)
-                            page = "root"
-                            onDismiss()
-                        },
-                    )
-                page.startsWith("param:") -> {
-                    val id = page.removePrefix("param:")
-                    val parameter = controls.parameters.find { it.id == id }
-                    if (parameter == null) {
-                        page = "root"
-                    } else {
-                        ChoiceList(
-                            title = parameter.label,
-                            options = parameter.options.ifEmpty { listOf(parameter.value) },
-                            selected = parameter.value,
-                            onBack = { page = "root" },
-                            onPick = {
-                                onParameter(parameter.id, it)
-                                page = "root"
-                            },
-                        )
+            AnimatedContent(
+                targetState = page,
+                transitionSpec = {
+                    val forward = initialState == "root"
+                    val enter =
+                        slideInHorizontally(spring(dampingRatio = 0.86f, stiffness = Spring.StiffnessMediumLow)) {
+                            if (forward) it / 3 else -it / 3
+                        } + fadeIn(tween(180))
+                    val exit =
+                        slideOutHorizontally(tween(160)) { if (forward) -it / 4 else it / 4 } + fadeOut(tween(120))
+                    (enter togetherWith exit).using(SizeTransform(clip = false))
+                },
+                label = "model-menu-page",
+                modifier = Modifier.padding(6.dp),
+            ) { shown ->
+                Column {
+                    when {
+                        shown == "models" ->
+                            ModelList(
+                                query = query,
+                                onQuery = { query = it },
+                                catalog = catalog,
+                                controls = controls,
+                                currentModelId = currentModelId,
+                                onBack = { page = "root" },
+                                onAuto = {
+                                    onAuto(true)
+                                    page = "root"
+                                },
+                                onModel = {
+                                    onModel(it)
+                                    onDismiss()
+                                },
+                            )
+                        shown.startsWith("param:") -> {
+                            val parameter = controls.parameters.find { it.id == shown.removePrefix("param:") }
+                            if (parameter != null) {
+                                ChoiceList(
+                                    title = parameter.label,
+                                    options = parameter.options.ifEmpty { listOf(parameter.value) },
+                                    selected = parameter.value,
+                                    onBack = { page = "root" },
+                                    onPick = {
+                                        onParameter(parameter.id, it)
+                                        page = "root"
+                                    },
+                                )
+                            }
+                        }
+                        else ->
+                            RootPage(
+                                controls = controls,
+                                onToggle = { parameter, on -> onParameter(parameter.id, on) },
+                                onOpen = { page = "param:${it.id}" },
+                                onOpenModels = {
+                                    query = ""
+                                    page = "models"
+                                },
+                            )
                     }
                 }
-                else ->
-                    RootPage(
-                        controls = controls,
-                        onToggle = { parameter, on -> onParameter(parameter.id, on) },
-                        onOpen = { page = "param:${it.id}" },
-                        onOpenModels = {
-                            query = ""
-                            page = "models"
-                        },
-                    )
             }
         }
     }
@@ -177,7 +230,7 @@ private fun RootPage(
     for (parameter in ordered) {
         if (parameter.type == "toggle") {
             MenuRow(label = parameter.label, onClick = { onToggle(parameter, !parameter.on) }) {
-                MiniSwitch(on = parameter.on)
+                GlowSwitch(on = parameter.on)
             }
         } else {
             MenuRow(label = parameter.label, onClick = { onOpen(parameter) }) {
@@ -185,6 +238,7 @@ private fun RootPage(
             }
         }
     }
+    if (ordered.isNotEmpty()) GlassRule()
     MenuRow(label = "Model", onClick = onOpenModels) {
         ValueChevron(if (controls.auto) "Auto" else controls.model.ifBlank { "Choose" })
     }
@@ -198,10 +252,10 @@ private fun ChoiceList(
     onBack: () -> Unit,
     onPick: (String) -> Unit,
 ) {
-    MenuRow(label = "‹ $title", onClick = onBack) {}
+    MenuRow(label = "‹  $title", muted = true, onClick = onBack) {}
     for (option in options) {
-        MenuRow(label = option, onClick = { onPick(option) }) {
-            if (option == selected) Text("✓", color = RsText, fontSize = 14.sp)
+        MenuRow(label = option, selected = option == selected, onClick = { onPick(option) }) {
+            if (option == selected) Check()
         }
     }
 }
@@ -217,15 +271,22 @@ private fun ModelList(
     onAuto: () -> Unit,
     onModel: (String) -> Unit,
 ) {
-    MenuRow(label = "‹ Model", onClick = onBack) {}
+    MenuRow(label = "‹  Model", muted = true, onClick = onBack) {}
     BasicTextField(
         value = query,
         onValueChange = onQuery,
         singleLine = true,
-        textStyle = androidx.compose.ui.text.TextStyle(color = RsText, fontSize = 14.sp),
-        cursorBrush = SolidColor(RsText),
+        textStyle = TextStyle(color = RsText, fontSize = 14.sp),
+        cursorBrush = SolidColor(RsAccent),
         decorationBox = { inner ->
-            Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .clip(RowShape)
+                    .background(Color.White.copy(alpha = 0.07f))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
                 if (query.isEmpty()) Text("Search models", color = RsMuted, fontSize = 14.sp)
                 inner()
             }
@@ -236,33 +297,45 @@ private fun ModelList(
     Column(
         modifier =
             Modifier
-                .height(320.dp)
+                .heightIn(max = 320.dp)
                 .verticalScroll(rememberScrollState()),
     ) {
         if (needle.isEmpty() || "auto".contains(needle)) {
-            MenuRow(label = "Auto", onClick = onAuto) {
-                if (controls.auto) Text("✓", color = RsText, fontSize = 14.sp)
+            MenuRow(label = "Auto", selected = controls.auto, onClick = onAuto) {
+                if (controls.auto) Check()
             }
         }
         for (model in catalog.models) {
             if (model.id == "default[]" || model.id == "default") continue
             if (needle.isNotEmpty() && !model.name.lowercase().contains(needle)) continue
             val selected = !controls.auto && model.id == currentModelId
-            MenuRow(label = model.name, onClick = { onModel(model.id) }) {
-                if (selected) Text("✓", color = RsText, fontSize = 14.sp)
+            MenuRow(label = model.name, selected = selected, onClick = { onModel(model.id) }) {
+                if (selected) Check()
             }
         }
     }
 }
 
+/** A glass row: a press lights it, the chosen one keeps a faint accent wash. */
 @Composable
 private fun MenuRow(
     label: String,
     onClick: () -> Unit,
+    selected: Boolean = false,
+    muted: Boolean = false,
     trailing: @Composable () -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
+    val fill by animateColorAsState(
+        when {
+            pressed -> Color.White.copy(alpha = 0.14f)
+            selected -> RsAccent.copy(alpha = 0.16f)
+            else -> Color.Transparent
+        },
+        animationSpec = tween(120),
+        label = "model-row-fill",
+    )
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -270,13 +343,13 @@ private fun MenuRow(
             Modifier
                 .fillMaxWidth()
                 .clip(RowShape)
-                .background(if (pressed) RowHover else Color.Transparent)
+                .background(fill, RowShape)
                 .clickable(interactionSource = source, indication = null, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text(
             label,
-            color = RsText,
+            color = if (muted) RsMuted else if (selected) RsAccent else RsText,
             fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -284,6 +357,22 @@ private fun MenuRow(
         )
         trailing()
     }
+}
+
+@Composable
+private fun GlassRule() {
+    Box(
+        Modifier
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .fillMaxWidth()
+            .size(height = 1.dp, width = 0.dp)
+            .background(Color.White.copy(alpha = 0.10f)),
+    )
+}
+
+@Composable
+private fun Check() {
+    Text("✓", color = RsAccent, fontSize = 14.sp)
 }
 
 @Composable
@@ -296,26 +385,37 @@ private fun ValueChevron(value: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text(" ›", color = RsMuted, fontSize = 14.sp)
+        Text("  ›", color = RsMuted, fontSize = 14.sp)
     }
 }
 
+/** Track eases to green and the thumb springs across, like Cursor's switch. */
 @Composable
-private fun MiniSwitch(on: Boolean) {
+private fun GlowSwitch(on: Boolean) {
+    val thumb by animateDpAsState(
+        if (on) 14.dp else 0.dp,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium),
+        label = "switch-thumb",
+    )
+    val track by animateColorAsState(
+        if (on) SwitchOn else Color.White.copy(alpha = 0.16f),
+        animationSpec = tween(160),
+        label = "switch-track",
+    )
     Box(
         modifier =
             Modifier
                 .padding(start = 12.dp)
                 .size(width = 36.dp, height = 22.dp)
                 .clip(CircleShape)
-                .background(if (on) SwitchOn else Color(0xFF3A3A3C)),
+                .background(track),
     ) {
         Box(
             modifier =
                 Modifier
                     .align(Alignment.CenterStart)
                     .padding(2.dp)
-                    .offset(x = if (on) 14.dp else 0.dp)
+                    .offset(x = thumb)
                     .size(18.dp)
                     .clip(CircleShape)
                     .background(Color.White),
