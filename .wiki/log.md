@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-10-05
+* **Change**: New Chat no longer opens, launches or presses anything in Cursor. The first message creates the agent through `agentRepositoryService.createAgent` in the background (selection and focus untouched); refusals fall back to ACP with one notice. See [Desktop chats](concepts/desktop-chats.md), [Sessions](concepts/sessions.md).
+
 ## 2026-10-04
 * **Fix**: Android loading skeleton no longer traps you when the host moves IP — a glass card shows the URL, failures, Retry and Change host; changing the URL resets old-host state. See [Android shell](concepts/android-shell.md).
 

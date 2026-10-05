@@ -553,12 +553,10 @@ export class SessionManager extends EventEmitter {
   /**
    * Start a session the user asked for from the web or the phone.
    *
-   * A new chat in Cursor is the same conversation on both ends. If no window
-   * has this folder, Auto opens one; if Cursor is not running, Auto starts it
-   * with the debug port. Cursor already running without that port cannot gain
-   * it without a quit that closes every window — Auto refuses that unless
-   * `AUTO_ALLOW_CURSOR_RESTART=1`. Only if none of that works does this fall
-   * back to an Auto-only agent, and it says so.
+   * A new chat in Cursor is the same conversation on both ends, but starting
+   * one must not disturb the computer: no window is opened or launched and no
+   * New Agent button is pressed. The session waits in Auto until its first
+   * message, which creates the Cursor agent in the background.
    *
    * An explicitly requested `agent` other than cursor never touches Cursor:
    * opencode has no desktop window to drive, so its sessions are Auto-only
@@ -571,27 +569,15 @@ export class SessionManager extends EventEmitter {
       return this.#startAgentOnly({ folder: dir, title, policy, mode, agent: who, model });
     }
 
-    const { opened, ready } = await this.#openCursorChat(dir);
-    if (opened.status === 'created' && opened.threadId) {
-      const meta = await this.attachDesktopThread({
-        threadId: opened.threadId,
-        folder: dir,
-        title,
-        fresh: true,
-      });
-      await this.#preferredOrAutoSelect(meta.id, model);
-      return meta;
-    }
-
+    // Nothing happens on the computer yet. Cursor creates an agent only when
+    // it has a first message, so the chat is born in the background on the
+    // first prompt (see #moveIntoIde) — no window opens, no tab comes forward.
     const meta = this.create({ folder: dir, title, policy, mode });
     this.setActive(meta.id);
     await this.transcripts.get(meta.id);
-    // A remembered model, else Auto-select, is applied once the process starts
-    // (see ensureLive) — a fresh Cursor chat would otherwise inherit the last.
     const first = model && model !== 'default[]' ? model : 'default[]';
     this.#update(meta.id, { model: first, modelName: this.modelName(first), preferWindow: true });
-    this.#record(meta.id, KIND.notice, { text: this.#whyNotInIde(dir, opened, ready) });
-    this.emit('log', `started Auto-only session "${meta.title}" (${opened.status})`);
+    this.emit('log', `started new chat "${meta.title}" — Cursor gets it on the first message`);
     return meta;
   }
 
@@ -623,100 +609,72 @@ export class SessionManager extends EventEmitter {
   }
 
   /**
-   * Open a new chat in the Cursor window for this folder, launching the
-   * window first when none is showing it.
+   * A new Cursor session becomes a Cursor agent with its first message.
    *
-   * @returns {Promise<{ opened: object, ready: object|null }>}
-   */
-  async #openCursorChat(folder) {
-    let opened = await this.cursor.newChat({ folder }).catch((err) => ({
-      status: 'error',
-      reason: err.message,
-    }));
-    if (opened.status === 'created' && opened.threadId) return { opened, ready: null };
-
-    let ready = null;
-    if (
-      typeof this.cursor.ensureWindow === 'function' &&
-      (opened.status === 'no-window' || opened.status === 'no-cdp')
-    ) {
-      ready = await this.cursor.ensureWindow({ folder }).catch((err) => ({
-        status: 'error',
-        reason: err.message,
-      }));
-      if (['showing', 'opened', 'started', 'restarted'].includes(ready.status)) {
-        opened = await this.cursor.newChat({ folder }).catch((err) => ({
-          status: 'error',
-          reason: err.message,
-        }));
-      }
-    }
-    return { opened, ready };
-  }
-
-  /**
-   * A Cursor session that never reached the IDE (the window could not be
-   * opened) still belongs there. The next message tries again, and if a chat
-   * opens, that message is typed into it so the computer calls the model.
-   * Sessions adopted from the CLI stay where they are.
+   * The agent is created through the Agents window's own repository with that
+   * message, the way its composer does on send — the window's selection and
+   * focus are left alone, so nothing on the computer moves. Pictures cannot
+   * ride along (there is no window to paste into), so they are named as left
+   * behind. If Cursor cannot take it (no debug port, a folder it has never
+   * had an agent in), the turn runs on the ACP agent instead and says so; the
+   * next message tries the background again. Adopted CLI sessions stay put.
    *
-   * @returns {Promise<boolean>}
+   * @returns {Promise<object|null>} the turn result, or null to fall back
    */
-  async #moveIntoIde(id) {
+  async #moveIntoIde(id, text, images = []) {
     const meta = this.meta.get(id);
-    if (!meta?.preferWindow || meta.kind === 'desktop' || meta.adopted || meta.agent !== 'cursor') return false;
-    if (meta.status === STATUS.busy) return false;
+    if (!meta?.preferWindow || meta.kind === 'desktop' || meta.adopted || meta.agent !== 'cursor') return null;
+    if (meta.status === STATUS.busy) return null;
+    if (!text?.trim() || typeof this.cursor.createAgentInBackground !== 'function') return null;
 
-    const { opened } = await this.#openCursorChat(meta.folder);
-    if (!(opened.status === 'created' && opened.threadId)) return false;
+    const created = await this.cursor
+      .createAgentInBackground({ folder: meta.folder, text })
+      .catch((err) => ({ status: 'error', reason: err.message }));
+    if (!(created?.status === 'created' && created.threadId)) {
+      if (!meta.backgroundRefused) {
+        this.#record(id, KIND.notice, {
+          text:
+            `Cursor could not start this chat in the background` +
+            (created?.reason ? ` (${created.reason})` : '') +
+            ` — this turn runs on the agent in Auto instead. The next message tries Cursor again.`,
+        });
+        this.#update(id, { backgroundRefused: true });
+      }
+      return null;
+    }
 
     const runtime = this.live.get(id);
     if (runtime?.client) {
       try {
         runtime.client.cancel?.();
       } catch {
-        // The ACP child is being left behind; a failed cancel must not block the window.
+        // The ACP child is being left behind; a failed cancel must not block the move.
       }
     }
     this.live.delete(id);
     await this.transcripts.get(id);
     this.#update(id, {
       kind: 'desktop',
-      desktopThreadId: opened.threadId,
+      desktopThreadId: created.threadId,
       acpSessionId: null,
       preferWindow: false,
+      backgroundRefused: false,
     });
-    this.#record(id, KIND.notice, {
-      text: 'Opened this chat in Cursor on the computer. The message goes there, and Cursor calls the model.',
-    });
+    this.#expectEcho(id, text);
+    this.clearDraft(id);
+    this.#record(id, KIND.userMessage, this.#userMessageFields(text, images));
+    const live = this.live.get(id) || {};
+    live.currentPrompt = this.#userMessageFields(text, images);
+    this.live.set(id, live);
+    if (images.length) {
+      this.#record(id, KIND.notice, {
+        text: `The ${images.length === 1 ? 'image' : `${images.length} images`} did not go with the first message — a new chat starts in Cursor without pictures. Send ${images.length === 1 ? 'it' : 'them'} again.`,
+      });
+    }
+    this.#update(id, { status: STATUS.busy });
     this.#watchDesktop(id);
-    await this.#preferredOrAutoSelect(id, meta.model);
-    return true;
-  }
-
-  /** Why a new session could not be a Cursor chat. */
-  #whyNotInIde(folder, opened, ready) {
-    if (ready?.status === 'error' || ready?.status === 'no-cdp' || ready?.status === 'no-window') {
-      return (
-        `This session is only in Auto — tried to open ${folder} in Cursor` +
-        (ready.reason ? ` (${ready.reason})` : '.')
-      );
-    }
-    if (opened?.status === 'no-cdp') {
-      return (
-        `This session is only in Auto — Cursor is not listening on its debug port, ` +
-        `so a new chat could not be opened in the IDE.`
-      );
-    }
-    if (opened?.status === 'no-window') {
-      return (
-        `This session is only in Auto — no Cursor window has ${folder} open.`
-      );
-    }
-    return (
-      `This session is only in Auto — Cursor would not start a new chat` +
-      (opened?.reason ? ` (${opened.reason})` : '.')
-    );
+    this.emit('log', `started "${meta.title}" in Cursor in the background (${created.threadId})`);
+    return { status: 'submitted', via: 'background', threadId: created.threadId };
   }
 
   setActive(id) {
@@ -1131,10 +1089,11 @@ export class SessionManager extends EventEmitter {
       return this.#promptDesktop(id, meta, text, images);
     }
 
-    // A phone session that fell back to ACP is invisible on the computer.
-    // Try the window again before starting another headless turn.
-    if (meta.preferWindow && meta.agent === 'cursor' && !meta.adopted && (await this.#moveIntoIde(id))) {
-      return this.#promptDesktop(id, this.meta.get(id), text, images);
+    // A new Cursor chat is created in Cursor, in the background, by its first
+    // message. Only when Cursor cannot take it does the ACP agent run the turn.
+    if (meta.preferWindow && meta.agent === 'cursor' && !meta.adopted && !shown) {
+      const started = await this.#moveIntoIde(id, text, images);
+      if (started) return started;
     }
 
     const runtime = await this.ensureLive(id);

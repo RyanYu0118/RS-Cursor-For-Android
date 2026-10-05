@@ -17,7 +17,7 @@ sources:
   - id: resolve
     resource: /src/acp/resolve.mjs
     title: Agent registry
-generated: { by: agent, at: 2026-09-26T09:20:00Z }
+generated: { by: agent, at: 2026-10-05T03:50:00Z }
 ---
 
 # Auto
@@ -51,11 +51,10 @@ is the truth; clients replay from a sequence number.
   `session/load`. Used when a desktop chat cannot be started, and always for
   opencode. See [ACP](concepts/acp.md).
 
-New sessions prefer the IDE. If no window has the folder, Auto opens one; if
-Cursor is not running, it starts it with `--remote-debugging-port=9222`. If
-Cursor is already running *without* that port, Auto refuses to quit it by
-default (that would close every window) and falls back to ACP unless
-`AUTO_ALLOW_CURSOR_RESTART=1`.
+New sessions become Cursor chats without disturbing the computer: no window
+opens and nothing is pressed. The first message creates the agent through
+the Agents window's own repository over the debug port, in the background;
+if Cursor cannot take it, that turn runs on ACP and says so.
 
 ## Surfaces
 

@@ -41,14 +41,17 @@ value as setup documentation is fine.
 
 - **One host, one port.** `src/server/index.mjs` on 4331 owns everything:
   HTTP, WebSocket, the session API, Telegram, the browser, terminals.
-- **New sessions start in the IDE.** Starting from the web or Telegram opens a
-  new chat in a Cursor window that already has that folder. If no window has
-  it, Auto opens one; if Cursor is not running, Auto starts it with
-  `--remote-debugging-port=9222`. If Cursor is already running *without* that
-  port, Auto refuses to quit it by default (that kill closes every window) and
-  falls back to ACP with a notice — set `AUTO_ALLOW_CURSOR_RESTART=1` only when
-  you mean to force a relaunch. If none of that works, it falls back to
-  `cursor-agent acp` and says so in the transcript.
+- **New sessions start in Cursor without touching the screen.** New Chat from
+ the web, the pad or Telegram opens no window, launches nothing and presses
+ no New Agent button — it only makes a session in Auto. Cursor creates an
+ agent only together with its first message, so that first message calls the
+ Agents window's own `agentRepositoryService.createAgent` over the debug port,
+ with the selection and focus left alone: the chat appears in Cursor's
+ sidebar and runs there while the window stays where it was. The folder's
+ workspace identity is borrowed from an agent already in that folder; a
+ folder Cursor has never had an agent in, or no debug port, runs the turn on
+ `cursor-agent acp` instead with one notice, and the next message tries the
+ background again. Pictures cannot go with that first message.
 - **One session, one conversation.** A desktop session is Cursor's own chat.
   An ACP session holds its own `cursor-agent acp` process and resumes via
   `session/load`, so an idle one costs nothing but its history stays intact.

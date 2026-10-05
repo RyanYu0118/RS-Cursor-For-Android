@@ -859,6 +859,56 @@ const flatten = (text) => String(text).replace(/\s+/g, ' ').trim();
 const same = (a, b) => flatten(a) === flatten(b);
 
 /**
+ * In-page half of `createAgentInBackground`. Folder paths compare the way
+ * Windows does — case and trailing slashes do not matter.
+ */
+export function createAgentExpression({ folder, text }) {
+  return `(async () => {
+    const folder = ${JSON.stringify(folder)};
+    const text = ${JSON.stringify(text)};
+    const entries = globalThis.__autoData?._instantiationService?._services?._entries;
+    if (!entries || typeof entries[Symbol.iterator] !== 'function') return { status: 'no-services' };
+    const svc = {};
+    for (const [id, v] of entries) {
+      const o = v && (v._instance || v.instance || v);
+      if (o && typeof o === 'object') svc[String(id)] = o;
+    }
+    const repo = svc.agentRepositoryService;
+    const store = repo?.delegate;
+    if (typeof repo?.createAgent !== 'function' || !store) return { status: 'no-services' };
+    const val = (x) => (x && typeof x === 'object' && 'value' in x ? x.value : x);
+    const norm = (p) => String(p || '').replace(/[\\\\/]+$/, '').replace(/\\//g, '\\\\').toLowerCase();
+    const want = norm(folder);
+    const pathOf = (env) => env?.uri?.fsPath || env?.uri?.path?.replace(/^\\/([a-zA-Z]:)/, '$1') || '';
+    let environment = null;
+    for (const h of store._agentHeaderById?.values?.() ?? []) {
+      if (h?.source !== 'local') continue;
+      const env = val(h.environment);
+      if (env?.id && env?.uri && norm(pathOf(env)) === want) { environment = env; break; }
+    }
+    if (!environment) {
+      const ws = svc.workspaceCollectionService;
+      for (const env of ws?.getMaterializedWorkspaceIdentifiers?.() ?? []) {
+        if (env?.id && env?.uri && norm(pathOf(env)) === want) { environment = env; break; }
+      }
+    }
+    if (!environment) return { status: 'no-workspace', reason: 'Cursor has no agent in ' + folder + ' yet' };
+    try {
+      const ref = await repo.createAgent(text, { type: 'existing', environment }, {
+        promptPreview: text,
+        unifiedMode: 'agent',
+        skipFocusAfterSubmission: true,
+      });
+      const threadId = ref?.header?.id;
+      try { ref?.dispose?.(); } catch {}
+      return threadId ? { status: 'created', threadId } : { status: 'error', reason: 'Cursor did not return the new agent' };
+    } catch (err) {
+      return { status: 'error', reason: String(err?.message || err) };
+    }
+  })()`;
+}
+
+/**
  * The Cursor windows on this machine, and what can be done with them.
  *
  * Connections are opened for a piece of work and closed after it. A socket
@@ -1309,6 +1359,29 @@ export class CursorCdp {
       },
       { prefer: /Agents/i },
     );
+  }
+
+  /**
+   * Start a Cursor agent for a folder with its first message, through the
+   * Agents window's agent repository — the same call its own composer makes on
+   * send, with the selection and focus left alone. No button is pressed, no
+   * window opens, and the chat on screen stays the chat on screen.
+   *
+   * The folder's workspace identity is borrowed from an agent that already
+   * lives there (or a workspace the window has loaded), because Cursor derives
+   * that id itself; a folder it has never seen answers `no-workspace`.
+   *
+   * @returns {Promise<{ status: 'created', threadId: string }
+   *   | { status: 'no-workspace'|'no-cdp'|'unknown-thread'|'error', reason?: string }>}
+   */
+  async createAgentInBackground({ folder, text }) {
+    const dir = String(folder || '').trim();
+    const message = String(text || '');
+    if (!dir) return { status: 'error', reason: 'no folder was named' };
+    if (!message.trim()) return { status: 'error', reason: 'a new agent needs a first message' };
+    const res = await this.inAgentsWindow(createAgentExpression({ folder: dir, text: message }));
+    if (res?.status === 'created' && res.threadId) return res;
+    return res && typeof res.status === 'string' ? res : { status: 'error', reason: 'no answer from Cursor' };
   }
 
   /** Run something in a window that has handed over its chat service. */

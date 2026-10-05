@@ -11,7 +11,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Session attach / catch-up
-generated: { by: agent, at: 2026-09-25T14:55:00Z }
+generated: { by: agent, at: 2026-10-05T03:50:00Z }
 ---
 
 # Continuing Cursor desktop chats
@@ -24,23 +24,27 @@ interface, and that can change under us.
 
 ## Starting a chat from Auto
 
-A session started from the web or Telegram is a new chat in Cursor. Auto
-presses the small **New Agent** workbench button (the one whose hint includes
-`(Ctrl+N)`), not the editor-group chrome or tab labels that also say "New Agent",
-and uses a real mouse click like the model/mode pickers — a dispatched click on
-the wrong control looked like success but opened nothing. It waits for a new
-thread id, then attaches. The model picker is then set to **Auto**
-(Auto-select / `default[]`) — Cursor otherwise keeps whatever the last chat
-in that window used. If no window has the folder, Auto asks Cursor for
-`--new-window`. If Cursor is not running, it starts it with
-`--remote-debugging-port=9222`. If Cursor is already running *without* that
-port, Auto will not quit it by default — that closes every window — unless
-`AUTO_ALLOW_CURSOR_RESTART=1`. If none of that works, Auto falls back to
-[ACP](acp.md) with the same Auto-select preference and writes a notice.
-The next message from the phone tries the window again. When a chat opens,
-that message is typed into it and Cursor calls the model. A session adopted
-from the CLI is left on ACP. A desktop chat whose window is missing is
-opened the same way before the message is held.
+A session started from the web, the pad or Telegram becomes a new chat in
+Cursor **without anything moving on the computer**. Starting it only makes
+an Auto session (`preferWindow`); no window is opened or launched and no New
+Agent button is pressed. Cursor creates an agent only together with its first
+message, so the first prompt calls `CursorCdp.createAgentInBackground`: in the
+Agents window, `agentRepositoryService.createAgent(text, { type: 'existing',
+environment }, { skipFocusAfterSubmission: true, unifiedMode: 'agent' })` —
+the same call its composer makes on send. Internally that is
+`createComposer({ skipSelect: true })`, so the chat on screen stays the chat
+on screen. The new id comes back, the session turns `desktop`, the message is
+recorded once (its desktop echo is expected) and the watcher follows the turn.
+
+The folder's workspace identity (`{ id, uri }`) is borrowed from a local agent
+already in that folder, else from a workspace the window has loaded — Cursor
+derives that id itself. A folder with neither answers `no-workspace`; with no
+debug port the call fails. Either way the turn runs on [ACP](acp.md) with one
+notice, and the next message tries the background again. Pictures cannot go
+with the first message (there is no window to paste into); a notice says so.
+The new chat uses Cursor's own default model for new agents. A session
+adopted from the CLI is left on ACP. A desktop chat whose window is missing
+is opened before a message is held — that path is for existing chats only.
 
 Desktop is the default path, so attaching does not announce that the chat
 lives in Cursor. A catch-up that leaves older history out still notes how

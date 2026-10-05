@@ -4230,114 +4230,129 @@ if (existsSync(SRC)) {
   }
 }
 
-// 1e4a. Starting a session from the phone opens it in the IDE when a window
-// has that folder, and falls back to an Auto-only agent with a notice if not.
+// 1e4a. Starting a session from the phone leaves the computer alone: no
+// window opens and no New Agent is pressed. The session waits for its first
+// message, which creates the Cursor agent in the background.
 {
   const dir = mkdtempSync(join(tmpdir(), 'auto-start-ide-'));
   try {
     const { SessionManager } = await import('../src/core/sessions.mjs');
-    const { KIND } = await import('../src/core/transcript.mjs');
     let failed = false;
 
     const sessions = new SessionManager({ stateDir: dir, defaultFolder: ROOT }).init();
+    const touched = [];
     sessions.cursor = {
-      newChat: async () => ({ status: 'no-window', reason: 'no Cursor window has it open' }),
-      ensureWindow: async () => ({ status: 'no-window', reason: 'could not open a window' }),
+      newChat: async () => (touched.push('newChat'), { status: 'created', threadId: 'nope' }),
+      ensureWindow: async () => (touched.push('ensureWindow'), { status: 'opened' }),
+      createAgentInBackground: async () => (touched.push('create'), { status: 'created', threadId: 'nope' }),
     };
     const meta = await sessions.startInIde({ folder: ROOT, title: 'From the phone' });
-    if (meta.kind === 'desktop') {
-      fail('a missing window must not pretend the session is in Cursor');
+    if (touched.length) {
+      fail(`starting a session must not touch Cursor, called ${touched.join(', ')}`);
+      failed = true;
+    }
+    if (meta.kind === 'desktop' || !meta.preferWindow) {
+      fail(`a new session waits for its first message, got ${JSON.stringify(meta)}`);
       failed = true;
     }
     if (meta.title !== 'From the phone') {
-      fail(`fallback should keep the title, got ${meta.title}`);
+      fail(`a new session should keep the title, got ${meta.title}`);
       failed = true;
     }
     if (meta.model !== 'default[]') {
-      fail(`Auto-only fallback should still prefer Auto-select, got ${meta.model}`);
-      failed = true;
-    }
-    const recs = await sessions.history(meta.id);
-    const notice = recs.find((r) => r.kind === KIND.notice);
-    if (!notice?.text?.includes('only in Auto') || !notice.text.includes(ROOT)) {
-      fail(`fallback should say why it is not in the IDE, got ${notice?.text}`);
+      fail(`a new session should still prefer Auto-select, got ${meta.model}`);
       failed = true;
     }
 
-    sessions.cursor = {
-      newChat: async () => ({ status: 'created', threadId: 'not-a-real-thread' }),
-      choose: async () => ({ status: 'already', picker: 'model', was: 'Auto' }),
-    };
-    const opened = await sessions.startInIde({ folder: ROOT, title: 'In Cursor' });
-    if (opened.kind !== 'desktop' || opened.desktopThreadId !== 'not-a-real-thread') {
-      fail(`a created chat should attach as desktop, got ${JSON.stringify(opened)}`);
-      failed = true;
-    }
-    if (opened.title !== 'In Cursor' || !opened.titleLocked) {
-      fail(`an explicit title should stick, got ${opened.title} locked=${opened.titleLocked}`);
-      failed = true;
-    }
-    if (opened.model !== 'default[]') {
-      fail(`a new desktop chat should land on Auto-select, got ${opened.model}`);
-      failed = true;
-    }
-    await sessions.stop(opened.id);
-
-    sessions.cursor = {
-      newChat: async () => ({ status: 'created', threadId: 'unnamed-fresh-thread' }),
-      choose: async () => ({ status: 'already', picker: 'model', was: 'Auto' }),
-    };
-    const unnamed = await sessions.startInIde({ folder: ROOT });
-    if (unnamed.title !== 'Desktop chat' || unnamed.titleLocked) {
-      fail(
-        `a new desktop chat is unnamed until Cursor names it, got ${unnamed.title} locked=${unnamed.titleLocked}`,
-      );
-      failed = true;
-    }
-    await sessions.stop(unnamed.id);
-
-    let attempts = 0;
-    let chose = null;
-    sessions.cursor = {
-      newChat: async () => {
-        attempts += 1;
-        return attempts === 1
-          ? { status: 'no-window', reason: 'no Cursor window has it open' }
-          : { status: 'created', threadId: 'opened-after-launch' };
-      },
-      ensureWindow: async () => ({ status: 'opened' }),
-      choose: async ({ picker, wanted }) => {
-        chose = { picker, wanted };
-        return { status: 'set', picker: 'model', was: 'Grok 4.6', now: 'Auto' };
-      },
-    };
-    const launched = await sessions.startInIde({ folder: ROOT, title: 'Opened a window' });
-    if (launched.kind !== 'desktop' || launched.desktopThreadId !== 'opened-after-launch') {
-      fail(`a missing window should be opened, then attached, got ${JSON.stringify(launched)}`);
-      failed = true;
-    }
-    if (attempts !== 2) fail(`should retry the chat after opening a window, tried ${attempts}`);
-    if (chose?.picker !== 'model' || chose?.wanted !== 'Auto') {
-      fail(`a new chat must press Auto-select, got ${JSON.stringify(chose)}`);
-      failed = true;
-    }
-    if (launched.model !== 'default[]') {
-      fail(`switching onto Auto should store default[], got ${launched.model}`);
-      failed = true;
-    }
-    const switched = (await sessions.history(launched.id)).find(
-      (r) => r.kind === KIND.notice && /now Auto/.test(r.text || ''),
-    );
-    if (!switched) {
-      fail('changing off a inherited model should say so in the transcript');
-      failed = true;
-    }
-    await sessions.stop(launched.id);
-
-    if (!failed) ok('v2 core: new sessions start in the IDE, or say why they could not');
+    if (!failed) ok('v2 core: new sessions do not open or press anything in Cursor');
   } catch (e) {
     fail(`v2 start in ide: ${e.message}`);
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// The first message of a new session creates the Cursor agent through the
+// Agents window's services with that message. Nothing is typed into a window;
+// a refusal falls back to the ACP agent and says so once.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'auto-pad-ide-'));
+  let sessions;
+  try {
+    const { SessionManager } = await import('../src/core/sessions.mjs');
+    const { KIND } = await import('../src/core/transcript.mjs');
+    let failed = false;
+    sessions = new SessionManager({ stateDir: dir, defaultFolder: ROOT }).init();
+    const meta = await sessions.startInIde({ folder: ROOT, title: 'From the pad' });
+    const created = [];
+    sessions.cursor = {
+      createAgentInBackground: async (opts) => {
+        created.push(opts);
+        return { status: 'created', threadId: 'pad-thread' };
+      },
+      newChat: async () => {
+        fail('the first message must not press New Agent');
+        failed = true;
+        return { status: 'error' };
+      },
+      sendText: async () => {
+        fail('the first message must not be typed into a window');
+        failed = true;
+        return { status: 'error' };
+      },
+    };
+    const result = await sessions.prompt(meta.id, { text: 'hello from the pad' });
+    const after = sessions.get(meta.id);
+    if (after.kind !== 'desktop' || after.desktopThreadId !== 'pad-thread' || after.preferWindow) {
+      fail(`the first message should make a Cursor chat, got ${JSON.stringify(after)}`);
+      failed = true;
+    }
+    if (result?.status !== 'submitted' || created[0]?.text !== 'hello from the pad' || created[0]?.folder !== ROOT) {
+      fail(`the agent should be created with that message, got ${JSON.stringify(result)} ${JSON.stringify(created)}`);
+      failed = true;
+    }
+    const users = (await sessions.history(meta.id)).filter((r) => r.kind === KIND.userMessage);
+    if (users.length !== 1 || users[0].text !== 'hello from the pad') {
+      fail(`the first message should be in the transcript once, got ${JSON.stringify(users)}`);
+      failed = true;
+    }
+
+    const refused = await sessions.startInIde({ folder: ROOT, title: 'Refused' });
+    let acp = 0;
+    sessions.ensureLive = async () => {
+      acp += 1;
+      return { client: { prompt: async () => ({ stopReason: 'end_turn' }), agent: 'cursor' }, acpSessionId: 'acp' };
+    };
+    sessions.cursor.createAgentInBackground = async () => ({ status: 'no-workspace', reason: 'Cursor has no agent there yet' });
+    await sessions.prompt(refused.id, { text: 'first' }).catch(() => {});
+    await sessions.prompt(refused.id, { text: 'second' }).catch(() => {});
+    if (acp !== 2 || sessions.get(refused.id).kind === 'desktop') {
+      fail(`a refused background start should run on ACP, ran ${acp}`);
+      failed = true;
+    }
+    const notices = (await sessions.history(refused.id)).filter(
+      (r) => r.kind === KIND.notice && /could not start this chat in the background/.test(r.text || ''),
+    );
+    if (notices.length !== 1 || !notices[0].text.includes('no agent there yet')) {
+      fail(`a refusal should be said once with its reason, got ${JSON.stringify(notices)}`);
+      failed = true;
+    }
+
+    const adopted = sessions.create({ folder: ROOT, title: 'CLI', agent: 'cursor' });
+    sessions.get(adopted.id).adopted = true;
+    sessions.get(adopted.id).preferWindow = true;
+    sessions.cursor.createAgentInBackground = async () => {
+      fail('an adopted CLI session must not be moved into Cursor');
+      failed = true;
+      return { status: 'created', threadId: 'nope' };
+    };
+    await sessions.prompt(adopted.id, { text: 'stay on the cli' }).catch(() => {});
+
+    if (!failed) ok('v2 core: a first message creates the Cursor chat in the background');
+  } catch (e) {
+    fail(`v2 pad into ide: ${e.message}`);
+  } finally {
+    for (const session of sessions?.list?.() || []) sessions.live.get(session.id)?.watcher?.stop();
     rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -4380,73 +4395,6 @@ if (existsSync(SRC)) {
     else ok('v2 core: Cursor.exe is taken from the running process when the usual folders miss it');
   } catch (e) {
     fail(`v2 cursor exe: ${e.message}`);
-  }
-}
-
-// A pad session that could not open Cursor stays headless until the next
-// message. That message has to land in a computer chat and be submitted,
-// so the window calls the model instead of another ACP turn.
-{
-  const dir = mkdtempSync(join(tmpdir(), 'auto-pad-ide-'));
-  let sessions;
-  try {
-    const { SessionManager } = await import('../src/core/sessions.mjs');
-    const { KIND } = await import('../src/core/transcript.mjs');
-    let failed = false;
-    sessions = new SessionManager({ stateDir: dir, defaultFolder: ROOT }).init();
-    const meta = sessions.create({ folder: ROOT, title: 'From the pad', agent: 'cursor' });
-    meta.preferWindow = true;
-    const sent = [];
-    sessions.cursor = {
-      newChat: async () => ({ status: 'created', threadId: 'pad-thread' }),
-      ensureWindow: async () => ({ status: 'showing' }),
-      sendText: async (opts) => {
-        sent.push(opts);
-        return { status: 'submitted' };
-      },
-      choose: async () => ({ status: 'already', picker: 'model', was: 'Auto' }),
-    };
-    const result = await sessions.prompt(meta.id, { text: 'hello from the pad' });
-    const after = sessions.get(meta.id);
-    if (after.kind !== 'desktop' || after.desktopThreadId !== 'pad-thread') {
-      fail(`the pad message should open a computer chat, got ${JSON.stringify(after)}`);
-      failed = true;
-    }
-    if (result?.status !== 'submitted' || sent[0]?.text !== 'hello from the pad') {
-      fail(`the message should be typed into that chat, got ${JSON.stringify(result)} ${JSON.stringify(sent)}`);
-      failed = true;
-    }
-    const notice = (await sessions.history(meta.id)).find(
-      (r) => r.kind === KIND.notice && /Opened this chat in Cursor/.test(r.text || ''),
-    );
-    if (!notice) {
-      fail('the transcript should say the chat moved into Cursor');
-      failed = true;
-    }
-    const adopted = sessions.create({ folder: ROOT, title: 'CLI', agent: 'cursor' });
-    sessions.get(adopted.id).adopted = true;
-    let acp = false;
-    sessions.ensureLive = async () => {
-      acp = true;
-      return { client: { prompt: async () => ({ stopReason: 'end_turn' }), agent: 'cursor' }, acpSessionId: 'acp' };
-    };
-    sessions.cursor.newChat = async () => {
-      fail('an adopted CLI session must not be opened in the IDE');
-      failed = true;
-      return { status: 'created', threadId: 'nope' };
-    };
-    await sessions.prompt(adopted.id, { text: 'stay on the cli' }).catch(() => {});
-    if (!acp) {
-      fail('an adopted session should still go to ACP');
-      failed = true;
-    }
-
-    if (!failed) ok('v2 core: a pad message opens a Cursor chat and submits it');
-  } catch (e) {
-    fail(`v2 pad into ide: ${e.message}`);
-  } finally {
-    for (const session of sessions?.list?.() || []) sessions.live.get(session.id)?.watcher?.stop();
-    rmSync(dir, { recursive: true, force: true });
   }
 }
 

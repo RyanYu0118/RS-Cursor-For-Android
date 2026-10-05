@@ -8,7 +8,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Session manager
-generated: { by: agent, at: 2026-09-25T03:50:00Z }
+generated: { by: agent, at: 2026-10-05T03:50:00Z }
 ---
 
 # Sessions
@@ -31,11 +31,13 @@ ours — messages go into Cursor and come back from its database.
 
 Every session records its `agent`; it does not change for the life of the
 conversation. `AUTO_AGENT` sets the default for new sessions and the web New
-session sheet / Telegram `/new` override it. New Cursor work starts in the IDE
-when it can (`startInIde`), falling back to ACP with a
-[notice](transcripts.md) saying why. The next prompt retries the IDE; if a
-chat opens, the message is typed there. Sessions adopted from the CLI stay
-on ACP. opencode sessions skip the IDE entirely.
+session sheet / Telegram `/new` override it. A new Cursor session
+(`startInIde`) touches nothing on the computer; its first prompt creates the
+Cursor agent in the background with that message
+([desktop chats](desktop-chats.md#starting-a-chat-from-auto)). If Cursor
+cannot take it, the turn runs on ACP with one [notice](transcripts.md) and
+the next prompt tries again. Sessions adopted from the CLI stay on ACP.
+opencode sessions skip the IDE entirely.
 The model and mode catalogs are per agent (`catalogFor`), so one agent's list
 never refills the other's picker.
 
