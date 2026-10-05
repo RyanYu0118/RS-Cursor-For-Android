@@ -348,6 +348,43 @@ class TranscriptReducer {
                 active = o.optBoolean("active", false),
             )
 
+        fun modelControlsFrom(o: JSONObject?): ModelControls {
+            if (o == null) return ModelControls()
+            val arr = o.optJSONArray("parameters")
+            val parameters = ArrayList<ModelParameter>()
+            if (arr != null) {
+                for (i in 0 until arr.length()) {
+                    val row = arr.optJSONObject(i) ?: continue
+                    val id = row.optString("id")
+                    if (id.isBlank()) continue
+                    val type = row.optString("type", "select")
+                    val raw = row.opt("value")
+                    val options = ArrayList<String>()
+                    val choices = row.optJSONArray("options")
+                    if (choices != null) {
+                        for (j in 0 until choices.length()) {
+                            val choice = choices.optString(j)
+                            if (choice.isNotBlank()) options += choice
+                        }
+                    }
+                    parameters +=
+                        ModelParameter(
+                            id = id,
+                            label = row.optString("label").ifBlank { id },
+                            type = type,
+                            value = if (type == "toggle") "" else raw?.toString().orEmpty(),
+                            on = raw == true || raw?.toString() == "true",
+                            options = options,
+                        )
+                }
+            }
+            return ModelControls(
+                auto = o.optBoolean("auto"),
+                model = o.optString("model"),
+                parameters = parameters,
+            )
+        }
+
         fun catalogFrom(o: JSONObject?): Catalog {
             if (o == null) return Catalog()
             return Catalog(

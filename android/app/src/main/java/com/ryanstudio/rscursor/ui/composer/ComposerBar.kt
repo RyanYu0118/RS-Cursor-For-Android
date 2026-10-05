@@ -21,13 +21,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,11 +45,15 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.widthIn
 import coil.compose.AsyncImage
 import com.ryanstudio.rscursor.data.Catalog
 import com.ryanstudio.rscursor.data.LocalAttachment
+import com.ryanstudio.rscursor.data.ModelControls
 import com.ryanstudio.rscursor.ui.theme.GlassMenu
 import com.ryanstudio.rscursor.ui.theme.GlassMenuItem
 import com.ryanstudio.rscursor.ui.theme.GlassMenuNote
@@ -66,6 +70,7 @@ fun ComposerBar(
     catalog: Catalog,
     currentMode: String,
     currentModel: String,
+    modelControls: ModelControls,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onCancel: () -> Unit,
@@ -73,11 +78,19 @@ fun ComposerBar(
     onRemoveAttachment: (Int) -> Unit,
     onMode: (String) -> Unit,
     onModel: (String) -> Unit,
+    onAuto: (Boolean) -> Unit,
+    onModelParameter: (String, Any) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var plusOpen by remember { mutableStateOf(false) }
     var modelOpen by remember { mutableStateOf(false) }
     var modeOpen by remember { mutableStateOf(false) }
+    val modelLabel =
+        when {
+            modelControls.auto || currentModel == "default[]" || currentModel == "default" -> "Auto"
+            modelControls.model.isNotBlank() -> modelControls.model
+            else -> catalog.models.find { it.id == currentModel }?.name ?: currentModel.ifBlank { "Model" }
+        }
 
     Column(
         modifier =
@@ -113,7 +126,6 @@ fun ComposerBar(
                     Icon(Icons.Default.Add, contentDescription = "加号菜单", tint = RsAccent)
                 }
                 val modeName = catalog.modes.find { it.id == currentMode }?.name ?: currentMode.ifBlank { "—" }
-                val modelName = catalog.models.find { it.id == currentModel }?.name ?: currentModel.ifBlank { "—" }
                 GlassMenu(expanded = plusOpen, onDismissRequest = { plusOpen = false }) {
                     GlassMenuItem("模式", icon = Icons.Outlined.Tune, detail = modeName, onClick = {
                         plusOpen = false
@@ -122,10 +134,6 @@ fun ComposerBar(
                     GlassMenuItem("Files", icon = Icons.Outlined.AttachFile, onClick = {
                         plusOpen = false
                         onPickFiles()
-                    })
-                    GlassMenuItem("模型", icon = Icons.Outlined.AutoAwesome, detail = modelName, onClick = {
-                        plusOpen = false
-                        modelOpen = true
                     })
                 }
                 GlassMenu(expanded = modeOpen, onDismissRequest = { modeOpen = false }) {
@@ -136,18 +144,6 @@ fun ComposerBar(
                             GlassMenuItem(mode.name, selected = mode.id == currentMode, onClick = {
                                 modeOpen = false
                                 onMode(mode.id)
-                            })
-                        }
-                    }
-                }
-                GlassMenu(expanded = modelOpen, onDismissRequest = { modelOpen = false }) {
-                    if (catalog.models.isEmpty()) {
-                        GlassMenuNote("暂无模型")
-                    } else {
-                        catalog.models.take(40).forEach { model ->
-                            GlassMenuItem(model.name, selected = model.id == currentModel, onClick = {
-                                modelOpen = false
-                                onModel(model.id)
                             })
                         }
                     }
@@ -185,6 +181,34 @@ fun ComposerBar(
                             if (draft.isNotBlank() || attachments.isNotEmpty()) onSend()
                         },
                     ),
+                trailingIcon = {
+                    Box {
+                        TextButton(
+                            onClick = { modelOpen = true },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                            modifier = Modifier.widthIn(max = 148.dp),
+                        ) {
+                            Text(
+                                modelLabel,
+                                color = RsMuted,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(" ⌄", color = RsMuted, fontSize = 12.sp)
+                        }
+                        ModelMenu(
+                            expanded = modelOpen,
+                            controls = modelControls,
+                            catalog = catalog,
+                            currentModelId = currentModel,
+                            onDismiss = { modelOpen = false },
+                            onParameter = onModelParameter,
+                            onModel = onModel,
+                            onAuto = onAuto,
+                        )
+                    }
+                },
                 colors =
                     OutlinedTextFieldDefaults.colors(
                         focusedTextColor = RsText,

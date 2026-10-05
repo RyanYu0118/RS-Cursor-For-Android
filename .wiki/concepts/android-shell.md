@@ -26,7 +26,7 @@ sources:
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
     title: Pinned + row actions through Cursor's services
-generated: { by: agent, at: 2026-10-04T08:50:00Z }
+generated: { by: agent, at: 2026-10-05T08:10:00Z }
 ---
 
 # Android shell
@@ -172,8 +172,12 @@ rail — so the new host is a clean cold start rather than a replay of a stale
   above the composer (Start Multitasking / × / tap to edit); scroll-up loads
   older history (`transcript.more`)
 - Composer: text, send / stop (send still queues while busy), draft sync,
-  attachments
-- Plus menu: mode, Files (system gallery), model list (trimmed)
+  attachments. The model chip sits inside the field on the right (Auto, or
+  the model name). It opens Cursor's sheet: Fast (switch), Context and
+  Effort (their choices), then Model, which lists Auto and the catalog.
+  `attached` and `model.controls` fill that sheet; taps send `session.auto`,
+  `session.modelParameter`, or `session.model`.
+- Plus menu: mode, Files (system gallery)
 
 Browser and Terminals tabs are not ported yet.
 
@@ -185,7 +189,9 @@ opens `ws(s)://host/?session=&fromSeq=`, handles `hello` / `attached` /
 `prompt`, `cancel`, `session.create`, `desktop.continue`, `projects.list`,
 `desktop.chat` (pin / unpin / rename / unread / fork / move / copy /
 archive), `desktop.chat.menu`, `desktop.chat.icons`,
-`session.draft`, `session.mode`, `session.model`, `permission`. Images load
+`session.draft`, `session.mode`, `session.model`, `session.auto`,
+`session.modelParameter`, `permission`. `attached` and `model.controls`
+carry the chat's Fast / Context / Effort sheet. Images load
 from `GET /api/image?session=&path=`.
 
 ## Icon

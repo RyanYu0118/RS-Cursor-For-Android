@@ -123,6 +123,7 @@ class HostRepository {
                 queue = emptyList(),
                 earlierCount = 0,
                 loadingEarlier = false,
+                modelControls = ModelControls(),
             ),
         )
         send(
@@ -319,12 +320,48 @@ class HostRepository {
 
     fun setModel(modelId: String) {
         val id = _state.sessionId ?: return
+        val name = _state.catalog.models.find { it.id == modelId }?.name ?: modelId
+        publish(
+            _state.copy(
+                modelControls = _state.modelControls.copy(auto = false, model = name),
+                meta = _state.meta?.copy(model = modelId, modelName = name),
+            ),
+        )
         send(
             JSONObject()
                 .put("op", "session.model")
                 .put("sessionId", id)
                 .put("modelId", modelId),
         )
+    }
+
+    fun setAuto(enabled: Boolean) {
+        val id = _state.sessionId ?: return
+        publish(_state.copy(modelControls = _state.modelControls.copy(auto = enabled)))
+        send(
+            JSONObject()
+                .put("op", "session.auto")
+                .put("sessionId", id)
+                .put("enabled", enabled),
+        )
+    }
+
+    fun setModelParameter(parameter: String, value: Any) {
+        val id = _state.sessionId ?: return
+        val next =
+            _state.modelControls.parameters.map { row ->
+                if (row.id != parameter) row
+                else if (row.type == "toggle") row.copy(on = value == true)
+                else row.copy(value = value.toString())
+            }
+        publish(_state.copy(modelControls = _state.modelControls.copy(parameters = next)))
+        val payload =
+            JSONObject()
+                .put("op", "session.modelParameter")
+                .put("sessionId", id)
+                .put("parameter", parameter)
+        if (value is Boolean) payload.put("value", value) else payload.put("value", value.toString())
+        send(payload)
     }
 
     fun resolvePermission(requestId: String, optionId: String) {
@@ -659,6 +696,10 @@ class HostRepository {
             "catalog" -> {
                 publish(_state.copy(catalog = TranscriptReducer.catalogFrom(msg.optJSONObject("catalog"))))
             }
+            "model.controls" -> {
+                if (msg.optString("sessionId") != _state.sessionId) return
+                publish(_state.copy(modelControls = TranscriptReducer.modelControlsFrom(msg)))
+            }
             "error" -> {
                 val text = msg.optString("message").ifBlank { "error" }
                 publish(
@@ -740,6 +781,7 @@ class HostRepository {
                 sessionId = sessionId,
                 meta = meta,
                 catalog = catalog,
+                modelControls = TranscriptReducer.modelControlsFrom(msg.optJSONObject("modelControls")),
                 items = reducer.snapshot(),
                 transcriptReady = true,
                 sessionsReady = true,

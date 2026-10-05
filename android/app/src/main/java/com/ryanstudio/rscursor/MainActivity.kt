@@ -67,6 +67,8 @@ class MainActivity : ComponentActivity() {
                     onRemoveAttachment = vm::removeAttachment,
                     onMode = vm::setMode,
                     onModel = vm::setModel,
+                    onAuto = vm::setAuto,
+                    onModelParameter = vm::setModelParameter,
                     onPermission = vm::resolvePermission,
                     onAnswer = vm::answerQuestion,
                     onSkipQuestion = vm::skipQuestion,

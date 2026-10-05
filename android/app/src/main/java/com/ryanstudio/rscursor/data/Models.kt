@@ -26,6 +26,23 @@ data class Catalog(
     val modes: List<CatalogItem> = emptyList(),
 )
 
+/** One knob on Cursor's model sheet (Fast, Context, Effort). */
+data class ModelParameter(
+    val id: String,
+    val label: String,
+    val type: String = "select",
+    val value: String = "",
+    val on: Boolean = false,
+    val options: List<String> = emptyList(),
+)
+
+/** What the composer chip opens: Auto, the model name, and its knobs. */
+data class ModelControls(
+    val auto: Boolean = false,
+    val model: String = "",
+    val parameters: List<ModelParameter> = emptyList(),
+)
+
 data class ImagePart(
     val mimeType: String = "image/png",
     val data: String? = null,
@@ -207,6 +224,7 @@ data class HostUiState(
     val draft: String = "",
     val attachments: List<LocalAttachment> = emptyList(),
     val catalog: Catalog = Catalog(),
+    val modelControls: ModelControls = ModelControls(),
     val busy: Boolean = false,
     val queue: List<QueueItem> = emptyList(),
     val banner: String? = null,

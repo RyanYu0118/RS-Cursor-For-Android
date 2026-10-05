@@ -68,6 +68,10 @@ class HostViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setModel(id: String) = repo.setModel(id)
 
+    fun setAuto(enabled: Boolean) = repo.setAuto(enabled)
+
+    fun setModelParameter(id: String, value: Any) = repo.setModelParameter(id, value)
+
     fun resolvePermission(requestId: String, optionId: String) =
         repo.resolvePermission(requestId, optionId)
 

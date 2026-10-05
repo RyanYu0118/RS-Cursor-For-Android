@@ -103,6 +103,8 @@ fun AppScaffold(
     onRemoveAttachment: (Int) -> Unit,
     onMode: (String) -> Unit,
     onModel: (String) -> Unit,
+    onAuto: (Boolean) -> Unit,
+    onModelParameter: (String, Any) -> Unit,
     onPermission: (String, String) -> Unit,
     onAnswer: (String, String) -> Unit,
     onSkipQuestion: (String) -> Unit,
@@ -163,6 +165,8 @@ fun AppScaffold(
                         onRemoveAttachment = onRemoveAttachment,
                         onMode = onMode,
                         onModel = onModel,
+                        onAuto = onAuto,
+                        onModelParameter = onModelParameter,
                         onPermission = onPermission,
                         onAnswer = onAnswer,
                         onSkipQuestion = onSkipQuestion,
@@ -200,6 +204,8 @@ private fun MainShell(
     onRemoveAttachment: (Int) -> Unit,
     onMode: (String) -> Unit,
     onModel: (String) -> Unit,
+    onAuto: (Boolean) -> Unit,
+    onModelParameter: (String, Any) -> Unit,
     onPermission: (String, String) -> Unit,
     onAnswer: (String, String) -> Unit,
     onSkipQuestion: (String) -> Unit,
@@ -381,6 +387,7 @@ private fun MainShell(
                     catalog = state.catalog,
                     currentMode = state.meta?.mode.orEmpty(),
                     currentModel = state.meta?.model.orEmpty(),
+                    modelControls = state.modelControls,
                     onDraftChange = onDraftChange,
                     onSend = onSend,
                     onCancel = onCancel,
@@ -388,6 +395,8 @@ private fun MainShell(
                     onRemoveAttachment = onRemoveAttachment,
                     onMode = onMode,
                     onModel = onModel,
+                    onAuto = onAuto,
+                    onModelParameter = onModelParameter,
                 )
             }
         }
