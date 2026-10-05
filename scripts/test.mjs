@@ -3741,6 +3741,45 @@ if (existsSync(SRC)) {
   if (!failed) ok('v2 web: per-session drafts and immediate send');
 }
 
+// A registry Windows briefly holds open must not throw out of #update.
+{
+  const { renameWithRetry } = await import('../src/core/sessions.mjs');
+  let failed = false;
+  const locked = (times, code = 'EPERM') => {
+    let calls = 0;
+    const rename = () => {
+      calls += 1;
+      if (calls <= times) throw Object.assign(new Error(code), { code });
+    };
+    return { rename, calls: () => calls };
+  };
+  const brief = locked(3);
+  try {
+    renameWithRetry('a', 'b', { rename: brief.rename, delayMs: 1 });
+    if (brief.calls() !== 4) throw new Error(`renamed after ${brief.calls()} tries`);
+  } catch (err) {
+    fail(`a briefly locked sessions.json must be renamed on retry: ${err.message}`);
+    failed = true;
+  }
+  const other = locked(1, 'ENOENT');
+  try {
+    renameWithRetry('a', 'b', { rename: other.rename, delayMs: 1 });
+    fail('a missing file is not a lock and must not be retried');
+    failed = true;
+  } catch {
+    if (other.calls() !== 1) {
+      fail('ENOENT must fail on the first try');
+      failed = true;
+    }
+  }
+  const sessionsSrc = readFileSync(new URL('../src/core/sessions.mjs', import.meta.url), 'utf8');
+  if (!/#persist\(\) \{[\s\S]*?try \{[\s\S]*?renameWithRetry/.test(sessionsSrc)) {
+    fail('#persist must not throw a locked-file error into its caller');
+    failed = true;
+  }
+  if (!failed) ok('sessions registry survives a briefly locked file');
+}
+
 // A prompt Auto typed into Cursor must not come back as a second bubble.
 {
   const { echoKey, modelIdFor, cursorNameFor } = await import('../src/core/sessions.mjs');

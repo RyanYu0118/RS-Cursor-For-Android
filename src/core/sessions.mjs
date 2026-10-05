@@ -37,6 +37,20 @@ import { accountUsage } from './cursor-usage.mjs';
 import { labelsForAnswer, indexesForAnswer } from './questions.mjs';
 import { classifyTool } from './desktop-tool-ui.mjs';
 
+const LOCKED_FILE = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+/** renameSync that waits out a file another process has open for a moment. */
+export function renameWithRetry(from, to, { attempts = 10, delayMs = 20, rename = renameSync } = {}) {
+  for (let i = 1; ; i += 1) {
+    try {
+      return rename(from, to);
+    } catch (err) {
+      if (i >= attempts || !LOCKED_FILE.has(err?.code)) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
+    }
+  }
+}
+
 /** Same words, even when Cursor stores a different apostrophe or spacing. */
 export function echoKey(text) {
   return String(text || '')
@@ -473,9 +487,19 @@ export class SessionManager extends EventEmitter {
       updatedAt: new Date().toISOString(),
     };
     // Write-then-rename so a crash mid-write cannot leave a truncated registry.
+    // Windows refuses the rename while anything (antivirus, the indexer) holds
+    // the registry open, for a few milliseconds at a time. A throw here lands
+    // in the middle of whatever called #update — once it cut a new chat off
+    // before its watcher started, so the phone never saw a reply. Retry, and
+    // if the file stays locked keep going: memory is right, and the next
+    // write carries it.
     const tmp = `${this.statePath}.tmp`;
-    writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n');
-    renameSync(tmp, this.statePath);
+    try {
+      writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n');
+      renameWithRetry(tmp, this.statePath);
+    } catch (err) {
+      this.emit('log', `could not save sessions: ${err.message}`);
+    }
     this.emit('sessions', this.list());
   }
 
