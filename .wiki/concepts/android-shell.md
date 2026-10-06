@@ -26,7 +26,10 @@ sources:
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
     title: Pinned + row actions through Cursor's services
-generated: { by: agent, at: 2026-10-06T11:20:00Z }
+  - id: cursor-icons
+    resource: /src/core/cursor-icons.mjs
+    title: Cursor icon glyph table + TrueType font
+generated: { by: agent, at: 2026-10-06T19:45:00Z }
 ---
 
 # Android shell
@@ -109,7 +112,23 @@ Long-press a chat (or Pinned row) for Cursor's own row menu, in its order:
   (front-coded names, "legacy" / "filled" dropped, featured icons first);
   search filters by words. An appearance is always icon + colour, so a colour
   picked before any icon waits on the host until one is chosen. `clear`
-  removes it.
+  removes it. The picker draws the real glyphs as a grid, like Cursor's.
+
+**Rows draw Cursor's own icons.** A chat with an appearance (Pinned or a
+repo chat) shows its icon glyph in its colour; one without keeps a dot, and a
+running turn still shows the spinner. The glyphs are Cursor's `cursor-icons`
+font, read from the installed Cursor and never copied into this repo
+([`cursor-icons.mjs`](/src/core/cursor-icons.mjs)):
+
+- The name → code point table is decoded from `workbench.glass.main.js`:
+  front-coded names plus base-36 code-point deltas, matched index for index.
+  The sidebar snapshot and the picker's icon list carry `glyph`.
+- `GET /api/cursor-icons.ttf` serves `out/media/cursor-icons-16.woff2`
+  converted to TrueType (`wawoff2`), cached in `state/` and keyed by the
+  source's size and mtime with an ETag.
+- The app downloads it once per connection into app storage
+  (`CursorIcons.kt`) and draws glyphs with that `FontFamily`. Colour ids use
+  Cursor's picker palette; `default` is muted text.
 - **Move to ›** is read when opened (`desktop.chat.menu` with `sub: "Move
   to"`); the target is matched by id, "label detail", or label.
 - An Auto-only session (no Cursor chat) offers only Archive.

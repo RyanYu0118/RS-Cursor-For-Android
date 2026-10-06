@@ -68,6 +68,7 @@ import com.ryanstudio.rscursor.ui.chat.QueueStrip
 import com.ryanstudio.rscursor.ui.chat.TranscriptScreen
 import com.ryanstudio.rscursor.ui.composer.ComposerBar
 import com.ryanstudio.rscursor.ui.rail.SessionRail
+import com.ryanstudio.rscursor.ui.theme.CursorIcons
 import com.ryanstudio.rscursor.ui.theme.GlassButton
 import com.ryanstudio.rscursor.ui.theme.GlassChip
 import com.ryanstudio.rscursor.ui.theme.ImmersiveLightBackground
@@ -218,6 +219,10 @@ private fun MainShell(
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val connected = state.phase == ConnPhase.Connected
+    LaunchedEffect(state.hostUrl, connected) {
+        CursorIcons.load(context.applicationContext, if (connected) state.hostUrl else "")
+    }
     val notice = state.notice
     LaunchedEffect(notice?.id) {
         if (notice == null) return@LaunchedEffect

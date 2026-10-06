@@ -140,6 +140,9 @@ data class RailChat(
     val folder: String = "",
     val at: Long = 0L,
     val busy: Boolean = false,
+    /** Cursor's icon glyph (cursor-icons font) and colour id; empty when the chat has none. */
+    val glyph: String = "",
+    val color: String = "",
 )
 
 data class RailRepo(
@@ -156,6 +159,7 @@ data class RailPinned(
     val folder: String = "",
     val at: Long = 0L,
     val color: String = "",
+    val glyph: String = "",
 )
 
 /** A rail row the long-press menu is acting on. */
@@ -181,6 +185,7 @@ data class MenuMoveState(
 data class IconChoice(
     val label: String,
     val selected: Boolean,
+    val glyph: String = "",
 )
 
 /** Cursor's Edit Icon picker, mirrored for one chat. */

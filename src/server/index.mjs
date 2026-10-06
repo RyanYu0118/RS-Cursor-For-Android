@@ -22,6 +22,7 @@ import { HostIdentity } from '../core/host-identity.mjs';
 import { TelegramBridge } from '../core/telegram.mjs';
 import { listProjects, workspaceIdFor, foldersByWorkspaceId } from '../core/projects.mjs';
 import { refreshLivePinned, sidebarSnapshot, watchLivePinned } from '../core/glass-sidebar.mjs';
+import { iconFontTtf } from '../core/cursor-icons.mjs';
 import { pressSidebarAction, readRowMenu, renameRow, rowIcon } from '../core/cursor-sidebar.mjs';
 
 /** Turn a sidebar action Cursor could not take into words for the phone. */
@@ -1028,6 +1029,24 @@ async function route(req, res) {
 
   if (pathname === '/api/image' && req.method === 'GET') {
     return serveImage(req, res, new URL(req.url, 'http://localhost'));
+  }
+
+  if (pathname === '/api/cursor-icons.ttf' && req.method === 'GET') {
+    const font = await iconFontTtf(STATE_DIR).catch(() => null);
+    if (!font) return json(res, { error: 'Cursor icon font not found' }, 404);
+    if (req.headers['if-none-match'] === font.etag) {
+      res.writeHead(304, { ETag: font.etag });
+      res.end();
+      return undefined;
+    }
+    res.writeHead(200, {
+      'Content-Type': 'font/ttf',
+      'Content-Length': font.body.length,
+      'Cache-Control': 'public, max-age=86400',
+      ETag: font.etag,
+    });
+    res.end(font.body);
+    return undefined;
   }
 
   if (pathname === '/api/mcp' && req.method === 'GET') {

@@ -59,6 +59,8 @@ import com.ryanstudio.rscursor.data.RailChat
 import com.ryanstudio.rscursor.data.RailMenuTarget
 import com.ryanstudio.rscursor.data.RailPinned
 import com.ryanstudio.rscursor.data.RailRepo
+import com.ryanstudio.rscursor.ui.theme.CursorGlyph
+import com.ryanstudio.rscursor.ui.theme.CursorIcons
 import com.ryanstudio.rscursor.ui.theme.GleamText
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
@@ -409,7 +411,13 @@ private fun PinnedRow(
                     )
                     .padding(horizontal = RsSpace.railRowH, vertical = RsSpace.railRowV),
         ) {
-            RailLeading(busy = busy, selected = selected, pinTint = pinColor(pin.color.ifBlank { pin.name }))
+            RailLeading(
+                busy = busy,
+                selected = selected,
+                pinTint = pinColor(pin.color.ifBlank { pin.name }),
+                glyph = pin.glyph,
+                colorId = pin.color,
+            )
             Spacer(modifier = Modifier.width(10.dp))
             RailTitle(
                 text = title,
@@ -525,7 +533,7 @@ private fun ChatRow(
                         bottom = RsSpace.railRowV,
                     ),
         ) {
-            RailLeading(busy = busy, selected = selected, pinTint = null)
+            RailLeading(busy = busy, selected = selected, pinTint = null, glyph = chat.glyph, colorId = chat.color)
             Spacer(modifier = Modifier.width(10.dp))
             RailTitle(
                 text = title,
@@ -542,35 +550,45 @@ private fun ChatRow(
     }
 }
 
-/** Dot when idle; spinner left of the title while the turn runs. */
+/** Cursor's icon (or a dot) when idle; spinner left of the title while the turn runs. */
 @Composable
 private fun RailLeading(
     busy: Boolean,
     selected: Boolean,
     pinTint: Color?,
+    glyph: String = "",
+    colorId: String = "",
 ) {
-    if (busy) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(12.dp),
-            color = if (selected) RsAccent else RsMuted,
-            strokeWidth = 1.6.dp,
-        )
-    } else if (pinTint != null) {
-        Box(
-            modifier =
-                Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(pinTint),
-        )
-    } else {
-        Box(
-            modifier =
-                Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(if (selected) RsAccent else RsMuted.copy(alpha = 0.55f)),
-        )
+    Box(modifier = Modifier.size(14.dp), contentAlignment = Alignment.Center) {
+        if (busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                color = if (selected) RsAccent else RsMuted,
+                strokeWidth = 1.6.dp,
+            )
+        } else if (glyph.isNotEmpty() && CursorIcons.family != null) {
+            CursorGlyph(
+                glyph = glyph,
+                tint = CursorIcons.color(colorId) ?: if (selected) RsAccent else RsMuted,
+                size = 14.dp,
+            )
+        } else if (pinTint != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(pinTint),
+            )
+        } else {
+            Box(
+                modifier =
+                    Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) RsAccent else RsMuted.copy(alpha = 0.55f)),
+            )
+        }
     }
 }
 
@@ -614,21 +632,9 @@ private fun isSelected(
 }
 
 private fun pinColor(name: String): Color {
-    // Cursor's ICON_COLORS ids + a few display labels. Anything else hashes.
-    val known =
-        mapOf(
-            "default" to Color(0xFF9AA4B2),
-            "green" to Color(0xFF3DD68C),
-            "cyan" to Color(0xFF4CC9C0),
-            "blue" to Color(0xFF6EA8FE),
-            "purple" to Color(0xFFC084FC),
-            "magenta" to Color(0xFFE879F9),
-            "orange" to Color(0xFFE6A15C),
-            "yellow" to Color(0xFFE6C15C),
-            "red" to Color(0xFFF07178),
-            "brand" to Color(0xFFF54E00),
-        )
-    known[name.trim().lowercase()]?.let { return it }
+    // Cursor's ICON_COLORS ids. Anything else hashes.
+    if (name.trim().lowercase() == "default") return Color(0xFFA6A6A6)
+    CursorIcons.color(name)?.let { return it }
     var n = 0
     for (ch in name) n = n * 33 + ch.code
     // Int overflow is fine; hue must stay in [0, 360] or Color.hsl throws.

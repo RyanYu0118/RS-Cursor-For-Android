@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { foldersByWorkspaceId } from './projects.mjs';
 import { desktopChats, desktopChatsWithoutWorkspace, recentDesktopChats } from './desktop-chats.mjs';
 import { readLivePinned } from './cursor-sidebar.mjs';
+import { iconGlyph } from './cursor-icons.mjs';
 
 const APPDATA = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
 const IDE_DB = join(APPDATA, 'Cursor', 'User', 'globalStorage', 'state.vscdb');
@@ -350,10 +351,40 @@ export function sidebarSnapshot() {
       repos.splice(repos.findIndex((repo) => repo.name === 'Minecraft') + 1, 0, row);
     }
   }
+  const looks = appearances();
   for (const repo of repos) {
     repo.collapsed = collapsedKeys.has(repo.key);
     repo.chats.sort((a, b) => b.at - a.at);
+    for (const chat of repo.chats) {
+      const look = looks.get(chat.id);
+      if (!look) continue;
+      chat.icon = look.icon;
+      chat.color = look.color;
+      chat.glyph = iconGlyph(look.icon);
+    }
   }
+  for (const row of pinned) row.glyph = iconGlyph(row.icon);
 
   return { pinned, repos };
+}
+
+/** Chats given an icon in Cursor (Edit Icon). A chat without one draws no icon, as in Cursor. */
+function appearances() {
+  const rows =
+    withDb((db) =>
+      db
+        .prepare(
+          `SELECT composerId AS id,
+                  json_extract(value, '$.projectAppearance.icon') AS icon,
+                  json_extract(value, '$.projectAppearance.colorId') AS color
+           FROM composerHeaders
+           WHERE value LIKE '%"projectAppearance"%'`,
+        )
+        .all(),
+    ) || [];
+  const map = new Map();
+  for (const row of rows) {
+    if (row.id && row.icon) map.set(row.id, { icon: row.icon, color: row.color || 'default' });
+  }
+  return map;
 }

@@ -2322,6 +2322,20 @@ if (existsSync(SRC)) {
   else fail(`icon catalog decoded wrong: ${JSON.stringify(icons)}`);
 }
 
+// Chat icons draw from Cursor's font: names and code points decode index for index.
+{
+  const { decodeIconGlyphs } = await import('../src/core/cursor-icons.mjs');
+  const bundle =
+    'function sS_(t){const e=[];let n="";for(const i of t.split(" "))n=n.slice(0,Number.parseInt(i[0],36))+i.slice(1),e.push(n);return e}' +
+    'function pB_(t){const e=[];let n=0;for(const i of t.split(" "))n+=Number.parseInt(i,36),e.push(String.fromCharCode(n));return e}' +
+    ';pCd="0code 0rocket 6-filled",MJe=sS_(pCd),gBd="1aao 2 1";' +
+    'function wo_(){const t=pB_(gBd),e={};for(let n=0;n<MJe.length;n++)e[MJe[n]]=t[n];return e}';
+  const glyphs = decodeIconGlyphs(bundle);
+  const got = glyphs && [...glyphs].map(([n, g]) => `${n}:${g.codePointAt(0).toString(16)}`).join(' ');
+  if (got === 'code:ea60 rocket:ea62 rocket-filled:ea63') ok('sidebar: icon glyphs decoded');
+  else fail(`icon glyphs decoded wrong: ${got}`);
+}
+
 // Mermaid and KaTeX ship as vendor assets; enrich.js paints them after markdown.
 {
   const server = readFileSync(join(ROOT, 'src/server/index.mjs'), 'utf8');

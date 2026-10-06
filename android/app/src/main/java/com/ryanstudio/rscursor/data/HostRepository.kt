@@ -668,7 +668,7 @@ class HostRepository {
                     for (i in 0 until arr.length()) {
                         val o = arr.optJSONObject(i) ?: continue
                         val label = o.optString("label")
-                        if (label.isNotBlank()) out += IconChoice(label, o.optBoolean(flag))
+                        if (label.isNotBlank()) out += IconChoice(label, o.optBoolean(flag), o.optString("glyph"))
                     }
                     return out
                 }

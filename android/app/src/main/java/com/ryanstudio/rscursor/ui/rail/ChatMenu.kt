@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Archive
@@ -42,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import com.ryanstudio.rscursor.data.IconPickerState
 import com.ryanstudio.rscursor.data.MenuMoveState
 import com.ryanstudio.rscursor.data.RailMenuTarget
+import com.ryanstudio.rscursor.ui.theme.CursorGlyph
+import com.ryanstudio.rscursor.ui.theme.CursorIcons
 import com.ryanstudio.rscursor.ui.theme.GlassButton
 import com.ryanstudio.rscursor.ui.theme.GlassChoiceChip
 import com.ryanstudio.rscursor.ui.theme.GlassDialog
@@ -53,6 +56,7 @@ import com.ryanstudio.rscursor.ui.theme.GlassSubmenu
 import com.ryanstudio.rscursor.ui.theme.GlassTextField
 import com.ryanstudio.rscursor.ui.theme.RsAccent
 import com.ryanstudio.rscursor.ui.theme.RsMuted
+import com.ryanstudio.rscursor.ui.theme.RsText
 import kotlinx.coroutines.delay
 
 private val CopyItems =
@@ -270,12 +274,34 @@ fun IconPickerDialog(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                val tint = state.colors.firstOrNull { it.selected }?.label.orEmpty()
                 state.icons.forEach { ic ->
-                    GlassChoiceChip(
-                        text = ic.label,
-                        selected = ic.selected || ic.label == state.current,
-                        onClick = { onIcon(ic.label) },
-                    )
+                    val chosen = ic.selected || ic.label == state.current
+                    if (ic.glyph.isNotEmpty() && CursorIcons.family != null) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier =
+                                Modifier
+                                    .size(36.dp)
+                                    .background(
+                                        if (chosen) Color.White.copy(alpha = 0.16f) else Color.Transparent,
+                                        RoundedCornerShape(8.dp),
+                                    )
+                                    .clickable { onIcon(ic.label) },
+                        ) {
+                            CursorGlyph(
+                                glyph = ic.glyph,
+                                tint = if (chosen) CursorIcons.color(tint) ?: RsText else RsText.copy(alpha = 0.78f),
+                                size = 18.dp,
+                            )
+                        }
+                    } else {
+                        GlassChoiceChip(
+                            text = ic.label,
+                            selected = chosen,
+                            onClick = { onIcon(ic.label) },
+                        )
+                    }
                 }
             }
         }

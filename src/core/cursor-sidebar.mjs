@@ -17,6 +17,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { CursorCdp, DEFAULT_PORT } from './cursor-cdp.mjs';
+import { iconGlyph } from './cursor-icons.mjs';
 
 const cdps = new Map();
 function cdpFor(port) {
@@ -365,7 +366,7 @@ export async function rowIcon(chatId, { query = '', color = '', icon = '', clear
   return {
     ok: true,
     colors: ICON_COLORS.map(([id, label]) => ({ label, checked: id === shownColor })),
-    icons: icons.slice(0, 160).map((label) => ({ label, selected: label === current?.icon })),
+    icons: icons.slice(0, 160).map((label) => ({ label, selected: label === current?.icon, glyph: iconGlyph(label) })),
     current: current?.icon || '',
   };
 }

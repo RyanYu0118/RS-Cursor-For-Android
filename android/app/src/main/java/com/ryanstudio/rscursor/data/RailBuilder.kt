@@ -66,6 +66,7 @@ object RailBuilder {
                     folder = o.optString("folder"),
                     at = parseTime(o.opt("at")),
                     color = o.optString("color"),
+                    glyph = o.optString("glyph"),
                 )
         }
         return out
@@ -160,9 +161,11 @@ object RailBuilder {
                         continue
                     }
                     val known = byThread[chatId]
+                    val glyph = c.optString("glyph")
+                    val color = c.optString("color")
                     if (known != null) {
                         seenSession += known.id
-                        chats += sessionChat(known, cursorTitle)
+                        chats += sessionChat(known, cursorTitle).copy(glyph = glyph, color = color)
                     } else {
                         val title = pickTitle(cursorTitle, "", folder)
                         chats +=
@@ -172,6 +175,8 @@ object RailBuilder {
                                 title = title,
                                 folder = c.optString("folder").ifBlank { folder },
                                 at = parseTime(c.opt("at")),
+                                glyph = glyph,
+                                color = color,
                             )
                     }
                 }
