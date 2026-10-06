@@ -108,6 +108,14 @@ cd android
 
 参与开发请先看 [AGENTS.md](AGENTS.md)：改代码要跑 `npm test`，通过后提交。
 
+## 支持作者
+
+RS Cursor 由 RYAN STUDIO 独立开发维护。如果它帮到了你，欢迎在爱发电支持：
+
+**[afdian.com/a/RYAN_STUDIO](https://afdian.com/a/RYAN_STUDIO)**
+
+赞助者可以第一时间拿到编译好的 Beta 版 APK。RS Cursor 是非官方项目，与 Cursor / Anysphere 无关；Cursor 更新后可能需要等待适配。
+
 ## 致谢与许可
 
 - 主机端基于 Simon Pedersen 的 [Auto](https://github.com/nitech/auto)。RS Cursor 在它的基础上加了安卓平板客户端，以及输入同步、侧栏镜像、后台新建对话、图标字体等功能。
