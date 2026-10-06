@@ -76,7 +76,9 @@ Cursor 必须带调试端口启动，否则主机没法和 IDE 交互：
 
 ### 2. 平板：安装 App
 
-用 JDK 17 编译：
+到 [Releases](https://github.com/RyanYu0118/RS-Cursor-For-Android/releases/latest) 下载最新 APK，装到平板（Android 8.0+）。首次打开时填写主机地址，例如 `http://100.x.y.z:4331`。
+
+也可以自己用 JDK 17 编译：
 
 ```powershell
 cd android

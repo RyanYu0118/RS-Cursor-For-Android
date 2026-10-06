@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-10-06
+* **Release**: First RS Cursor release `26m10a` published on GitHub (tag `v26m10a`, debug-signed APK). README points tablet install at Releases. See [Android shell](concepts/android-shell.md).
 * **Change**: Test builds are always `RS Cursor - beta.apk`; only a confirmed release (`-PrsRelease`) gets the versioned name. See [Android shell](concepts/android-shell.md).
 * **Change**: RS Cursor versions are `<yy>m<month><letter>` (first: `26m10a`) and the APK is named `RS Cursor - <versionName>.apk`; the app label stays RS Cursor. See [Android shell](concepts/android-shell.md).
 * **Fix**: Choosing a model on a new chat before its first message no longer shows "Internal error". The choice (and its Fast / Effort knobs) is stored on the session without starting the ACP agent, and the Cursor chat is created on that model. See [Desktop chats](concepts/desktop-chats.md).
