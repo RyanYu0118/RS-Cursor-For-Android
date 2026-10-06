@@ -18,10 +18,12 @@ When an application is built and ready to use, copy the deliverable (APK, instal
 
 RS Cursor's `versionName` is `<yy>m<month><letter>`: `26m10a` is the first release of October 2026, then `26m10b`, `26m10c`; a new month starts again at `a` (`26m11a`). The app name stays `RS Cursor`.
 
-**Every test build is a beta.** A plain `assembleDebug` produces `RS Cursor - beta.apk`; back it up as `R:\RYAN STUDIO\软件\RS Cursor beta\RS Cursor - beta.apk`, overwriting the previous beta. Do not bump the version for a beta.
+RS Cursor is the exception to the versioned-folder rule: everything goes in one folder, `R:\RYAN STUDIO\软件\RS Cursor\`.
+
+**Every test build is a beta.** A plain `assembleDebug` produces `RS Cursor - beta.apk`; copy it into that folder, overwriting the previous beta. Do not bump the version for a beta.
 
 **Only when the user confirms a release:**
 
 - Take the next letter (or `a` in a new month) for `versionName` and raise `versionCode` by 1.
-- Build with `.\gradlew.bat assembleDebug -PrsRelease`, which names the APK `RS Cursor - <versionName>.apk`.
-- Back it up as `R:\RYAN STUDIO\软件\RS Cursor <versionName>\RS Cursor - <versionName>.apk`.
+- Build with `.\gradlew.bat assembleDebug -PrsRelease`, which names the APK `RS Cursor - <versionName>.apk`, and copy it into the same folder.
+- Overwrite `RS Cursor - beta.apk` with that same build, so the beta and the newest release are identical files.

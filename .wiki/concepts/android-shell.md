@@ -253,8 +253,7 @@ test build is a beta and keeps that name. A release the user has confirmed is
 built with `-PrsRelease` and named `RS Cursor - <versionName>.apk`.
 `versionName` is `<yy>m<month><letter>` — `26m10a` is the first release of
 October 2026, then `26m10b`; a new month restarts at `a`. The app label stays
-"RS Cursor". Backups go to `R:\RYAN STUDIO\软件\RS Cursor beta\` or
-`RS Cursor <versionName>\`.
+"RS Cursor". Both are backed up in one folder, `R:\RYAN STUDIO\软件\RS Cursor\`.
 Copy `local.properties.example` to `local.properties` and set `sdk.dir`
 if the SDK is not the cursor-pad one.
 
