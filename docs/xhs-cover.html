@@ -21,13 +21,18 @@
   .grain { position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay;
     background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 4px 4px; }
 
-  .brand { position: absolute; top: 72px; left: 80px; display: flex; align-items: center; gap: 20px; }
-  .brand img { width: 76px; height: 76px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
-  .brand b { font-size: 40px; letter-spacing: .5px; }
-  .brand span { display: block; font-size: 22px; color: rgba(244,241,234,.55); margin-top: 4px; font-weight: 400; }
+  .brand { position: absolute; top: 60px; left: 78px; }
+  .brand b { display: block; font-size: 84px; font-weight: 900; letter-spacing: -1px; line-height: 1.05; }
+  .brand span { display: block; font-size: 30px; color: rgba(244,241,234,.6); margin-top: 8px; font-weight: 500; letter-spacing: 1px; }
 
-  .headline { position: absolute; top: 190px; left: 76px; right: 60px; }
-  .headline .small { font-size: 64px; font-weight: 700; color: rgba(244,241,234,.9); }
+  .app-icon {
+    position: absolute; top: 230px; right: 70px; width: 420px; height: 420px; border-radius: 96px;
+    box-shadow: 0 30px 90px rgba(0,0,0,.6), 0 0 120px rgba(169,139,255,.35);
+    transform: rotate(6deg);
+  }
+
+  .headline { position: absolute; top: 250px; left: 76px; width: 520px; }
+  .headline .small { font-size: 56px; font-weight: 700; color: rgba(244,241,234,.9); line-height: 1.2; }
   .headline .big {
     font-size: 150px; font-weight: 900; line-height: 1.08; letter-spacing: -2px; margin-top: 6px;
     background: linear-gradient(100deg, #7FD3FF 0%, #A98BFF 45%, #FF7FA8 80%, #FFB37F 100%);
@@ -35,7 +40,7 @@
     filter: drop-shadow(0 6px 30px rgba(169,139,255,.35));
   }
 
-  .badges { position: absolute; top: 520px; left: 80px; display: flex; flex-direction: column; gap: 16px; }
+  .badges { position: absolute; top: 590px; left: 80px; display: flex; flex-direction: column; gap: 16px; }
   .badge {
     display: inline-flex; align-items: center; gap: 16px; padding: 16px 30px 16px 18px;
     font-size: 38px; font-weight: 700; border-radius: 999px; width: fit-content;
@@ -135,12 +140,13 @@
   <div class="grain"></div>
 
   <div class="brand">
-    <img src="../android/branding/rs-cursor-logo.png" alt="">
-    <div><b>RS Cursor</b><span>安卓平板 · Cursor 遥控器</span></div>
+    <b>RS Cursor</b><span>安卓平板 · Cursor 遥控器</span>
   </div>
 
+  <img class="app-icon" src="../android/branding/rs-cursor-logo.png" alt="">
+
   <div class="headline">
-    <div class="small">我给 Cursor 做了个</div>
+    <div class="small">我给 Cursor<br>做了个</div>
     <div class="big">遥控器</div>
   </div>
 
