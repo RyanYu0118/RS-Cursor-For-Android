@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>RS Cursor 结尾页</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; }
+  body { width: 1080px; height: 1440px; overflow: hidden; }
+  .page {
+    position: relative; width: 1080px; height: 1440px; overflow: hidden;
+    font-family: "PingFang SC", "Microsoft YaHei", "HarmonyOS Sans SC", sans-serif;
+    color: #F4F1EA;
+    background:
+      radial-gradient(620px 520px at 88% 6%, rgba(88, 180, 255, .28), transparent 70%),
+      radial-gradient(700px 600px at 5% 34%, rgba(160, 110, 255, .28), transparent 70%),
+      radial-gradient(760px 620px at 75% 100%, rgba(255, 110, 150, .22), transparent 70%),
+      radial-gradient(520px 420px at 10% 96%, rgba(61, 220, 132, .16), transparent 70%),
+      #0E0C09;
+  }
+  .grain { position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay;
+    background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 4px 4px; }
+
+  .hero { position: absolute; top: 76px; left: 0; right: 0; text-align: center; }
+  .hero img {
+    width: 240px; height: 240px; border-radius: 56px;
+    box-shadow: 0 30px 90px rgba(0,0,0,.6), 0 0 120px rgba(169,139,255,.35);
+  }
+  .hero h1 { font-size: 90px; font-weight: 900; letter-spacing: -1px; margin-top: 28px; line-height: 1; }
+  .hero .tag {
+    margin-top: 18px; font-size: 46px; font-weight: 800; letter-spacing: 2px;
+    background: linear-gradient(100deg, #7FD3FF 0%, #A98BFF 40%, #FF7FA8 70%, #3DDC84 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  .card {
+    position: absolute; left: 80px; right: 80px; border-radius: 36px;
+    background: rgba(255,255,255,.06); border: 1.5px solid rgba(255,255,255,.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 20px 60px rgba(0,0,0,.35);
+    backdrop-filter: blur(16px);
+  }
+  .setup { top: 566px; padding: 30px 44px 18px; }
+  .setup h2 { font-size: 40px; font-weight: 800; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; }
+  .setup h2 small { font-size: 24px; font-weight: 500; color: rgba(244,241,234,.5); }
+  .step { display: flex; align-items: center; gap: 22px; padding: 14px 0; border-top: 1px solid rgba(255,255,255,.08); }
+  .step:first-of-type { border-top: none; }
+  .num {
+    width: 52px; height: 52px; border-radius: 16px; flex: none; display: grid; place-items: center;
+    font-size: 28px; font-weight: 900; color: #0E0C09;
+  }
+  .step b { font-size: 32px; font-weight: 700; display: block; }
+  .step span { font-size: 24px; color: rgba(244,241,234,.6); display: block; margin-top: 4px; }
+
+  .gh { top: 1130px; padding: 30px 44px; display: flex; align-items: center; gap: 30px;
+    background: linear-gradient(100deg, rgba(127,211,255,.14), rgba(169,139,255,.14) 50%, rgba(255,127,168,.12)); }
+  .gh svg { width: 96px; height: 96px; flex: none; fill: #F4F1EA; }
+  .gh .t { font-size: 30px; color: rgba(244,241,234,.75); font-weight: 600; }
+  .gh .u { font-size: 34px; font-weight: 800; margin-top: 8px; letter-spacing: .2px; }
+  .gh .s { font-size: 24px; color: rgba(244,241,234,.6); margin-top: 8px; }
+
+  .foot { position: absolute; left: 80px; right: 80px; bottom: 56px; display: flex; justify-content: space-between; align-items: center; }
+  .foot span { font-size: 22px; color: rgba(244,241,234,.45); white-space: nowrap; }
+  .studio-logo { height: 44px; width: auto; display: block; flex: none; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="grain"></div>
+
+  <div class="hero">
+    <img src="../android/branding/rs-cursor-logo.png" alt="">
+    <h1>RS Cursor</h1>
+    <div class="tag">Cursor 遥控器 · 安卓可用</div>
+  </div>
+
+  <div class="card setup">
+    <h2>主机配置 <small>四步就能用</small></h2>
+    <div class="step">
+      <div class="num" style="background:#7FD3FF">1</div>
+      <div><b>Windows 电脑 + Cursor</b><span>启动 Cursor 时带上 --remote-debugging-port=9222</span></div>
+    </div>
+    <div class="step">
+      <div class="num" style="background:#A98BFF">2</div>
+      <div><b>运行主机服务</b><span>Node 20+，一条命令装好，可开机自启</span></div>
+    </div>
+    <div class="step">
+      <div class="num" style="background:#FF7FA8">3</div>
+      <div><b>平板和电脑连同一个网络</b><span>同一 Wi-Fi，或都装上 Tailscale</span></div>
+    </div>
+    <div class="step">
+      <div class="num" style="background:#3DDC84">4</div>
+      <div><b>平板装好 App，填一次主机地址</b><span>之后打开就连，断线自动重连</span></div>
+    </div>
+  </div>
+
+  <div class="card gh">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    <div>
+      <div class="t">安装步骤、功能细节、源码，都在 GitHub</div>
+      <div class="u">RyanYu0118/RS-Cursor-For-Android</div>
+      <div class="s">开源免费 · 欢迎 Star ⭐</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>非官方项目，与 Cursor / Anysphere 无关</span>
+    <img class="studio-logo" src="ryan-studio-logo.png" alt="RYAN STUDIO">
+  </div>
+</div>
+</body>
+</html>
