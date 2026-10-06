@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>RS Cursor 下载与使用说明</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", "HarmonyOS Sans SC", sans-serif; color: #2A2620; background: #FAF8F3; }
+  .page { width: 210mm; height: 297mm; position: relative; overflow: hidden; page-break-after: always; padding: 20mm 18mm 18mm; }
+  .page:last-child { page-break-after: auto; }
+  a { color: #6A4FE0; text-decoration: none; }
+
+  /* cover */
+  .cover {
+    padding: 0; color: #F4F1EA;
+    background:
+      radial-gradient(90mm 80mm at 12% 8%, rgba(88,180,255,.32), transparent 70%),
+      radial-gradient(110mm 90mm at 95% 35%, rgba(160,110,255,.32), transparent 70%),
+      radial-gradient(120mm 100mm at 30% 100%, rgba(255,110,150,.25), transparent 70%),
+      #0E0C09;
+  }
+  .cover .inner { position: absolute; left: 20mm; right: 20mm; top: 44mm; }
+  .cover img.icon { width: 52mm; height: 52mm; border-radius: 12mm; box-shadow: 0 8mm 24mm rgba(0,0,0,.6), 0 0 30mm rgba(169,139,255,.35); }
+  .cover h1 { font-size: 30pt; font-weight: 900; margin-top: 12mm; letter-spacing: -.5pt; }
+  .cover .sub {
+    font-size: 24pt; font-weight: 800; margin-top: 4mm;
+    background: linear-gradient(100deg, #7FD3FF, #A98BFF 45%, #FF7FA8 80%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .cover .desc { font-size: 12.5pt; line-height: 1.8; color: rgba(244,241,234,.75); margin-top: 8mm; max-width: 140mm; }
+  .cover .chips { margin-top: 9mm; display: flex; gap: 3mm; flex-wrap: wrap; }
+  .cover .chip { font-size: 10.5pt; font-weight: 700; padding: 2mm 4.5mm; border-radius: 99mm;
+    background: rgba(255,255,255,.08); border: .3mm solid rgba(255,255,255,.18); }
+  .cover .foot { position: absolute; left: 20mm; right: 20mm; bottom: 18mm; display: flex; justify-content: space-between; align-items: flex-end; }
+  .cover .foot .ver { font-size: 10.5pt; color: rgba(244,241,234,.55); line-height: 1.7; }
+  .cover .foot img { height: 9mm; }
+
+  /* content */
+  .hdr { position: absolute; top: 9mm; left: 18mm; right: 18mm; display: flex; justify-content: space-between; font-size: 8.5pt; color: #A39C90; }
+  .pnum { position: absolute; bottom: 9mm; right: 18mm; font-size: 8.5pt; color: #A39C90; }
+  h2 { font-size: 17pt; font-weight: 900; margin: 0 0 4mm; display: flex; align-items: center; gap: 3mm; }
+  h2 .n { width: 9mm; height: 9mm; border-radius: 2.5mm; display: grid; place-items: center; color: #fff; font-size: 12pt; }
+  h3 { font-size: 12pt; font-weight: 800; margin: 5mm 0 2mm; }
+  p, li { font-size: 10.5pt; line-height: 1.75; }
+  ul, ol { padding-left: 5.5mm; }
+  li { margin: .8mm 0; }
+  section { margin-bottom: 8mm; }
+  code { font-family: "Cascadia Code", Consolas, monospace; font-size: 9.5pt; background: #EFEBE2; padding: .3mm 1.4mm; border-radius: 1mm; }
+  pre { font-family: "Cascadia Code", Consolas, monospace; font-size: 9.5pt; line-height: 1.6; background: #1A1813; color: #EDE8DC;
+    padding: 3mm 4mm; border-radius: 2.5mm; margin: 2mm 0 3mm; white-space: pre-wrap; word-break: break-all; }
+  .muted { color: #8A8378; }
+  .card { border-radius: 4mm; padding: 5mm 6mm; background: #fff; border: .3mm solid #E6E0D4; box-shadow: 0 1.5mm 5mm rgba(60,40,10,.05); }
+  .dl { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .dl .card h3 { margin-top: 0; display: flex; align-items: center; gap: 2mm; }
+  .dl .tag { font-size: 8.5pt; font-weight: 700; padding: .5mm 2.2mm; border-radius: 99mm; }
+  .dl .big { font-size: 10pt; word-break: break-all; line-height: 1.6; margin-top: 2mm; }
+  .dl .code { margin-top: 3mm; font-size: 11pt; }
+  .dl .code b { font-size: 16pt; letter-spacing: 1.5pt; color: #6A4FE0; margin-left: 2mm; }
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  th, td { text-align: left; padding: 2.4mm 3mm; border-bottom: .3mm solid #E6E0D4; vertical-align: top; line-height: 1.6; }
+  th { background: #F1ECE2; font-weight: 800; }
+  .note { border-left: 1.2mm solid #F1B467; background: #FFF6E8; padding: 3mm 4mm; border-radius: 0 2mm 2mm 0; margin: 3mm 0; }
+  .warn { border-left-color: #FC6B83; background: #FFEFF2; }
+  .ok { border-left-color: #3FA266; background: #EDF8F1; }
+  .steps li { margin: 1.6mm 0; }
+</style>
+</head>
+<body>
+
+<!-- 封面 -->
+<div class="page cover">
+  <div class="inner">
+    <img class="icon" src="../android/branding/rs-cursor-logo.png" alt="">
+    <h1>RS Cursor</h1>
+    <div class="sub">下载与使用说明</div>
+    <p class="desc">在安卓平板上遥控电脑里的 Cursor。Cursor 照常在电脑上运行 AI Agent，你在平板上派活、看进度、改需求。平板上看到的就是电脑 Cursor 里的同一个对话。</p>
+    <div class="chips">
+      <span class="chip">原生 App · 不是网页套壳</span>
+      <span class="chip">直连你的电脑 · 不走云端</span>
+      <span class="chip">安卓可用</span>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="ver">版本 26m10a · 2026 年 10 月<br>github.com/RyanYu0118/RS-Cursor-For-Android</div>
+    <img src="ryan-studio-logo.png" alt="RYAN STUDIO">
+  </div>
+</div>
+
+<!-- 第 2 页：下载 + 准备 -->
+<div class="page">
+  <div class="hdr"><span>RS Cursor 下载与使用说明</span><span>26m10a</span></div>
+
+  <section>
+    <h2><span class="n" style="background:#7BAFE9">1</span>下载安装包</h2>
+    <div class="dl">
+      <div class="card">
+        <h3>百度网盘 <span class="tag" style="background:#E8F1FF;color:#3B6FD8">国内推荐</span></h3>
+        <p class="big"><a href="https://pan.baidu.com/s/1aid1KEI39C3u_J76z5JryA?pwd=2610">pan.baidu.com/s/1aid1KEI39C3u_J76z5JryA?pwd=2610</a></p>
+        <p class="code">提取码<b>2610</b></p>
+        <p class="muted" style="font-size:9pt;margin-top:2mm">文件名：RS Cursor - 26m10a.apk</p>
+      </div>
+      <div class="card">
+        <h3>GitHub Releases <span class="tag" style="background:#EFEAFF;color:#6A4FE0">官方源</span></h3>
+        <p class="big"><a href="https://github.com/RyanYu0118/RS-Cursor-For-Android/releases/tag/v26m10a">github.com/RyanYu0118/RS-Cursor-For-Android/releases/tag/v26m10a</a></p>
+        <p class="muted" style="font-size:9pt;margin-top:3mm">在页面底部 Assets 中下载 APK。下载后的文件名为 RS-Cursor-26m10a.apk，与网盘版本内容完全相同。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n" style="background:#9386F2">2</span>准备工作</h2>
+    <p>RS Cursor 是电脑上 Cursor 的遥控器，需要电脑和平板两端配合：</p>
+    <table style="margin-top:3mm">
+      <tr><th style="width:24%">设备</th><th>要求</th></tr>
+      <tr><td><b>电脑</b></td><td>Windows 10 / 11，已安装并登录 Cursor；Node.js 20 或 22（LTS）；Git</td></tr>
+      <tr><td><b>平板</b></td><td>Android 8.0 及以上（手机也能装，界面按平板设计）</td></tr>
+      <tr><td><b>网络</b></td><td>平板和电脑在同一个 Wi-Fi；或者两端都安装 Tailscale 并登录同一账号（不在同一网络时推荐）</td></tr>
+    </table>
+    <div class="note">
+      <p><b>工作原理：</b>电脑上运行一个"主机服务"（端口 4331），由它读写 Cursor 的对话。平板 App 直接连接这个主机，中间不经过任何第三方服务器，项目和代码始终留在你的电脑上。</p>
+    </div>
+  </section>
+
+  <div class="pnum">2</div>
+</div>
+
+<!-- 第 3 页：电脑端 -->
+<div class="page">
+  <div class="hdr"><span>RS Cursor 下载与使用说明</span><span>26m10a</span></div>
+
+  <section>
+    <h2><span class="n" style="background:#B48EAD">3</span>电脑端：安装主机服务</h2>
+    <p class="muted">以下命令都在 PowerShell 中执行。</p>
+
+    <h3>① 安装 Cursor Agent 命令行并登录</h3>
+    <pre>irm 'https://cursor.com/install?win32=true' | iex
+agent login</pre>
+    <p class="muted">安装后如果提示找不到 <code>agent</code>，关闭 PowerShell 重新打开再试。</p>
+
+    <h3>② 下载并安装主机服务</h3>
+    <pre>git clone https://github.com/RyanYu0118/RS-Cursor-For-Android.git
+cd RS-Cursor-For-Android
+npm install</pre>
+    <p><code>npm install</code> 结束时会打印一份环境检查清单，按提示把红色项处理掉即可。</p>
+
+    <h3>③ 设置开机自启并启动</h3>
+    <pre>npm run autostart:install
+Start-ScheduledTask -TaskName AutoSupervise</pre>
+    <p>主机会在后台运行，没有窗口，关掉 PowerShell 也不影响。用浏览器打开 <code>http://127.0.0.1:4331/api/health</code>，能看到返回内容就说明主机已经启动。</p>
+
+    <h3>④ 让 Cursor 带调试端口启动（必须）</h3>
+    <p>右键 Cursor 的开始菜单或桌面快捷方式 → 属性 → 在"目标"末尾加一个空格和：</p>
+    <pre>--remote-debugging-port=9222</pre>
+    <p>然后<b>完全退出</b> Cursor（包括托盘图标），再用这个快捷方式重新打开。没有这一步，平板无法和电脑上的 Cursor 互动。</p>
+
+    <h3>⑤ 放行防火墙（平板连不上时再做）</h3>
+    <p>以管理员身份打开 PowerShell，执行：</p>
+    <pre>New-NetFirewallRule -DisplayName "Auto" -Direction Inbound -Protocol TCP -LocalPort 4331 -Action Allow</pre>
+  </section>
+
+  <div class="pnum">3</div>
+</div>
+
+<!-- 第 4 页：平板端 + 功能 -->
+<div class="page">
+  <div class="hdr"><span>RS Cursor 下载与使用说明</span><span>26m10a</span></div>
+
+  <section>
+    <h2><span class="n" style="background:#3FA266">4</span>平板端：安装与连接</h2>
+    <ol class="steps">
+      <li>把 APK 传到平板上安装。系统提示"未知来源"时，允许当前文件管理器或浏览器安装应用。</li>
+      <li>查到电脑的主机地址：
+        <ul>
+          <li><b>同一 Wi-Fi：</b>电脑上运行 <code>ipconfig</code>，找到 IPv4 地址，例如 <code>http://192.168.1.23:4331</code></li>
+          <li><b>Tailscale：</b>电脑上运行 <code>tailscale ip -4</code>，例如 <code>http://100.x.y.z:4331</code></li>
+        </ul>
+      </li>
+      <li>打开 RS Cursor，在"主机地址"页填入上面的地址，点"保存并打开"。</li>
+      <li>连接成功后出现侧栏和对话界面。之后打开 App 会自动连接，断线也会自动重连。</li>
+    </ol>
+    <div class="note ok"><p>电脑换了 IP（比如换了 Wi-Fi）也没关系：加载页会出现"重试"和"更改主机地址"按钮，平时也可以点右上角的设置按钮修改。</p></div>
+  </section>
+
+  <section>
+    <h2><span class="n" style="background:#BE7C67">5</span>功能使用</h2>
+    <table>
+      <tr><th style="width:24%">功能</th><th>怎么用</th></tr>
+      <tr><td><b>侧栏</b></td><td>左上角菜单按钮打开或收起。结构和电脑上的 Cursor 一致：Pinned 在上，下面按仓库分组，每个对话显示它在 Cursor 里设的图标和颜色。点对话即可打开。</td></tr>
+      <tr><td><b>长按菜单</b></td><td>长按侧栏里的对话：置顶 / 重命名 / 改图标 / 标为未读 / 复刻 / 移动到 / 复制 / 归档。操作直接生效，电脑屏幕上不会弹出任何东西。</td></tr>
+      <tr><td><b>新建对话</b></td><td>点 New Chat，或点仓库旁的 + 在该文件夹新建。发出第一条消息后，对话会在电脑 Cursor 的侧栏里悄悄出现并开始运行，电脑不弹窗、不抢焦点。第一条消息暂时不能带图片。</td></tr>
+      <tr><td><b>输入同步</b></td><td>电脑 Cursor 正在显示同一个对话时，两边输入框实时同步。谁在打字谁优先，哪边按发送就发哪边的内容。</td></tr>
+      <tr><td><b>发消息与排队</b></td><td>AI 忙时照样可以发，消息会进入"Queued"排队卡片，当前一轮结束后自动发出。</td></tr>
+      <tr><td><b>模型与参数</b></td><td>点输入框右侧的模型按钮，可切换模型以及速度、上下文、推理强度等参数，和电脑共用同一个设置。</td></tr>
+      <tr><td><b>图片</b></td><td>点输入框的 + → Files 选图发送；点已发送的缩略图可查看原图。</td></tr>
+      <tr><td><b>历史记录</b></td><td>在对话里向上滑动，自动加载更早的消息。</td></tr>
+    </table>
+  </section>
+
+  <div class="pnum">4</div>
+</div>
+
+<!-- 第 5 页：FAQ + 安全 -->
+<div class="page">
+  <div class="hdr"><span>RS Cursor 下载与使用说明</span><span>26m10a</span></div>
+
+  <section>
+    <h2><span class="n" style="background:#F1B467">6</span>常见问题</h2>
+    <table>
+      <tr><th style="width:34%">现象</th><th>解决办法</th></tr>
+      <tr><td>一直停在"连接中"</td><td>① 电脑上打开 <code>http://127.0.0.1:4331/api/health</code> 确认主机在运行，没运行就执行 <code>Start-ScheduledTask -TaskName AutoSupervise</code>；② 确认平板和电脑在同一网络或同一 Tailscale；③ 地址要带 <code>http://</code> 和 <code>:4331</code>；④ 按第 3 节第 ⑤ 步放行防火墙。</td></tr>
+      <tr><td>能连上，但消息发不到电脑的 Cursor</td><td>多半是 Cursor 没带调试端口启动。按第 3 节第 ④ 步修改快捷方式，完全退出后重新打开 Cursor。</td></tr>
+      <tr><td>侧栏图标只显示圆点</td><td>图标字体会在首次连接时下载，稍等片刻即可。在 Cursor 里没设过图标的对话本来就显示圆点。</td></tr>
+      <tr><td>新对话没出现在 Cursor 侧栏</td><td>如果这个文件夹在 Cursor 里从没建过对话，第一轮会改在后台运行并给出提示。先在电脑上用 Cursor 在该文件夹建过一次对话，之后就正常了。</td></tr>
+      <tr><td>Cursor 更新后功能异常</td><td>RS Cursor 依赖 Cursor 的内部机制，Cursor 大版本更新后可能需要等待适配，请关注 GitHub 上的新版本。</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="n" style="background:#FC6B83">7</span>安全提醒</h2>
+    <div class="note warn">
+      <ul>
+        <li>主机服务<b>没有登录密码</b>，访问控制靠网络本身。只在家里的局域网或 Tailscale 内使用。</li>
+        <li><b>不要</b>把 4331 端口映射到公网，也不要对它开启 Tailscale Funnel。</li>
+        <li>默认设置下 AI 执行命令不会逐条询问。共用电脑建议在仓库目录的 <code>.env</code> 中设置 <code>AUTO_POLICY=ask-on-write</code>。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n" style="background:#2A2620">8</span>更多信息</h2>
+    <p>详细安装教程、功能说明和源码：<a href="https://github.com/RyanYu0118/RS-Cursor-For-Android">github.com/RyanYu0118/RS-Cursor-For-Android</a></p>
+    <p class="muted" style="margin-top:3mm;font-size:9.5pt">RS Cursor 为非官方项目，与 Cursor / Anysphere 无关。主机端基于 Simon Pedersen 的开源项目 Auto（MIT 协议），平板端与同步功能由 RYAN STUDIO 开发。</p>
+  </section>
+
+  <div class="pnum">5</div>
+</div>
+
+</body>
+</html>
