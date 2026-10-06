@@ -28,8 +28,15 @@
   .app-icon {
     position: absolute; top: 230px; right: 70px; width: 420px; height: 420px; border-radius: 96px;
     box-shadow: 0 30px 90px rgba(0,0,0,.6), 0 0 120px rgba(169,139,255,.35);
-    transform: rotate(6deg);
+    transform: rotate(6deg); z-index: 2;
   }
+  .cursor-icon {
+    position: absolute; top: 120px; right: 30px; width: 270px; height: 270px; z-index: 1;
+    transform: rotate(-12deg); opacity: .9;
+    filter: drop-shadow(0 16px 40px rgba(0,0,0,.6));
+  }
+  .pointer { position: absolute; left: 560px; top: 120px; width: 240px; height: 200px; z-index: 3; overflow: visible; }
+  .studio-logo { height: 40px; display: block; opacity: .92; }
 
   .headline { position: absolute; top: 250px; left: 76px; width: 520px; }
   .headline .small { font-size: 56px; font-weight: 700; color: rgba(244,241,234,.9); line-height: 1.2; }
@@ -143,7 +150,20 @@
     <b>RS Cursor</b><span>安卓平板 · Cursor 遥控器</span>
   </div>
 
+  <img class="cursor-icon" src="cursor-logo.png" alt="">
   <img class="app-icon" src="../android/branding/rs-cursor-logo.png" alt="">
+  <svg class="pointer" viewBox="0 0 240 200">
+    <defs>
+      <linearGradient id="pg" x1="1" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7FD3FF"/>
+        <stop offset="1" stop-color="#FF7FA8"/>
+      </linearGradient>
+      <marker id="ph" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="#FF7FA8"/>
+      </marker>
+    </defs>
+    <path d="M200 30 C 120 10, 50 50, 60 150" fill="none" stroke="url(#pg)" stroke-width="8" stroke-linecap="round" marker-end="url(#ph)"/>
+  </svg>
 
   <div class="headline">
     <div class="small">我给 Cursor<br>做了个</div>
@@ -205,7 +225,7 @@
 
   <div class="foot">
     <span>开源 · <b>github.com/RyanYu0118/RS-Cursor-For-Android</b></span>
-    <span><b>RYAN STUDIO</b></span>
+    <img class="studio-logo" src="ryan-studio-logo.png" alt="RYAN STUDIO">
   </div>
 </div>
 </body>
