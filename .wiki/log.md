@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-10-06
+* **Update**: New RS Cursor launcher icon (hexagon + R) from `android/branding/rs-cursor-logo.png`; `make-icons.ps1` regenerates adaptive + legacy icons. See [Android shell](concepts/android-shell.md).
+
 ## 2026-10-05
 * **Change**: The tablet composer puts the model chip inside the text field, on the right. It opens the same sheet as the computer: Fast, Context, Effort, then Model. See [Android shell](concepts/android-shell.md).
 * **Fix**: A new chat started from the tablet no longer goes dark when Windows briefly locks `state/sessions.json`. The registry write retries `EPERM`/`EBUSY` and never throws into its caller. That throw had skipped the desktop watcher, so replies never reached the phone. See [Sessions](concepts/sessions.md).

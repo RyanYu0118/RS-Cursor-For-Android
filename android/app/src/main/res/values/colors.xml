@@ -6,5 +6,5 @@
     <color name="rs_muted">#B8C4D9</color>
     <color name="rs_accent">#7EC8FF</color>
     <!-- Studio mark sits on white; adaptive icon background matches. -->
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#14120B</color>
 </resources>

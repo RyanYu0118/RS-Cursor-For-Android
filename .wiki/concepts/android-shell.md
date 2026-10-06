@@ -1,4 +1,4 @@
-﻿---
+---
 type: Concept
 title: Android shell
 description: Native Jetpack Compose pad client for Auto — immersive light field, liquid-glass panels, skeleton until WS ready.
@@ -26,7 +26,7 @@ sources:
   - id: cursor-sidebar
     resource: /src/core/cursor-sidebar.mjs
     title: Pinned + row actions through Cursor's services
-generated: { by: agent, at: 2026-10-05T08:10:00Z }
+generated: { by: agent, at: 2026-10-06T11:20:00Z }
 ---
 
 # Android shell
@@ -160,6 +160,14 @@ settings). The socket's connect timeout is 6 s. Saving a different host URL
 drops everything tied to the old one — session id, transcript seq, sidebar,
 rail — so the new host is a clean cold start rather than a replay of a stale
 `fromSeq`.
+
+## Launcher icon
+
+The source is `android/branding/rs-cursor-logo.png` (1024², dark rounded
+square). `android/branding/make-icons.ps1` regenerates every icon from it:
+the adaptive foreground (logo at 92% of the 108dp canvas, so the hexagon stays
+inside the 66dp safe circle) over `ic_launcher_background` `#14120B`, plus the
+legacy square and round mipmaps. Replace the PNG and re-run the script.
 
 ## What v1 covers
 
