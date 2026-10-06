@@ -38,6 +38,14 @@
   }
   .cursor-icon img { width: 66%; height: 66%; }
   .pointer { position: absolute; left: 560px; top: 100px; width: 240px; height: 200px; z-index: 3; overflow: visible; }
+  .android-ok {
+    position: absolute; top: 700px; right: 60px; width: 460px; text-align: center; z-index: 3;
+    font-size: 86px; font-weight: 900; letter-spacing: 2px; line-height: 1.1;
+    background: linear-gradient(100deg, #3DDC84 0%, #8BF5B8 50%, #7FD3FF 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 6px 26px rgba(61,220,132,.45));
+    transform: rotate(-4deg);
+  }
   .studio-logo { height: 44px; width: auto; display: block; flex: none; }
   .foot span { white-space: nowrap; }
 
@@ -155,6 +163,7 @@
 
   <div class="cursor-icon"><img src="cursor-logo.png" alt=""></div>
   <img class="app-icon" src="../android/branding/rs-cursor-logo.png" alt="">
+  <div class="android-ok">安卓可用！</div>
   <svg class="pointer" viewBox="0 0 240 200">
     <defs>
       <linearGradient id="pg" x1="1" y1="0" x2="0" y2="1">
