@@ -30,10 +30,12 @@ android {
         }
     }
 
+    // Test builds are always "RS Cursor - beta.apk"; a confirmed release is built with -PrsRelease.
+    val confirmedRelease = project.hasProperty("rsRelease")
     applicationVariants.all {
         outputs.all {
             (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
-                "RS Cursor - ${defaultConfig.versionName}.apk"
+                if (confirmedRelease) "RS Cursor - ${defaultConfig.versionName}.apk" else "RS Cursor - beta.apk"
         }
     }
 

@@ -83,9 +83,9 @@ cd android
 .\gradlew.bat assembleDebug
 ```
 
-把 `android/app/build/outputs/apk/debug/RS Cursor - <版本号>.apk` 装到平板上。首次打开时填写主机地址，例如 `http://100.x.y.z:4331`。
+把 `android/app/build/outputs/apk/debug/RS Cursor - beta.apk` 装到平板上。首次打开时填写主机地址，例如 `http://100.x.y.z:4331`。
 
-版本号格式为 `<年>m<月><字母>`：`26m10a` 是 2026 年 10 月的第一个版本，同月依次为 `26m10b`、`26m10c`……
+日常编译出来的都是测试版 `RS Cursor - beta.apk`。正式发布时用 `.\gradlew.bat assembleDebug -PrsRelease`，文件名带版本号，例如 `RS Cursor - 26m10a.apk`。版本号格式为 `<年>m<月><字母>`：`26m10a` 是 2026 年 10 月的第一个版本，同月依次为 `26m10b`、`26m10c`……
 
 ## 安全
 
