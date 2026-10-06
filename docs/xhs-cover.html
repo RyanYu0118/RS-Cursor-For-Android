@@ -31,12 +31,15 @@
     transform: rotate(6deg); z-index: 2;
   }
   .cursor-icon {
-    position: absolute; top: 120px; right: 30px; width: 270px; height: 270px; z-index: 1;
-    transform: rotate(-12deg); opacity: .9;
-    filter: drop-shadow(0 16px 40px rgba(0,0,0,.6));
+    position: absolute; top: 60px; right: 34px; width: 240px; height: 240px; z-index: 1;
+    border-radius: 56px; background: #0A0A0A; border: 2px solid rgba(255,255,255,.12);
+    display: grid; place-items: center; transform: rotate(-12deg);
+    box-shadow: 0 20px 50px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.1);
   }
-  .pointer { position: absolute; left: 560px; top: 120px; width: 240px; height: 200px; z-index: 3; overflow: visible; }
-  .studio-logo { height: 40px; display: block; opacity: .92; }
+  .cursor-icon img { width: 66%; height: 66%; }
+  .pointer { position: absolute; left: 560px; top: 100px; width: 240px; height: 200px; z-index: 3; overflow: visible; }
+  .studio-logo { height: 44px; width: auto; display: block; flex: none; }
+  .foot span { white-space: nowrap; }
 
   .headline { position: absolute; top: 250px; left: 76px; width: 520px; }
   .headline .small { font-size: 56px; font-weight: 700; color: rgba(244,241,234,.9); line-height: 1.2; }
@@ -150,7 +153,7 @@
     <b>RS Cursor</b><span>安卓平板 · Cursor 遥控器</span>
   </div>
 
-  <img class="cursor-icon" src="cursor-logo.png" alt="">
+  <div class="cursor-icon"><img src="cursor-logo.png" alt=""></div>
   <img class="app-icon" src="../android/branding/rs-cursor-logo.png" alt="">
   <svg class="pointer" viewBox="0 0 240 200">
     <defs>
