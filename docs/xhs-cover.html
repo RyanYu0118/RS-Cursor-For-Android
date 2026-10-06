@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>RS Cursor 封面</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; }
+  body { width: 1080px; height: 1440px; overflow: hidden; }
+  .cover {
+    position: relative; width: 1080px; height: 1440px; overflow: hidden;
+    font-family: "PingFang SC", "Microsoft YaHei", "HarmonyOS Sans SC", sans-serif;
+    color: #F4F1EA;
+    background:
+      radial-gradient(620px 520px at 12% 8%, rgba(88, 180, 255, .30), transparent 70%),
+      radial-gradient(700px 600px at 95% 30%, rgba(160, 110, 255, .30), transparent 70%),
+      radial-gradient(760px 620px at 30% 100%, rgba(255, 110, 150, .24), transparent 70%),
+      radial-gradient(500px 400px at 85% 95%, rgba(245, 78, 0, .22), transparent 70%),
+      #0E0C09;
+  }
+  .grain { position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay;
+    background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 4px 4px; }
+
+  .brand { position: absolute; top: 72px; left: 80px; display: flex; align-items: center; gap: 20px; }
+  .brand img { width: 76px; height: 76px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  .brand b { font-size: 40px; letter-spacing: .5px; }
+  .brand span { display: block; font-size: 22px; color: rgba(244,241,234,.55); margin-top: 4px; font-weight: 400; }
+
+  .headline { position: absolute; top: 190px; left: 76px; right: 60px; }
+  .headline .small { font-size: 64px; font-weight: 700; color: rgba(244,241,234,.9); }
+  .headline .big {
+    font-size: 150px; font-weight: 900; line-height: 1.08; letter-spacing: -2px; margin-top: 6px;
+    background: linear-gradient(100deg, #7FD3FF 0%, #A98BFF 45%, #FF7FA8 80%, #FFB37F 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 6px 30px rgba(169,139,255,.35));
+  }
+
+  .badges { position: absolute; top: 520px; left: 80px; display: flex; flex-direction: column; gap: 16px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 16px; padding: 16px 30px 16px 18px;
+    font-size: 38px; font-weight: 700; border-radius: 999px; width: fit-content;
+    background: rgba(255,255,255,.07); border: 1.5px solid rgba(255,255,255,.16);
+    backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 10px 30px rgba(0,0,0,.25);
+  }
+  .badge i {
+    width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center;
+    font-style: normal; font-size: 30px; font-weight: 900;
+  }
+  .no i { background: rgba(252,107,131,.18); color: #FC6B83; border: 1.5px solid rgba(252,107,131,.5); }
+  .no s { text-decoration-thickness: 4px; text-decoration-color: rgba(252,107,131,.85); }
+  .yes { background: linear-gradient(100deg, rgba(63,162,102,.28), rgba(123,175,233,.22)); border-color: rgba(120,220,160,.45); }
+  .yes i { background: rgba(63,162,102,.3); color: #7BE3A4; border: 1.5px solid rgba(123,227,164,.6); }
+
+  /* devices */
+  .stage { position: absolute; left: 0; right: 0; top: 880px; height: 460px; }
+  .monitor {
+    position: absolute; right: 70px; top: 0; width: 540px; height: 310px; border-radius: 22px;
+    background: #17150F; border: 2px solid rgba(255,255,255,.14);
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.1);
+    overflow: hidden;
+  }
+  .monitor::after { content: ""; position: absolute; left: 50%; bottom: -60px; width: 120px; height: 60px;
+    transform: translateX(-50%); background: #201D16; }
+  .stand { position: absolute; right: 280px; top: 310px; width: 120px; height: 46px;
+    background: linear-gradient(#25221A, #17150F); clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%); }
+  .stand-foot { position: absolute; right: 240px; top: 354px; width: 200px; height: 12px; border-radius: 6px; background: #25221A; }
+
+  .tablet {
+    position: absolute; left: 70px; top: 90px; width: 590px; height: 370px; border-radius: 34px;
+    padding: 16px; background: linear-gradient(145deg, #2A2720, #12100C);
+    border: 2px solid rgba(255,255,255,.18);
+    box-shadow: 0 40px 90px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.15);
+    transform: rotate(-4deg);
+  }
+  .screen {
+    position: relative; width: 100%; height: 100%; border-radius: 20px; overflow: hidden; display: flex;
+    background:
+      radial-gradient(260px 200px at 10% 0%, rgba(88,180,255,.25), transparent 70%),
+      radial-gradient(300px 240px at 100% 100%, rgba(255,110,150,.2), transparent 70%),
+      #14120B;
+  }
+  .rail { width: 38%; padding: 18px 12px; display: flex; flex-direction: column; gap: 9px; }
+  .rail .cap { font-size: 12px; color: rgba(244,241,234,.45); margin: 4px 6px 2px; letter-spacing: 1px; }
+  .row { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; font-size: 13px; color: rgba(244,241,234,.85); white-space: nowrap; overflow: hidden; }
+  .row.on { background: rgba(255,255,255,.12); }
+  .gl { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+  .bar { height: 7px; border-radius: 4px; background: rgba(244,241,234,.22); flex: 1; }
+  .chat {
+    flex: 1; margin: 12px 12px 12px 0; border-radius: 16px; padding: 16px; position: relative;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .bubble-me { align-self: flex-end; width: 62%; height: 30px; border-radius: 14px; background: rgba(123,175,233,.35); }
+  .line { height: 8px; border-radius: 4px; background: rgba(244,241,234,.25); }
+  .work { font-size: 12px; color: rgba(244,241,234,.55); display: flex; align-items: center; gap: 8px; }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(169,139,255,.3); border-top-color: #A98BFF; }
+  .composer {
+    position: absolute; left: 14px; right: 14px; bottom: 14px; height: 40px; border-radius: 20px;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
+    display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: rgba(244,241,234,.8);
+  }
+  .composer .caret { width: 2px; height: 16px; background: #7FD3FF; margin-left: 2px; }
+  .composer .send { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; background: #F4F1EA; }
+
+  .mon-screen { display: flex; height: 100%; }
+  .mon-screen .rail { width: 34%; padding: 16px 10px; gap: 7px; background: rgba(255,255,255,.03); }
+  .mon-screen .row { font-size: 11px; padding: 4px 6px; }
+  .mon-screen .gl { width: 11px; height: 11px; }
+  .mon-screen .chat { margin: 10px; padding: 12px; gap: 8px; border-radius: 12px; }
+  .mon-screen .composer { height: 30px; font-size: 11px; left: 10px; right: 10px; bottom: 10px; }
+  .mon-screen .composer .send { width: 20px; height: 20px; }
+
+  /* signal */
+  .signal { position: absolute; left: 520px; top: 40px; width: 200px; height: 200px; }
+  .signal span {
+    position: absolute; left: 0; bottom: 0; border-radius: 50%;
+    border: 5px solid transparent; border-top-color: rgba(127,211,255,.9); border-right-color: rgba(127,211,255,.9);
+  }
+  .signal span:nth-child(1) { width: 70px; height: 70px; left: -35px; bottom: -35px; }
+  .signal span:nth-child(2) { width: 140px; height: 140px; left: -70px; bottom: -70px; opacity: .7; }
+  .signal span:nth-child(3) { width: 210px; height: 210px; left: -105px; bottom: -105px; opacity: .4; }
+  .lan {
+    position: absolute; left: 470px; top: 215px; padding: 10px 20px; border-radius: 999px; font-size: 24px; font-weight: 700;
+    background: rgba(14,12,9,.75); border: 1.5px solid rgba(127,211,255,.5); color: #BFE8FF;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4); transform: rotate(-4deg); z-index: 3;
+  }
+
+  .foot { position: absolute; left: 80px; right: 80px; bottom: 52px; display: flex; justify-content: space-between; align-items: center;
+    font-size: 24px; color: rgba(244,241,234,.6); }
+  .foot b { color: rgba(244,241,234,.9); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="cover">
+  <div class="grain"></div>
+
+  <div class="brand">
+    <img src="../android/branding/rs-cursor-logo.png" alt="">
+    <div><b>RS Cursor</b><span>安卓平板 · Cursor 遥控器</span></div>
+  </div>
+
+  <div class="headline">
+    <div class="small">我给 Cursor 做了个</div>
+    <div class="big">遥控器</div>
+  </div>
+
+  <div class="badges">
+    <div class="badge no"><i>✕</i><s>网页套壳</s>&nbsp;原生 App</div>
+    <div class="badge no"><i>✕</i><s>走云端</s>&nbsp;直连你的电脑</div>
+    <div class="badge yes"><i>✓</i>平板遥控，电脑干活</div>
+  </div>
+
+  <div class="stage">
+    <div class="monitor">
+      <div class="mon-screen">
+        <div class="rail">
+          <div class="row"><div class="gl" style="background:#3FA266"></div><div class="bar"></div></div>
+          <div class="row on"><div class="gl" style="background:#9386F2"></div><div class="bar"></div></div>
+          <div class="row"><div class="gl" style="background:#F1B467"></div><div class="bar"></div></div>
+          <div class="row"><div class="gl" style="background:#FC6B83"></div><div class="bar"></div></div>
+          <div class="row"><div class="gl" style="background:#7BAFE9"></div><div class="bar"></div></div>
+        </div>
+        <div class="chat">
+          <div class="bubble-me" style="height:22px"></div>
+          <div class="line" style="width:90%"></div>
+          <div class="line" style="width:75%"></div>
+          <div class="line" style="width:82%"></div>
+          <div class="composer">修一下侧栏的图标<div class="caret"></div><div class="send"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="stand"></div>
+    <div class="stand-foot"></div>
+
+    <div class="lan">局域网 / Tailscale 直连</div>
+
+    <div class="tablet">
+      <div class="screen">
+        <div class="rail">
+          <div class="cap">PINNED</div>
+          <div class="row"><div class="gl" style="background:#3FA266"></div>AI 建筑师</div>
+          <div class="row on"><div class="gl" style="background:#9386F2"></div>RS Cursor 安卓端</div>
+          <div class="row"><div class="gl" style="background:#F1B467"></div>商城后台</div>
+          <div class="cap">REPOSITORIES</div>
+          <div class="row"><div class="gl" style="background:#FC6B83"></div>服务器优化</div>
+          <div class="row"><div class="gl" style="background:#7BAFE9"></div>数据看板</div>
+        </div>
+        <div class="chat">
+          <div class="bubble-me"></div>
+          <div class="work"><div class="spin"></div>Working… 编辑 SessionRail.kt</div>
+          <div class="line" style="width:92%"></div>
+          <div class="line" style="width:70%"></div>
+          <div class="line" style="width:84%"></div>
+          <div class="composer">修一下侧栏的图标<div class="caret"></div><div class="send"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>开源 · <b>github.com/RyanYu0118/RS-Cursor-For-Android</b></span>
+    <span><b>RYAN STUDIO</b></span>
+  </div>
+</div>
+</body>
+</html>
