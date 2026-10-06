@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,7 +95,6 @@ fun AppScaffold(
     onToggleRepo: (String) -> Unit,
     onSettings: () -> Unit,
     onRetry: () -> Unit,
-    onOpenWeb: () -> Unit,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onCancel: () -> Unit,
@@ -158,7 +156,6 @@ fun AppScaffold(
                         onNewInFolder = onNewInFolder,
                         onToggleRepo = onToggleRepo,
                         onSettings = onSettings,
-                        onOpenWeb = onOpenWeb,
                         onDraftChange = onDraftChange,
                         onSend = onSend,
                         onCancel = onCancel,
@@ -197,7 +194,6 @@ private fun MainShell(
     onNewInFolder: (String) -> Unit,
     onToggleRepo: (String) -> Unit,
     onSettings: () -> Unit,
-    onOpenWeb: () -> Unit,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onCancel: () -> Unit,
@@ -257,7 +253,6 @@ private fun MainShell(
                                 ?: state.hostUrl.trimEnd('/')
                     },
                 onMenu = { onRailOpen(!state.railOpen) },
-                onOpenWeb = onOpenWeb,
                 onSettings = onSettings,
             )
         },
@@ -413,7 +408,6 @@ private fun CompactTopBar(
     title: String,
     subtitle: String?,
     onMenu: () -> Unit,
-    onOpenWeb: () -> Unit,
     onSettings: () -> Unit,
 ) {
     Row(
@@ -448,9 +442,6 @@ private fun CompactTopBar(
                     lineHeight = 13.sp,
                 )
             }
-        }
-        IconButton(onClick = onOpenWeb, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Default.OpenInBrowser, contentDescription = "网页版", tint = RsMuted, modifier = Modifier.size(18.dp))
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(40.dp)) {
             Icon(Icons.Default.Settings, contentDescription = "设置", tint = RsMuted, modifier = Modifier.size(18.dp))

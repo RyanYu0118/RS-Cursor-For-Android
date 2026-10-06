@@ -17,9 +17,6 @@ sources:
   - id: repo
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/data/HostRepository.kt
     title: HostRepository + WebSocket
-  - id: web-fallback
-    resource: /android/app/src/main/java/com/ryanstudio/rscursor/WebShellActivity.kt
-    title: WebView fallback
   - id: settings
     resource: /android/app/src/main/java/com/ryanstudio/rscursor/SettingsActivity.kt
     title: Host URL settings
@@ -29,7 +26,7 @@ sources:
   - id: cursor-icons
     resource: /src/core/cursor-icons.mjs
     title: Cursor icon glyph table + TrueType font
-generated: { by: agent, at: 2026-10-06T19:45:00Z }
+generated: { by: agent, at: 2026-10-06T19:55:00Z }
 ---
 
 # Android shell
@@ -161,8 +158,8 @@ open the system image picker for Files. The native app uses Android's
 photo picker and paints its own UI, so every main control is a real
 Material component.
 
-The old WebView Activity remains as **网页版** (debug / compare). Default
-launch is Compose.
+There is no WebView fallback: the 网页版 button and its Activity were
+removed, so the app is Compose only.
 
 ## Skeleton
 

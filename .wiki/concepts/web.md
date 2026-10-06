@@ -40,7 +40,7 @@ sources:
     resource: https://ionicframework.com/docs/developing/keyboard
     title: Keyboard Guide
     author: Ionic
-generated: { by: agent, at: 2026-09-26T09:20:00Z }
+generated: { by: agent, at: 2026-10-06T19:55:00Z }
 ---
 
 # Web app
@@ -335,7 +335,7 @@ menu (Plan / Debug / Multitask / Ask; tap the active one again for Agent).
 **Files** covers the row with a transparent `<input type="file">` (opacity 0,
 full size). On an installed Home Screen PWA that control is still often
 ignored — use the [Android shell](android-shell.md) APK (Compose UI +
-system photo picker; WebView fallback still has `onShowFileChooser`). The menu stays up through the
+system photo picker). The menu stays up through the
 gesture; it closes after a pick or an outside tap. **Model** opens the
 same nested model popover as the chip; **MCP** opens a nested list of
 servers from Cursor's `mcp.json` (user and this folder) — tap one to
