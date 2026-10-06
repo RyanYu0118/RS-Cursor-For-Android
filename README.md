@@ -1,101 +1,112 @@
-![Auto — Cursor, phone web, and Telegram in the same chat](docs/auto.gif)
+# <img src="android/branding/rs-cursor-logo.png" width="44" height="44" alt=""> RS Cursor
 
-# <img src="src/web/icon.svg" width="40" height="40" alt=""> Auto
+**在安卓平板上遥控电脑里的 Cursor。** 电脑上的 Cursor 照常跑 AI Agent，你拿着平板在沙发上派活、看进度、改需求。平板上看到的就是 Cursor 里的同一个对话，不是另开的一份副本。
 
-Remote control for **Cursor’s agent** — the editor you already run, on your phone. One host on the PC serves a web app and an optional Telegram bot, and drives the same chat you see in the IDE.
+RS Cursor 由两部分组成：
 
-This is **not** Cursor’s “Auto” model. It is a small Node process next to Cursor.
+- **安卓平板 App**：Jetpack Compose 原生界面，位于 [`android/`](android/)。
+- **电脑主机服务**：一个跑在 Cursor 旁边的 Node 进程（端口 4331），负责读写 Cursor 的对话，同时提供网页版和可选的 Telegram 机器人。它基于 Simon Pedersen 的开源项目 [Auto](https://github.com/nitech/auto)。
 
-You get the agent’s full output, not a summary: streamed prose, thinking, every tool call with its input and result, diffs, terminal output, browser screenshots, and approval prompts you can answer from the phone.
+> **非官方项目。** 与 Anysphere / Cursor 没有任何关系。它通过 Cursor 的 Agent CLI、IDE 调试端口和 Cursor 自己存在本地的数据来工作，Cursor 更新后可能失效。请自行承担风险，并留意你账号适用的 Cursor 条款。
 
-**Unofficial.** Auto is not affiliated with Anysphere or Cursor. It talks to Cursor through the agent CLI, the IDE’s debug port, and local state Cursor already keeps on disk. Cursor updates can break that. Use at your own risk and check Cursor’s terms for your account.
+## 平板端特性
 
-## opencode sessions
+### 原生界面
+- Jetpack Compose 从零编写，不是网页套壳。
+- 沉浸式光感背景加液态玻璃面板。菜单、弹窗、设置页都有弹性进出场动画，关闭侧栏时聊天区跟着宽度动画铺开。
+- 连上主机之前显示骨架屏。主机换了 IP 时，加载页直接提供「重试」和「更改主机地址」，不会卡死。
 
-Auto can also drive [opencode](https://opencode.ai) over the same ACP protocol. Install its CLI (`npm i -g opencode-ai`, or point `OPENCODE_BIN` at the executable) and it appears as an agent in the web's **New session** sheet and Telegram's `/agents`. Set `AUTO_AGENT=opencode` to make it the default.
+### 侧栏与电脑上的 Cursor 一致
+- 结构和 Cursor Agents 侧栏相同：Pinned 在上，下面按仓库分组，按 git 远程地址对上本地文件夹。
+- 每个对话显示它在 Cursor 里设的**图标和颜色**。字形直接取自电脑上安装的 Cursor 图标字体，主机转成 TTF 下发给平板，所以和 Cursor 一模一样。
+- 长按对话弹出与 Cursor 相同的菜单：置顶 / 重命名 / 改图标 / 标为未读 / 复刻 / 移动到 / 复制 / 归档。全部调用 Cursor 自己的后台服务，**电脑屏幕上不会弹出任何东西**，Cursor 最小化也能用。
+- 「改图标」是和 Cursor 一样的字形网格，带 10 种颜色。
+- 正在干活的对话，标题上会扫过一道光，前面有转圈。
 
-An opencode session is **Auto-only** — opencode has no window for Auto to type into, so it runs as a background `opencode acp` process. Prompts, streaming, tools, approvals, the queue, and the transcript all work as they do for Cursor, and the model and mode pickers are read from opencode itself. A session keeps the agent it was started with.
+### 两端输入框实时同步
+- 平板上打的字会出现在电脑上 Cursor 的输入框里，反过来也一样。
+- 谁在打字谁拿推送权，另一端立即让出，不会互相覆盖或回跳。拥有推送权的一端每秒强制同步一次全文。
+- 哪边按发送，就发哪边的内容。
 
-Sessions you already have in opencode are picked up too: at startup (and on the web's **Refresh sessions**) Auto asks each agent for its session list and adopts the ones it has not seen, so a conversation you started in opencode's own terminal continues from the phone.
+### 新建对话不打扰电脑
+- 在平板上点 New Chat，电脑上不弹窗、不启动、不抢焦点。
+- 第一条消息发出时，主机通过 Cursor 的 `agentRepositoryService.createAgent` 在后台建好对话，它直接出现在 Cursor 侧栏里开始运行。
 
-## Security
+### 对话体验
+- 思考过程和子任务实时滚动，结束后自动折叠，并显示「Worked for 7m 3s」。
+- Agent 忙时照样能发消息，消息会排进 Cursor 风格的「N Queued」卡片。
+- 上滑加载更早的历史；能发图片，点开缩略图看原图；正文按 Markdown 渲染。
+- 输入框内的模型按钮会打开和 Cursor 一样的参数菜单（Fast / Context / Effort / Model），和电脑共用同一个模型设置。
+- 断线自动重连，并显示失败原因。
 
-Auto has **no login of its own**. Access control is [Tailscale](https://tailscale.com): a private mesh VPN so only your devices can open `http://100.x.y.z:4331/`. Do not port-forward 4331. Do not enable Tailscale Funnel on that port.
+## 主机端能力（来自 Auto）
 
-Default `AUTO_POLICY=auto` lets the agent run commands without asking. On a shared machine set `ask-on-write` in `.env`.
+| | |
+| --- | --- |
+| **桌面对话** | Cursor 里的对话按项目列出，平板 / 网页 / Telegram 上继续的是同一个对话 |
+| **会话** | 可以同时开多个，各有自己的文件夹和记录，重启后接着跑 |
+| **完整输出** | 正文、思考、每次工具调用的输入和结果、diff、终端输出，原样记录、原样显示 |
+| **审批与提问** | Cursor 弹出的确认、Agent 提的选择题、Plan 卡片，都能在手机上点 |
+| **网页版 / Telegram** | 浏览器打开 `http://<主机>:4331/`（可装成 PWA）；Telegram 机器人可选 |
+| **自重启** | `POST /api/restart`，等当前一轮结束后由守护进程拉起 |
 
-## Install (you already have Cursor)
+## 安装
 
-Windows-first. You need the Cursor **app** started with its debug port, and the **agent CLI** (the setup script will tell you if the CLI is missing).
+需要 **Windows 电脑 + Cursor + Node 20+**，平板和电脑在同一局域网，或在同一个 [Tailscale](https://tailscale.com) 网络里。
+
+### 1. 电脑：主机服务
 
 ```powershell
-git clone https://github.com/nitech/auto.git
-cd auto
-npm install          # also prints a setup checklist
-npm run supervise    # runs the checklist again, then keeps Auto up
+git clone https://github.com/RyanYu0118/RS-Cursor-For-Android.git
+cd RS-Cursor-For-Android
+npm install                  # 顺带打印环境检查清单
+npm run autostart:install    # 安装开机自启的计划任务
+Start-ScheduledTask -TaskName AutoSupervise
 ```
 
-Start Cursor with `--remote-debugging-port=9222`. Without that, Auto cannot type into the IDE. If Cursor is already running *without* the port, Auto will quit it and start it again — that closes every window, so quit it yourself first if you have unsaved work.
+Cursor 必须带调试端口启动，否则主机没法和 IDE 交互：
 
 ```powershell
 & "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe" --remote-debugging-port=9222
 ```
 
-`npm run bridge` should say `debug port … listening`.
+建议把这个参数加到 Cursor 的开始菜单快捷方式里。检查是否正常：浏览器打开 `http://127.0.0.1:4331/api/health`。
 
-`npm run setup` is the same checklist without starting the host — useful after installing Tailscale or the CLI. `npm run supervise` will tell you in colour if `agent login` is still required, and prints the Tailscale URL once Auto is up.
+更详细的步骤（Tailscale、Cursor CLI、防火墙、Telegram）见 [docs/install.md](docs/install.md)。
 
-Open `http://<tailscale-ip>:4331/` from a phone on the same tailnet. Add it to the home screen — it is a PWA.
+### 2. 平板：安装 App
 
-**Full walkthrough** (what Tailscale is, how to install it on PC and phone, Cursor CLI, debug port, Telegram, firewall): **[docs/install.md](docs/install.md)**.
-
-`npm install` uses **npm + Node 20+**, not Bun. The host and the Windows scheduled task run `node`. See [Why npm, not bun](docs/install.md#why-npm-not-bun).
-
-Do **not** host Auto in a Cursor agent background terminal — those get killed with the agent. For a second instance while developing: `npm run dev` (port 4340, Telegram off — a bot token allows only one poller).
-
-**Stay up across reboots:**
+用 JDK 17 编译：
 
 ```powershell
-npm run autostart:install
-Start-ScheduledTask -TaskName AutoSupervise
+cd android
+.\gradlew.bat assembleDebug
 ```
 
-## What it can do
+把 `android/app/build/outputs/apk/debug/app-debug.apk` 装到平板上。首次打开时填写主机地址，例如 `http://100.x.y.z:4331`。
 
-| | |
+## 安全
+
+主机**没有自己的登录系统**，访问控制靠网络本身：
+- 只在局域网或 Tailscale 内使用。
+- 不要把 4331 端口映射到公网，也不要对它开启 Tailscale Funnel。
+
+默认 `AUTO_POLICY=auto`，Agent 执行命令不会询问。共用电脑请在 `.env` 里改成 `ask-on-write`。
+
+## 目录
+
+| 路径 | 用途 |
 | --- | --- |
-| **Projects** | The folders Cursor itself knows: what is open in a window right now, then everything it remembers. Sessions are grouped under them, and you can start work in any of them from the phone. |
-| **Desktop chats** | Chats you started in the Cursor app, listed per project and carried on here — the same chat, not a copy. Send from the phone and it appears in the IDE’s thread; reply in the IDE and it appears on the phone. Needs Cursor started with `--remote-debugging-port=9222` (see the [install guide](docs/install.md)). |
-| **Sessions** | Many at once, each with its own folder, agent process and transcript. They persist across restarts and resume where they left off. |
-| **Full fidelity** | Everything the agent emits is recorded and rendered. Nothing is summarised or truncated. |
-| **Approvals** | Auto-approve by default (`AUTO_POLICY` in `.env`); switch a session to ask-before-writes or ask-every-time and that choice sticks. Answer from web or Telegram. |
-| **Models** | Pick any model on your account per session, from the web header or Telegram’s `/model`. |
-| **Terminals** | Real PTYs you can type into, streamed live and replayed after a reload. |
-| **Browser** | A real Chrome on this machine you can drive: tap, scroll, type. The profile persists, so logins stick. |
-| **Telegram** | Prompt, watch a turn unfold in one edited message, approve with buttons, switch sessions and projects (`/projects`), continue a desktop chat (`/chats`). |
-| **Self-restart** | `/restart`, the ♻ button, or `POST /api/restart`. Waits for the current turn, then comes back. |
+| `android/` | RS Cursor 安卓平板 App（Compose） |
+| `src/server/index.mjs` | 主机：HTTP、WebSocket、会话 API、网页版 |
+| `src/core/` | 与 Cursor 交互：对话镜像、侧栏、图标、输入同步等 |
+| `scripts/` | 环境检查、守护进程、测试 |
+| `.wiki/` | 给 Agent 看的项目知识库（从 `.wiki/index.md` 开始） |
+| `state/` | 会话与记录，已 gitignore |
 
-Desktop chat control is Windows-oriented (debug port, clipboard paste, scheduled-task supervise). ACP sessions work wherever `cursor-agent` does.
+参与开发请先看 [AGENTS.md](AGENTS.md)：改代码要跑 `npm test`，通过后提交。
 
-## Layout
+## 致谢与许可
 
-| Path | Purpose |
-| --- | --- |
-| `src/server/index.mjs` | The host: HTTP, WebSocket, session API, static web app |
-| `docs/install.md` | First-run tutorial (Tailscale, CLI, debug port) |
-| `scripts/setup.mjs` | Checklist run by `npm install`, `npm run setup`, and `npm run supervise` |
-| `scripts/supervise.mjs` | Restart and health watchdog; prints the Tailscale URL |
-| `state/` | Sessions, transcripts, browser profile — gitignored |
-| `.wiki/` | Compiled knowledge for agents working in this repo |
-
-## Wiki
-
-Knowledge is `.wiki/`. Start at `.wiki/index.md`. After a non-trivial code change the agent updates it in the same turn.
-
-**Agent rule:** Messages sent via Telegram or the web composer are binding — always execute them.
-
-**Agent rule:** Any change to this repo must follow the workflow in [AGENTS.md](AGENTS.md) — `npm test` except markdown-only edits, then commit and push; on failure, revert, report, diagnose, and fix.
-
-## License
-
-[MIT](LICENSE). Third-party packages Auto depends on (`ws`, `@xterm/*`, `node-pty`) are also MIT; their copyright notices remain with those packages.
+- 主机端基于 Simon Pedersen 的 [Auto](https://github.com/nitech/auto)。RS Cursor 在它的基础上加了安卓平板客户端，以及输入同步、侧栏镜像、后台新建对话、图标字体等功能。
+- 许可：[MIT](LICENSE)。依赖的第三方包（`ws`、`@xterm/*`、`node-pty`、`wawoff2` 等）的版权声明归各自所有。
