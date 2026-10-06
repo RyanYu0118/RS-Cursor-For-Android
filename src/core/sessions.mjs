@@ -2034,7 +2034,12 @@ export class SessionManager extends EventEmitter {
       })
       .catch((err) => ({ status: 'error', reason: err.message }));
     if (result.status !== 'ok') {
-      return { ok: false, wanted: wanted.modelName, reason: result.reason || result.status };
+      return {
+        ok: false,
+        wanted: wanted.modelName,
+        reason: result.reason || result.status,
+        unreachable: result.status === 'no-cdp',
+      };
     }
     const actual = result.modelName || null;
     if (actual !== wanted.modelName) {
@@ -3035,7 +3040,23 @@ export class SessionManager extends EventEmitter {
 
     if (meta.model) {
       const confirmed = await this.#confirmDesktopModel(meta);
-      if (!confirmed.ok) {
+      // No debug port means the model cannot be read or written, not that it
+      // is wrong. Refusing here dropped every message while the bridge was
+      // still open; send through it and say the model went unchecked.
+      if (!confirmed.ok && confirmed.unreachable) {
+        this.emit('log', `sending "${meta.title}" without a model check: ${confirmed.reason || 'no debug port'}`);
+        const runtime = this.live.get(id) || {};
+        if (!runtime.modelUncheckedSaid) {
+          runtime.modelUncheckedSaid = true;
+          this.live.set(id, runtime);
+          this.#record(id, KIND.notice, {
+            text:
+              `Cursor is not listening on its debug port, so the model could not be checked — ` +
+              `this goes on whatever model the chat has on the computer. Start Cursor with ` +
+              `--remote-debugging-port=9222 to bring back model and chat-box sync.`,
+          });
+        }
+      } else if (!confirmed.ok) {
         const label = meta.model === 'default[]' || meta.model === 'default' ? 'Auto' : this.modelName(meta.model);
         this.emit(
           'log',

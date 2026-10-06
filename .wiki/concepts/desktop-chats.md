@@ -11,7 +11,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Session attach / catch-up
-generated: { by: agent, at: 2026-10-05T03:50:00Z }
+generated: { by: agent, at: 2026-10-06T11:35:00Z }
 ---
 
 # Continuing Cursor desktop chats
@@ -50,7 +50,7 @@ Desktop is the default path, so attaching does not announce that the chat
 lives in Cursor. A catch-up that leaves older history out still notes how
 many recent messages are shown.
 
-The phone and the computer share the model on a desktop thread. Changing it on either side updates the other. A send waits until the loaded chat is on that model.
+The phone and the computer share the model on a desktop thread. Changing it on either side updates the other. A send waits until the loaded chat is on that model. When Cursor has no debug port the model can be neither read nor written — that is not a mismatch: the message goes through the desktop bridge unchecked, with one notice per session asking for `--remote-debugging-port=9222`. Refusing there once dropped every phone message after a Cursor relaunch without the port, while the bridge was open.
 
 ## Into the IDE, and back out
 

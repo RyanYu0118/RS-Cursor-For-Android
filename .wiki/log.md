@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-10-06
+* **Fix**: Phone messages no longer get refused ("model … not the one selected") when Cursor runs without its debug port; they go through the desktop bridge with the model unchecked and one notice. See [Desktop chats](concepts/desktop-chats.md).
 * **Update**: New RS Cursor launcher icon (hexagon + R) from `android/branding/rs-cursor-logo.png`; `make-icons.ps1` regenerates adaptive + legacy icons. See [Android shell](concepts/android-shell.md).
 
 ## 2026-10-05
