@@ -874,10 +874,18 @@ const same = (a, b) => flatten(a) === flatten(b);
  * In-page half of `createAgentInBackground`. Folder paths compare the way
  * Windows does — case and trailing slashes do not matter.
  */
-export function createAgentExpression({ folder, text }) {
+export function createAgentExpression({ folder, text, modelConfig = null }) {
+  const model = modelConfig?.modelName
+    ? {
+        modelName: modelConfig.modelName,
+        maxMode: false,
+        selectedModels: [{ modelId: modelConfig.modelName, parameters: modelConfig.parameters || [] }],
+      }
+    : null;
   return `(async () => {
     const folder = ${JSON.stringify(folder)};
     const text = ${JSON.stringify(text)};
+    const modelConfig = ${JSON.stringify(model)};
     const entries = globalThis.__autoData?._instantiationService?._services?._entries;
     if (!entries || typeof entries[Symbol.iterator] !== 'function') return { status: 'no-services' };
     const svc = {};
@@ -910,6 +918,7 @@ export function createAgentExpression({ folder, text }) {
         promptPreview: text,
         unifiedMode: 'agent',
         skipFocusAfterSubmission: true,
+        ...(modelConfig ? { modelConfig } : {}),
       });
       const threadId = ref?.header?.id;
       try { ref?.dispose?.(); } catch {}
@@ -1382,16 +1391,18 @@ export class CursorCdp {
    * The folder's workspace identity is borrowed from an agent that already
    * lives there (or a workspace the window has loaded), because Cursor derives
    * that id itself; a folder it has never seen answers `no-workspace`.
+   * `modelConfig` (`{ modelName, parameters }`, `default` is Auto) is the
+   * model the chat is born on, so its first turn already runs on it.
    *
    * @returns {Promise<{ status: 'created', threadId: string }
    *   | { status: 'no-workspace'|'no-cdp'|'unknown-thread'|'error', reason?: string }>}
    */
-  async createAgentInBackground({ folder, text }) {
+  async createAgentInBackground({ folder, text, modelConfig = null }) {
     const dir = String(folder || '').trim();
     const message = String(text || '');
     if (!dir) return { status: 'error', reason: 'no folder was named' };
     if (!message.trim()) return { status: 'error', reason: 'a new agent needs a first message' };
-    const res = await this.inAgentsWindow(createAgentExpression({ folder: dir, text: message }));
+    const res = await this.inAgentsWindow(createAgentExpression({ folder: dir, text: message, modelConfig }));
     if (res?.status === 'created' && res.threadId) return res;
     return res && typeof res.status === 'string' ? res : { status: 'error', reason: 'no answer from Cursor' };
   }

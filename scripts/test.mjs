@@ -4354,7 +4354,34 @@ if (existsSync(SRC)) {
         return { status: 'error' };
       },
     };
+    // Picking a model before the first message must not start the ACP agent
+    // (it answers set_model on an untouched session with "Internal error");
+    // the choice goes in with the agent Cursor creates.
+    const liveBefore = sessions.ensureLive;
+    sessions.ensureLive = async () => {
+      fail('choosing a model for a waiting chat must not start the ACP agent');
+      failed = true;
+      throw new Error('no acp');
+    };
+    const picked = 'grok-4.7[context=256k,reasoning_effort=high,fast=true]';
+    if (!(await sessions.setModel(meta.id, picked)) || sessions.get(meta.id).model !== picked) {
+      fail(`a waiting chat should keep the chosen model, got ${sessions.get(meta.id).model}`);
+      failed = true;
+    }
+    if (!sessions.usesCursorModels(meta.id)) {
+      fail('a waiting chat should use Cursor model controls');
+      failed = true;
+    }
+    sessions.ensureLive = liveBefore;
     const result = await sessions.prompt(meta.id, { text: 'hello from the pad' });
+    const sentModel = created[0]?.modelConfig;
+    if (
+      sentModel?.modelName !== 'grok-4.7' ||
+      !sentModel.parameters?.some((p) => p.id === 'fast' && p.value === 'true')
+    ) {
+      fail(`the chosen model should go in with the new agent, got ${JSON.stringify(sentModel)}`);
+      failed = true;
+    }
     const after = sessions.get(meta.id);
     if (after.kind !== 'desktop' || after.desktopThreadId !== 'pad-thread' || after.preferWindow) {
       fail(`the first message should make a Cursor chat, got ${JSON.stringify(after)}`);

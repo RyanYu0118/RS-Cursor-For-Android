@@ -255,7 +255,7 @@ const OPS = {
     // travelled. The gap between them is counted as `earlier`.
     const window = await sessions.replay(id, fromSeq, REPLAY_LIMIT);
     const meta = sessions.get(id);
-    const modelControls = meta?.kind === 'desktop' ? await sessions.modelControls(id) : null;
+    const modelControls = sessions.usesCursorModels(id) ? await sessions.modelControls(id) : null;
     send(ws, {
       type: 'attached',
       sessionId: id,
@@ -567,7 +567,7 @@ const OPS = {
     const id = msg.sessionId || state.sessionId;
     const set = await sessions.setModel(id, msg.modelId);
     send(ws, { type: 'model.set', sessionId: id, set });
-    if (sessions.get(id)?.kind === 'desktop') {
+    if (sessions.usesCursorModels(id)) {
       send(ws, { type: 'model.controls', sessionId: id, ...(await sessions.modelControls(id)) });
     }
   },
@@ -576,7 +576,7 @@ const OPS = {
     const id = msg.sessionId || state.sessionId;
     const set = await sessions.setAutoSelect(id, Boolean(msg.enabled));
     send(ws, { type: 'model.set', sessionId: id, set });
-    if (sessions.get(id)?.kind === 'desktop') {
+    if (sessions.usesCursorModels(id)) {
       send(ws, { type: 'model.controls', sessionId: id, ...(await sessions.modelControls(id)) });
     }
   },

@@ -652,7 +652,11 @@ export class SessionManager extends EventEmitter {
     if (!text?.trim() || typeof this.cursor.createAgentInBackground !== 'function') return null;
 
     const created = await this.cursor
-      .createAgentInBackground({ folder: meta.folder, text })
+      .createAgentInBackground({
+        folder: meta.folder,
+        text,
+        modelConfig: meta.model ? composerConfig(meta.model, meta.modelParameters) : null,
+      })
       .catch((err) => ({ status: 'error', reason: err.message }));
     if (!(created?.status === 'created' && created.threadId)) {
       if (!meta.backgroundRefused) {
@@ -1657,6 +1661,7 @@ export class SessionManager extends EventEmitter {
    */
   async modelControls(id) {
     const meta = this.meta.get(id);
+    if (this.#awaitingCursor(meta)) return this.#storedControls(meta);
     if (meta?.kind !== 'desktop') {
       return {
         status: 'ok',
@@ -1665,20 +1670,41 @@ export class SessionManager extends EventEmitter {
         parameters: [],
       };
     }
-    if (meta.model) {
-      const controls = controlsFor(meta.model);
-      const saved = meta.modelParameters || {};
-      controls.parameters = (controls.parameters || []).map((parameter) =>
-        saved[parameter.id] === undefined ? parameter : { ...parameter, value: saved[parameter.id] },
-      );
-      return controls;
-    }
+    if (meta.model) return this.#storedControls(meta);
     return (
       readModelControls(meta.desktopThreadId) || {
         status: 'error',
         reason: 'Cursor has no desktop database to read',
       }
     );
+  }
+
+  /** The catalog's controls for the session's model, with the knobs it saved. */
+  #storedControls(meta) {
+    const controls = controlsFor(meta.model || 'default[]');
+    const saved = meta.modelParameters || {};
+    controls.parameters = (controls.parameters || []).map((parameter) =>
+      saved[parameter.id] === undefined ? parameter : { ...parameter, value: saved[parameter.id] },
+    );
+    return controls;
+  }
+
+  /**
+   * A new Cursor chat that has not had its first message yet. Cursor has no
+   * chat to set a model on, and the ACP agent refuses `session/set_model` on
+   * an untouched session ("Internal error"), so the choice is kept here and
+   * goes in with the agent Cursor creates.
+   */
+  #awaitingCursor(meta) {
+    return Boolean(
+      meta?.preferWindow && meta.kind !== 'desktop' && !meta.adopted && (meta.agent || 'cursor') === 'cursor',
+    );
+  }
+
+  /** Whether the session's picker is Cursor's: a desktop chat, or one about to be. */
+  usesCursorModels(id) {
+    const meta = this.meta.get(id);
+    return meta?.kind === 'desktop' || this.#awaitingCursor(meta);
   }
 
   /**
@@ -1688,6 +1714,11 @@ export class SessionManager extends EventEmitter {
    */
   async setModelParameter(id, parameter, value) {
     const meta = this.meta.get(id);
+    if (this.#awaitingCursor(meta)) {
+      if (!meta.model || meta.model === 'default[]') return false;
+      this.#update(id, { modelParameters: { ...(meta.modelParameters || {}), [parameter]: value } });
+      return true;
+    }
     if (meta?.kind !== 'desktop') {
       return { status: 'error', reason: 'model parameters belong to Cursor desktop chats' };
     }
@@ -3270,6 +3301,19 @@ export class SessionManager extends EventEmitter {
         this.#update(id, previous);
         this.emit('log', `did not switch "${meta.title}" to ${this.modelName(modelId)}: ${confirmed.reason || 'not confirmed'}`);
         return false;
+      }
+      this.emit('model', { sessionId: id, ...(await this.modelControls(id)) });
+      return true;
+    }
+    if (this.#awaitingCursor(meta)) {
+      this.#update(id, { model: modelId, modelName: this.modelName(modelId), modelParameters: {} });
+      // A turn that fell back to ACP left an agent running; keep it in step,
+      // but the stored choice is what the Cursor chat will be created with.
+      const runtime = this.live.get(id);
+      if (runtime?.client?.running && runtime.acpSessionId && runtime.client.agent === 'cursor') {
+        await runtime.client
+          .setModel({ sessionId: runtime.acpSessionId, modelId })
+          .catch((err) => this.emit('log', `[${meta.title}] ACP kept its model (${err.message})`));
       }
       this.emit('model', { sessionId: id, ...(await this.modelControls(id)) });
       return true;

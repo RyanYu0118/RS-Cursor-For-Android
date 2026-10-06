@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-10-06
+* **Fix**: Choosing a model on a new chat before its first message no longer shows "Internal error". The choice (and its Fast / Effort knobs) is stored on the session without starting the ACP agent, and the Cursor chat is created on that model. See [Desktop chats](concepts/desktop-chats.md).
 * **Remove**: The Android top bar's 网页版 button and the WebView fallback Activity behind it are gone; the app is Compose only. See [Android shell](concepts/android-shell.md).
 * **Feature**: The Android rail draws each chat's real Cursor icon in its colour (Pinned and repo chats), and Edit Icon shows a glyph grid. Glyphs come from the installed Cursor's `cursor-icons` font, served as TTF at `/api/cursor-icons.ttf`. See [Android shell](concepts/android-shell.md).
 * **Fix**: Phone messages no longer get refused ("model … not the one selected") when Cursor runs without its debug port; they go through the desktop bridge with the model unchecked and one notice. See [Desktop chats](concepts/desktop-chats.md).

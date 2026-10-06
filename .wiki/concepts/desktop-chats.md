@@ -11,7 +11,7 @@ sources:
   - id: sessions
     resource: /src/core/sessions.mjs
     title: Session attach / catch-up
-generated: { by: agent, at: 2026-10-06T11:35:00Z }
+generated: { by: agent, at: 2026-10-06T12:40:00Z }
 ---
 
 # Continuing Cursor desktop chats
@@ -42,7 +42,12 @@ derives that id itself. A folder with neither answers `no-workspace`; with no
 debug port the call fails. Either way the turn runs on [ACP](acp.md) with one
 notice, and the next message tries the background again. Pictures cannot go
 with the first message (there is no window to paste into); a notice says so.
-The new chat uses Cursor's own default model for new agents. A session
+The new chat is born on the model picked on the phone (Auto-select unless
+one was chosen): `createAgent` is given that `modelConfig`, so the first turn
+already runs on it. Until the first message there is no Cursor chat and the
+ACP agent refuses `session/set_model` on an untouched session ("Internal
+error"), so a model or Fast / Effort chosen in that window is only stored on
+the Auto session — nothing is spawned for it. A session
 adopted from the CLI is left on ACP. A desktop chat whose window is missing
 is opened before a message is held — that path is for existing chats only.
 
