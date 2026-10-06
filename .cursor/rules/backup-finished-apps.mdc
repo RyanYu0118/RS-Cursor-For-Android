@@ -13,3 +13,11 @@ When an application is built and ready to use, copy the deliverable (APK, instal
 - Put the built file inside that folder. Do not leave a new release as a loose file in `软件`.
 - Use the version already in the project (`versionName`, package version). Do not invent a new number.
 - Do this in the same turn the app is finished, without waiting to be asked again.
+
+## RS Cursor versions
+
+RS Cursor's `versionName` is `<yy>m<month><letter>`: `26m10a` is the first release of October 2026, then `26m10b`, `26m10c`; a new month starts again at `a` (`26m11a`). The app name stays `RS Cursor`.
+
+- Gradle names the APK `RS Cursor - <versionName>.apk` (`android/app/build.gradle.kts`).
+- Back it up as `R:\RYAN STUDIO\软件\RS Cursor <versionName>\RS Cursor - <versionName>.apk`.
+- For a new release, take the next letter (or `a` in a new month) and raise `versionCode` by 1.

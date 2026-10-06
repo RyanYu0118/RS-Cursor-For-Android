@@ -26,7 +26,7 @@ sources:
   - id: cursor-icons
     resource: /src/core/cursor-icons.mjs
     title: Cursor icon glyph table + TrueType font
-generated: { by: agent, at: 2026-10-06T19:55:00Z }
+generated: { by: agent, at: 2026-10-06T22:40:00Z }
 ---
 
 # Android shell
@@ -227,7 +227,7 @@ foreground ~52%). Regenerate with
 
 ## First launch
 
-1. Install the debug APK (`RS-Cursor-0.1.0-debug.apk`).
+1. Install the APK (`RS Cursor - 26m10a.apk`).
 2. Open **主机设置** and enter the computer's Auto URL, for example
    `http://100.x.y.z:4331` (Tailscale IP + port).
 3. Save — the app connects over WebSocket and fills the skeleton.
@@ -248,7 +248,10 @@ cd android
 system Java is 25, which Gradle 8.9 rejects with a bare "25.0.2" — so JDK 17
 has to go first on `PATH`.
 
-Output: `android/app/build/outputs/apk/debug/app-debug.apk`.
+Output: `android/app/build/outputs/apk/debug/RS Cursor - <versionName>.apk`.
+`versionName` is `<yy>m<month><letter>` — `26m10a` is the first release of
+October 2026, then `26m10b`; a new month restarts at `a`. The app label stays
+"RS Cursor". Backups go to `R:\RYAN STUDIO\软件\RS Cursor <versionName>\`.
 Copy `local.properties.example` to `local.properties` and set `sdk.dir`
 if the SDK is not the cursor-pad one.
 

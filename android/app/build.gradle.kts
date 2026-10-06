@@ -12,8 +12,9 @@ android {
         applicationId = "com.ryanstudio.rscursor"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // <yy>m<month><letter>: 26m10a is the first release of October 2026, then 26m10b, ...
+        versionCode = 2
+        versionName = "26m10a"
     }
 
     buildTypes {
@@ -26,7 +27,13 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
+        }
+    }
+
+    applicationVariants.all {
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "RS Cursor - ${defaultConfig.versionName}.apk"
         }
     }
 
